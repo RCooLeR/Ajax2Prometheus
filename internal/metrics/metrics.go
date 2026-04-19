@@ -183,8 +183,8 @@ func (m *Metrics) SetSnapshot(snapshot state.Snapshot) {
 		m.zoneLastEvent.With(labels).Set(timestamp(zone.LastEventAt))
 
 		alarmLabels := deviceLabels(zone)
-		alarmLabels["alarm_signal"] = labelValue(zone.AlarmSignal, "unknown")
-		alarmLabels["alarm_action"] = labelValue(zone.AlarmAction, "unknown")
+		alarmLabels["alarm_signal"] = labelValue(zone.AlarmSignal, "")
+		alarmLabels["alarm_action"] = labelValue(zone.AlarmAction, "")
 		m.zoneAlarm.With(alarmLabels).Set(boolFloat(zone.AlarmActive))
 		if !zone.AlarmStartedAt.IsZero() {
 			m.zoneAlarmLast.With(alarmLabels).Set(timestamp(zone.AlarmStartedAt))
@@ -199,12 +199,16 @@ func (m *Metrics) SetSnapshot(snapshot state.Snapshot) {
 }
 
 func deviceLabels(zone state.Zone) prometheus.Labels {
+	device := zone.Device
+	if device == "" {
+		device = zone.Zone
+	}
 	return prometheus.Labels{
 		"account":       labelValue(zone.Account, "unknown"),
 		"partition":     labelValue(zone.Partition, "unknown"),
 		"group":         labelValue(zone.Group, "unknown"),
 		"zone":          labelValue(zone.Zone, "unknown"),
-		"device":        labelValue(zone.Device, "unknown"),
+		"device":        labelValue(device, "unknown"),
 		"device_name":   labelValue(zone.DeviceName, "unknown"),
 		"room":          labelValue(zone.Room, "unknown"),
 		"device_kind":   labelValue(zone.Kind, "unknown"),

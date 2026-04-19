@@ -80,3 +80,32 @@ ajax_zone_alarm_last_event_timestamp_seconds{account="0001",alarm_action="smoke_
 		t.Fatal(err)
 	}
 }
+
+func TestInactiveZoneAlarmMetricUsesStableFallbackLabels(t *testing.T) {
+	registry := prometheus.NewRegistry()
+	m := New(registry)
+	m.SetSnapshot(state.Snapshot{
+		Zones: []state.Zone{
+			{
+				Account:           "0001",
+				Partition:         "1",
+				Group:             "1",
+				Zone:              "501",
+				DeviceName:        "Roma",
+				Room:              "House",
+				Kind:              "App",
+				DeviceEventsLabel: "night_mode,arming",
+				AlarmActive:       false,
+			},
+		},
+	})
+
+	expected := `
+# HELP ajax_zone_alarm_active Whether an alarm is currently active for a zone/device.
+# TYPE ajax_zone_alarm_active gauge
+ajax_zone_alarm_active{account="0001",alarm_action="none",alarm_signal="none",device="501",device_events="night_mode,arming",device_kind="App",device_name="Roma",group="1",partition="1",room="House",zone="501"} 0
+`
+	if err := testutil.GatherAndCompare(registry, strings.NewReader(expected), "ajax_zone_alarm_active"); err != nil {
+		t.Fatal(err)
+	}
+}
