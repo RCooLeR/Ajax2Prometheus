@@ -1,0 +1,21 @@
+[
+  {
+    "account": "0001",
+    "zone": "3",
+    "name": "Kitchen transmitter",
+    "room": "Kitchen",
+    "kind": "ajax_transmitter",
+    "events": ["alarm", "tamper"],
+    "description": "Transmitter connected to kitchen wired contact",
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "501",
+    "name": "Main user",
+    "room": "System",
+    "kind": "user",
+    "events": ["arm", "disarm", "duress"],
+    "auto_discovered": false
+  }
+]

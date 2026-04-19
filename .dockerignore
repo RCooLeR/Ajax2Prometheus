@@ -1,0 +1,9 @@
+.git
+.idea
+*.exe
+*.test
+*.out
+.env
+data
+devices.json
+*.log

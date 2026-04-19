@@ -1,0 +1,44 @@
+# Binaries
+*.exe
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+ajax2prometheus
+
+# Go coverage / profiling
+coverage.out
+cover.out
+*.coverprofile
+*.prof
+
+# Module workspace
+go.work
+go.work.sum
+
+# Environment / local secrets
+.env
+.env.*
+*.local
+
+# Runtime data/logs
+data/
+devices.json
+*.log
+
+# IDE files
+.idea/
+.vscode/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Temporary directories
+tmp/
+dist/
+build/
+
+# Docker overrides
+docker-compose.override.yml
