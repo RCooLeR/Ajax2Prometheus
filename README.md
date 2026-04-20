@@ -2,6 +2,8 @@
 
 Receives Ajax security hub SIA DC-09 events, keeps the current alarm state in memory, and exposes Prometheus metrics on `/metrics`.
 
+*If i ever get access to API will update to also have all sensors info, automation via Home Assistant etc.
+
 <p style="text-align: center">
 <img src="./ajax2prometheus.png" alt="Ajax 2 Prometheus" width="70%">
 </p>
