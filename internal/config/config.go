@@ -25,6 +25,16 @@ type Config struct {
 	ForwardTimeout    time.Duration
 	ForwardRequireACK bool
 
+	MQTTBroker          string
+	MQTTUsername        string
+	MQTTPassword        string
+	MQTTClientID        string
+	MQTTTopicPrefix     string
+	MQTTDiscovery       bool
+	MQTTDiscoveryPrefix string
+	MQTTTimeout         time.Duration
+	MQTTRetain          bool
+
 	LogLevel  string
 	LogPretty bool
 }
@@ -44,8 +54,20 @@ func FromEnv() Config {
 		ReadTimeout:       envDuration("AJAX2PROM_READ_TIMEOUT", 2*time.Minute),
 		ForwardTimeout:    envDuration("AJAX2PROM_FORWARD_TIMEOUT", 5*time.Second),
 		ForwardRequireACK: envBool("AJAX2PROM_FORWARD_REQUIRE_ACK", false),
-		LogLevel:          envString("AJAX2PROM_LOG_LEVEL", "info"),
-		LogPretty:         envBool("AJAX2PROM_LOG_PRETTY", false),
+		MQTTBroker:        os.Getenv("AJAX2PROM_MQTT_BROKER"),
+		MQTTUsername:      os.Getenv("AJAX2PROM_MQTT_USERNAME"),
+		MQTTPassword:      os.Getenv("AJAX2PROM_MQTT_PASSWORD"),
+		MQTTClientID:      envString("AJAX2PROM_MQTT_CLIENT_ID", "ajax2prometheus"),
+		MQTTTopicPrefix:   envString("AJAX2PROM_MQTT_TOPIC_PREFIX", "ajax2prometheus"),
+		MQTTDiscovery:     envBool("AJAX2PROM_MQTT_DISCOVERY", true),
+		MQTTDiscoveryPrefix: envString(
+			"AJAX2PROM_MQTT_DISCOVERY_PREFIX",
+			"homeassistant",
+		),
+		MQTTTimeout: envDuration("AJAX2PROM_MQTT_TIMEOUT", 5*time.Second),
+		MQTTRetain:  envBool("AJAX2PROM_MQTT_RETAIN", true),
+		LogLevel:    envString("AJAX2PROM_LOG_LEVEL", "info"),
+		LogPretty:   envBool("AJAX2PROM_LOG_PRETTY", false),
 	}
 }
 
@@ -68,7 +90,20 @@ func (c Config) Validate() error {
 	if len(c.ForwardAddresses()) > 0 && c.ForwardTimeout <= 0 {
 		return fmt.Errorf("forward timeout must be positive: %s", c.ForwardTimeout)
 	}
+	if c.MQTTBroker != "" && c.MQTTTimeout <= 0 {
+		return fmt.Errorf("MQTT timeout must be positive: %s", c.MQTTTimeout)
+	}
+	if c.MQTTBroker != "" && strings.TrimSpace(c.MQTTTopicPrefix) == "" {
+		return errors.New("MQTT topic prefix is required when MQTT is enabled")
+	}
+	if c.MQTTBroker != "" && c.MQTTDiscovery && strings.TrimSpace(c.MQTTDiscoveryPrefix) == "" {
+		return errors.New("MQTT discovery prefix is required when MQTT discovery is enabled")
+	}
 	return nil
+}
+
+func (c Config) MQTTEnabled() bool {
+	return strings.TrimSpace(c.MQTTBroker) != ""
 }
 
 func (c Config) ForwardAddresses() []string {

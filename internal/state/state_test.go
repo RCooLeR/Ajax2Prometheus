@@ -51,8 +51,65 @@ func TestNewEngineSeedsCatalogDevicesAsInactiveZones(t *testing.T) {
 	if zone.DeviceEventsLabel != "burglary,tamper,battery,connectivity" {
 		t.Fatalf("device events label = %q", zone.DeviceEventsLabel)
 	}
+	for _, signal := range []string{"burglary", "tamper", "battery", "connectivity"} {
+		if zone.SignalActive[signal] {
+			t.Fatalf("catalog-only signal %q should be inactive: %#v", signal, zone.SignalActive)
+		}
+	}
 	if zone.AlarmActive || zone.TamperActive || zone.TroubleActive || !zone.LastEventAt.IsZero() {
 		t.Fatalf("catalog-only zone should be inactive with no event timestamp: %#v", zone)
+	}
+}
+
+func TestZoneSignalActiveTracksAlarmTroubleAndRestore(t *testing.T) {
+	engine := NewEngine(time.Minute, devicecatalog.Empty())
+
+	engine.Apply(event.Normalized{
+		Account:     "0001",
+		Zone:        "7",
+		EventCode:   "BA",
+		EventClass:  event.ClassAlarm,
+		EventAction: "burglary_alarm",
+		EventName:   "Burglary alarm",
+		Signal:      "burglary",
+		ReceivedAt:  time.Unix(100, 0),
+		ParseStatus: event.ParseStatusOK,
+	})
+	engine.Apply(event.Normalized{
+		Account:     "0001",
+		Zone:        "7",
+		EventCode:   "XT",
+		EventClass:  event.ClassTrouble,
+		EventAction: "battery_low",
+		EventName:   "Device battery low",
+		Signal:      "battery",
+		ReceivedAt:  time.Unix(200, 0),
+		ParseStatus: event.ParseStatusOK,
+	})
+	snapshot := engine.Snapshot()
+	zone := snapshot.Zones[0]
+	if !zone.SignalActive["burglary"] || !zone.SignalActive["battery"] {
+		t.Fatalf("expected burglary and battery signals active: %#v", zone.SignalActive)
+	}
+
+	engine.Apply(event.Normalized{
+		Account:     "0001",
+		Zone:        "7",
+		EventCode:   "BR",
+		EventClass:  event.ClassRestore,
+		EventAction: "burglary_restore",
+		EventName:   "Burglary alarm restored",
+		Signal:      "burglary",
+		ReceivedAt:  time.Unix(300, 0),
+		ParseStatus: event.ParseStatusOK,
+	})
+	snapshot = engine.Snapshot()
+	zone = snapshot.Zones[0]
+	if zone.SignalActive["burglary"] {
+		t.Fatalf("expected burglary signal restored: %#v", zone.SignalActive)
+	}
+	if !zone.SignalActive["battery"] {
+		t.Fatalf("battery trouble should remain active: %#v", zone.SignalActive)
 	}
 }
 

@@ -45,6 +45,13 @@ services:
       # Optional: AES key configured in Ajax SIA monitoring settings.
       # AJAX2PROM_ENCRYPTION_KEY: "REPLACE_WITH_32_HEX_AES_KEY"
 
+      # Optional: publish Home Assistant MQTT discovery and retained state.
+      # AJAX2PROM_MQTT_BROKER: "tcp://homeassistant.local:1883"
+      # AJAX2PROM_MQTT_USERNAME: "mqtt-user"
+      # AJAX2PROM_MQTT_PASSWORD: "mqtt-password"
+      # AJAX2PROM_MQTT_TOPIC_PREFIX: "ajax2prometheus"
+      # AJAX2PROM_MQTT_DISCOVERY: "true"
+
       # Optional: forward raw SIA frames to Home Assistant's SIA integration.
       # Use an IP/hostname reachable from inside this container.
       # AJAX2PROM_FORWARD_ADDR: "home-assistant.example:12345,cms.example:7700"
@@ -77,6 +84,15 @@ Configure the Ajax hub monitoring station connection:
 | `AJAX2PROM_FORWARD_ADDR` | empty | Comma-separated upstream SIA receivers |
 | `AJAX2PROM_FORWARD_TIMEOUT` | `5s` | Upstream forwarding timeout |
 | `AJAX2PROM_FORWARD_REQUIRE_ACK` | `false` | Return NAK to Ajax if an upstream receiver does not ACK |
+| `AJAX2PROM_MQTT_BROKER` | empty | Optional MQTT broker URL, for example `tcp://homeassistant.local:1883` |
+| `AJAX2PROM_MQTT_USERNAME` | empty | MQTT username |
+| `AJAX2PROM_MQTT_PASSWORD` | empty | MQTT password |
+| `AJAX2PROM_MQTT_CLIENT_ID` | `ajax2prometheus` | MQTT client ID |
+| `AJAX2PROM_MQTT_TOPIC_PREFIX` | `ajax2prometheus` | MQTT state topic prefix |
+| `AJAX2PROM_MQTT_DISCOVERY` | `true` | Publish Home Assistant MQTT discovery configs when MQTT is enabled |
+| `AJAX2PROM_MQTT_DISCOVERY_PREFIX` | `homeassistant` | Home Assistant MQTT discovery prefix |
+| `AJAX2PROM_MQTT_TIMEOUT` | `5s` | MQTT connect and publish timeout |
+| `AJAX2PROM_MQTT_RETAIN` | `true` | Retain MQTT state messages |
 | `AJAX2PROM_DEVICES_PATH` | `data/devices.json` | Device catalog path |
 | `AJAX2PROM_PING_INTERVAL` | `60s` | Expected Ajax monitoring station ping interval |
 | `AJAX2PROM_OFFLINE_GRACE` | `180s` | Grace period before marking account offline |
@@ -117,6 +133,68 @@ Core metrics:
 - `ajax_zone_last_event_timestamp_seconds`
 
 All `ajax_zone_*` metrics include stable catalog labels where available: `account`, `partition`, `group`, `zone`, `device`, `device_name`, `room`, `device_kind`, and `device_events`. Alarm metrics also include `alarm_signal` and `alarm_action`.
+
+## Home Assistant MQTT
+
+Set `AJAX2PROM_MQTT_BROKER` to enable MQTT publishing. Home Assistant discovery is enabled by default, so each Ajax account and each device from `devices.json` appears as a separate Home Assistant device.
+
+See [ha.md](./ha.md) for step-by-step Home Assistant setup and troubleshooting.
+
+MQTT is intentionally non-blocking for SIA handling. If the MQTT broker is down or slow, Ajax ACK responses are still sent normally.
+
+Published state topics:
+
+```text
+ajax2prometheus/status
+ajax2prometheus/accounts/A0F80D/state
+ajax2prometheus/accounts/A0F80D/zones/3/state
+```
+
+Home Assistant discovery topics use the configured discovery prefix:
+
+```text
+homeassistant/binary_sensor/ajax2prometheus/zone_a0f80d_3_signal_fire/config
+homeassistant/sensor/ajax2prometheus/zone_a0f80d_3_last_event_name/config
+```
+
+Each zone/device publishes one retained JSON state payload with current status and signal states:
+
+```json
+{
+  "account": "A0F80D",
+  "zone": "3",
+  "device_name": "Hall fire detector",
+  "room": "Hall",
+  "kind": "FireProtect",
+  "device_events": ["fire", "smoke", "temperature", "tamper", "battery", "connectivity"],
+  "alarm_active": false,
+  "tamper_active": false,
+  "trouble_active": false,
+  "signal_active": {
+    "fire": false,
+    "smoke": false,
+    "temperature": false,
+    "tamper": false,
+    "battery": false,
+    "connectivity": false
+  },
+  "last_event_code": "BR",
+  "last_event_name": "Burglary alarm restored",
+  "last_signal": "burglary",
+  "last_event_at": "2026-04-20T12:00:00Z"
+}
+```
+
+For every zone, discovery creates:
+
+- `binary_sensor` entities for `alarm_active`, `tamper_active`, and `trouble_active`
+- one `binary_sensor` for every value in the device `events` list, such as `fire`, `smoke`, `battery`, `connectivity`, `power`, `bypass`, or `water_leak`
+- `sensor` entities for last event name, code, signal, event time, alarm signal, and alarm action
+
+For every account, discovery creates:
+
+- `binary_sensor` entities for online, armed, night mode, partially armed, alarm, tamper, and trouble
+- `sensor` entities for mode, last event, last signal, last event time, and last ping time
 
 ## Device Catalog
 

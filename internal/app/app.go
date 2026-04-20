@@ -16,6 +16,7 @@ import (
 	"github.com/RCooLeR/Ajax2Prometheus/internal/devicecatalog"
 	"github.com/RCooLeR/Ajax2Prometheus/internal/event"
 	"github.com/RCooLeR/Ajax2Prometheus/internal/forward"
+	"github.com/RCooLeR/Ajax2Prometheus/internal/hamqtt"
 	"github.com/RCooLeR/Ajax2Prometheus/internal/httpapi"
 	"github.com/RCooLeR/Ajax2Prometheus/internal/metrics"
 	"github.com/RCooLeR/Ajax2Prometheus/internal/sia"
@@ -35,6 +36,8 @@ type App struct {
 	parser    *sia.Parser
 	responder *sia.Responder
 	forwarder *forward.Group
+	mqtt      *hamqtt.Publisher
+	mqttQueue chan state.Snapshot
 }
 
 func Run(parent context.Context, cfg config.Config, log zerolog.Logger) error {
@@ -69,6 +72,26 @@ func Run(parent context.Context, cfg config.Config, log zerolog.Logger) error {
 	metricSet := metrics.New(registry)
 	stateEngine := state.NewEngine(cfg.OfflineGrace, devices)
 	metricSet.SetSnapshot(stateEngine.Snapshot())
+	var mqttPublisher *hamqtt.Publisher
+	var mqttQueue chan state.Snapshot
+	if cfg.MQTTEnabled() {
+		mqttPublisher = hamqtt.New(hamqtt.Config{
+			Broker:          cfg.MQTTBroker,
+			Username:        cfg.MQTTUsername,
+			Password:        cfg.MQTTPassword,
+			ClientID:        cfg.MQTTClientID,
+			TopicPrefix:     cfg.MQTTTopicPrefix,
+			Discovery:       cfg.MQTTDiscovery,
+			DiscoveryPrefix: cfg.MQTTDiscoveryPrefix,
+			Timeout:         cfg.MQTTTimeout,
+			Retain:          cfg.MQTTRetain,
+		}, log.With().Str("component", "mqtt").Logger())
+		if err := mqttPublisher.Connect(ctx); err != nil {
+			log.Warn().Err(err).Str("broker", cfg.MQTTBroker).Msg("MQTT connect failed; continuing without blocking SIA")
+		}
+		mqttQueue = make(chan state.Snapshot, 1)
+		defer mqttPublisher.Close()
+	}
 	var siaForwarder *forward.Group
 	forwardAddrs := cfg.ForwardAddresses()
 	if len(forwardAddrs) > 0 {
@@ -90,6 +113,8 @@ func Run(parent context.Context, cfg config.Config, log zerolog.Logger) error {
 		parser:    parser,
 		responder: responder,
 		forwarder: siaForwarder,
+		mqtt:      mqttPublisher,
+		mqttQueue: mqttQueue,
 	}
 
 	httpServer := httpapi.New(cfg.HTTPAddr, stateEngine, eventStore, devices, registry, log.With().Str("component", "http").Logger())
@@ -113,6 +138,10 @@ func Run(parent context.Context, cfg config.Config, log zerolog.Logger) error {
 		}
 	}()
 	go application.refreshOnline(ctx)
+	if application.mqtt != nil {
+		go application.publishMQTTSnapshots(ctx)
+		application.enqueueMQTTSnapshot(stateEngine.Snapshot())
+	}
 
 	wg.Wait()
 	close(errs)
@@ -178,6 +207,7 @@ func (a *App) handleSIAFrame(ctx context.Context, raw []byte, remoteAddr string)
 	a.discoverDevice(ctx, evt)
 	snapshot = a.state.Apply(*evt)
 	a.metrics.SetSnapshot(snapshot)
+	a.enqueueMQTTSnapshot(snapshot)
 	forwardResults = a.forwardAjaxFrame(ctx, raw, evt)
 	a.log.Info().
 		Interface("event", normalizedLogEvent(evt)).
@@ -270,6 +300,38 @@ func (a *App) forwardAjaxFrame(ctx context.Context, raw []byte, evt *event.Norma
 func (a *App) observeForwardResults(results []forward.Result) {
 	for _, result := range results {
 		a.metrics.ObserveForward(result)
+	}
+}
+
+func (a *App) enqueueMQTTSnapshot(snapshot state.Snapshot) {
+	if a.mqtt == nil || a.mqttQueue == nil {
+		return
+	}
+	select {
+	case a.mqttQueue <- snapshot:
+		return
+	default:
+	}
+	select {
+	case <-a.mqttQueue:
+	default:
+	}
+	select {
+	case a.mqttQueue <- snapshot:
+	default:
+	}
+}
+
+func (a *App) publishMQTTSnapshots(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case snapshot := <-a.mqttQueue:
+			if err := a.mqtt.PublishSnapshot(ctx, snapshot); err != nil {
+				a.log.Debug().Err(err).Msg("publish MQTT snapshot")
+			}
+		}
 	}
 }
 
@@ -445,7 +507,9 @@ func (a *App) refreshOnline(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case now := <-ticker.C:
-			a.metrics.SetSnapshot(a.state.RefreshOnline(now.UTC()))
+			snapshot := a.state.RefreshOnline(now.UTC())
+			a.metrics.SetSnapshot(snapshot)
+			a.enqueueMQTTSnapshot(snapshot)
 		}
 	}
 }

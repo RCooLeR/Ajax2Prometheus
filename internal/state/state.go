@@ -27,28 +27,29 @@ type Account struct {
 }
 
 type Zone struct {
-	Account           string    `json:"account"`
-	Partition         string    `json:"partition"`
-	Group             string    `json:"group"`
-	Zone              string    `json:"zone"`
-	Device            string    `json:"device"`
-	DeviceName        string    `json:"device_name"`
-	Room              string    `json:"room"`
-	Kind              string    `json:"kind"`
-	DeviceEvents      []string  `json:"device_events"`
-	DeviceEventsLabel string    `json:"device_events_label"`
-	AlarmActive       bool      `json:"alarm_active"`
-	AlarmSignal       string    `json:"alarm_signal"`
-	AlarmAction       string    `json:"alarm_action"`
-	AlarmEventCode    string    `json:"alarm_event_code"`
-	AlarmEventName    string    `json:"alarm_event_name"`
-	AlarmStartedAt    time.Time `json:"alarm_started_at"`
-	TamperActive      bool      `json:"tamper_active"`
-	TroubleActive     bool      `json:"trouble_active"`
-	LastEventCode     string    `json:"last_event_code"`
-	LastEventName     string    `json:"last_event_name"`
-	LastSignal        string    `json:"last_signal"`
-	LastEventAt       time.Time `json:"last_event_at"`
+	Account           string          `json:"account"`
+	Partition         string          `json:"partition"`
+	Group             string          `json:"group"`
+	Zone              string          `json:"zone"`
+	Device            string          `json:"device"`
+	DeviceName        string          `json:"device_name"`
+	Room              string          `json:"room"`
+	Kind              string          `json:"kind"`
+	DeviceEvents      []string        `json:"device_events"`
+	DeviceEventsLabel string          `json:"device_events_label"`
+	AlarmActive       bool            `json:"alarm_active"`
+	AlarmSignal       string          `json:"alarm_signal"`
+	AlarmAction       string          `json:"alarm_action"`
+	AlarmEventCode    string          `json:"alarm_event_code"`
+	AlarmEventName    string          `json:"alarm_event_name"`
+	AlarmStartedAt    time.Time       `json:"alarm_started_at"`
+	TamperActive      bool            `json:"tamper_active"`
+	TroubleActive     bool            `json:"trouble_active"`
+	SignalActive      map[string]bool `json:"signal_active"`
+	LastEventCode     string          `json:"last_event_code"`
+	LastEventName     string          `json:"last_event_name"`
+	LastSignal        string          `json:"last_signal"`
+	LastEventAt       time.Time       `json:"last_event_at"`
 }
 
 type Snapshot struct {
@@ -134,12 +135,29 @@ func (e *Engine) Apply(evt event.Normalized) Snapshot {
 			zone.AlarmEventCode = evt.EventCode
 			zone.AlarmEventName = evt.EventName
 			zone.AlarmStartedAt = evt.ReceivedAt
+			zone.setSignal(evt.Signal, true)
 		case event.ClassRestore:
 			applyZoneRestore(zone, evt)
 		case event.ClassTamper:
 			zone.TamperActive = true
+			zone.setSignal(evt.Signal, true)
 		case event.ClassTrouble:
 			zone.TroubleActive = true
+			zone.setSignal(evt.Signal, true)
+		case event.ClassArm:
+			zone.setSignal("arming", true)
+			zone.setSignal("night_mode", false)
+		case event.ClassNight:
+			zone.setSignal("arming", true)
+			zone.setSignal("night_mode", true)
+		case event.ClassDisarm:
+			if evt.Signal == "night_mode" {
+				zone.setSignal("night_mode", false)
+			} else {
+				zone.setSignal("arming", false)
+				zone.setSignal("night_mode", false)
+				zone.setSignal("duress", false)
+			}
 		}
 	}
 
@@ -177,7 +195,7 @@ func (e *Engine) zone(accountID, zoneID string) *Zone {
 	if current, ok := e.zones[key]; ok {
 		return current
 	}
-	current := &Zone{Account: accountID, Zone: zoneID}
+	current := &Zone{Account: accountID, Zone: zoneID, SignalActive: make(map[string]bool)}
 	e.zones[key] = current
 	return current
 }
@@ -222,7 +240,10 @@ func (e *Engine) snapshotLocked() Snapshot {
 		snapshot.Accounts = append(snapshot.Accounts, *account)
 	}
 	for _, zone := range e.zones {
-		snapshot.Zones = append(snapshot.Zones, *zone)
+		copyZone := *zone
+		copyZone.DeviceEvents = append([]string(nil), zone.DeviceEvents...)
+		copyZone.SignalActive = cloneSignalActive(zone.SignalActive)
+		snapshot.Zones = append(snapshot.Zones, copyZone)
 	}
 	return snapshot
 }
@@ -267,6 +288,14 @@ func applyDeviceMetadata(zone *Zone, device devicecatalog.Device) {
 	zone.Kind = device.Kind
 	zone.DeviceEvents = append([]string(nil), device.Events...)
 	zone.DeviceEventsLabel = strings.Join(device.Events, ",")
+	zone.ensureSignalMap()
+	for _, signal := range device.Events {
+		if signal != "" {
+			if _, ok := zone.SignalActive[signal]; !ok {
+				zone.SignalActive[signal] = false
+			}
+		}
+	}
 }
 
 func applyAccountRestore(account *Account, evt event.Normalized) {
@@ -284,8 +313,10 @@ func applyZoneRestore(zone *Zone, evt event.Normalized) {
 	switch evt.Signal {
 	case "tamper":
 		zone.TamperActive = false
+		zone.setSignal(evt.Signal, false)
 	case "battery", "connectivity", "power", "interference", "fire_detector", "hardware", "accelerometer", "bypass", "tamper_bypass":
 		zone.TroubleActive = false
+		zone.setSignal(evt.Signal, false)
 	default:
 		zone.AlarmActive = false
 		zone.AlarmSignal = ""
@@ -293,5 +324,31 @@ func applyZoneRestore(zone *Zone, evt event.Normalized) {
 		zone.AlarmEventCode = ""
 		zone.AlarmEventName = ""
 		zone.AlarmStartedAt = time.Time{}
+		zone.setSignal(evt.Signal, false)
 	}
+}
+
+func (z *Zone) ensureSignalMap() {
+	if z.SignalActive == nil {
+		z.SignalActive = make(map[string]bool)
+	}
+}
+
+func (z *Zone) setSignal(signal string, active bool) {
+	if signal == "" || signal == "unknown" {
+		return
+	}
+	z.ensureSignalMap()
+	z.SignalActive[signal] = active
+}
+
+func cloneSignalActive(values map[string]bool) map[string]bool {
+	if len(values) == 0 {
+		return nil
+	}
+	out := make(map[string]bool, len(values))
+	for signal, active := range values {
+		out[signal] = active
+	}
+	return out
 }
