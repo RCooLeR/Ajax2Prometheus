@@ -65,12 +65,14 @@ type Engine struct {
 }
 
 func NewEngine(offlineGrace time.Duration, devices *devicecatalog.Catalog) *Engine {
-	return &Engine{
+	engine := &Engine{
 		offlineGrace: offlineGrace,
 		devices:      devices,
 		accounts:     make(map[string]*Account),
 		zones:        make(map[string]*Zone),
 	}
+	engine.seedCatalogDevices()
+	return engine
 }
 
 func (e *Engine) Apply(evt event.Normalized) Snapshot {
@@ -180,6 +182,19 @@ func (e *Engine) zone(accountID, zoneID string) *Zone {
 	return current
 }
 
+func (e *Engine) seedCatalogDevices() {
+	if e.devices == nil {
+		return
+	}
+	for _, device := range e.devices.Devices() {
+		if device.Account == "" || device.Zone == "" {
+			continue
+		}
+		zone := e.zone(device.Account, device.Zone)
+		applyDeviceMetadata(zone, device)
+	}
+}
+
 func (e *Engine) refreshOnlineLocked(now time.Time) {
 	for _, account := range e.accounts {
 		reference := account.LastPingAt
@@ -233,21 +248,25 @@ func (e *Engine) updateZoneMetadata(zone *Zone, evt event.Normalized) {
 		return
 	}
 	if device, ok := e.devices.Lookup(evt.Account, evt.Zone, evt.Device); ok {
-		if device.Partition != "" {
-			zone.Partition = device.Partition
-		}
-		if device.Group != "" {
-			zone.Group = device.Group
-		}
-		if device.Device != "" {
-			zone.Device = device.Device
-		}
-		zone.DeviceName = device.Name
-		zone.Room = device.Room
-		zone.Kind = device.Kind
-		zone.DeviceEvents = append([]string(nil), device.Events...)
-		zone.DeviceEventsLabel = strings.Join(device.Events, ",")
+		applyDeviceMetadata(zone, device)
 	}
+}
+
+func applyDeviceMetadata(zone *Zone, device devicecatalog.Device) {
+	if device.Partition != "" {
+		zone.Partition = device.Partition
+	}
+	if device.Group != "" {
+		zone.Group = device.Group
+	}
+	if device.Device != "" {
+		zone.Device = device.Device
+	}
+	zone.DeviceName = device.Name
+	zone.Room = device.Room
+	zone.Kind = device.Kind
+	zone.DeviceEvents = append([]string(nil), device.Events...)
+	zone.DeviceEventsLabel = strings.Join(device.Events, ",")
 }
 
 func applyAccountRestore(account *Account, evt event.Normalized) {

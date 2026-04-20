@@ -1,21 +1,3260 @@
 [
   {
     "account": "0001",
-    "zone": "3",
-    "name": "Kitchen transmitter",
-    "room": "Kitchen",
-    "kind": "ajax_transmitter",
-    "events": ["alarm", "tamper"],
-    "description": "Transmitter connected to kitchen wired contact",
+    "zone": "EX001",
+    "name": "Hub (2G) / (4G) Jeweller",
+    "room": "Central units",
+    "kind": "hub_2g_4g_jeweller",
+    "events": [
+      "supervision",
+      "connectivity",
+      "battery",
+      "power",
+      "tamper",
+      "interference",
+      "configuration",
+      "firmware"
+    ],
     "auto_discovered": false
   },
   {
     "account": "0001",
-    "zone": "501",
-    "name": "Main user",
-    "room": "System",
-    "kind": "user",
-    "events": ["arm", "disarm", "duress"],
+    "zone": "EX002",
+    "name": "Hub 2 (2G) / (4G)",
+    "room": "Central units",
+    "kind": "hub_2_2g_4g",
+    "events": [
+      "supervision",
+      "connectivity",
+      "battery",
+      "power",
+      "tamper",
+      "interference",
+      "configuration",
+      "firmware"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX003",
+    "name": "Hub Plus Jeweller",
+    "room": "Central units",
+    "kind": "hub_plus_jeweller",
+    "events": [
+      "supervision",
+      "connectivity",
+      "battery",
+      "power",
+      "tamper",
+      "interference",
+      "configuration",
+      "firmware"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX004",
+    "name": "Hub 2 Plus",
+    "room": "Central units",
+    "kind": "hub_2_plus",
+    "events": [
+      "supervision",
+      "connectivity",
+      "battery",
+      "power",
+      "tamper",
+      "interference",
+      "configuration",
+      "firmware"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX005",
+    "name": "ReX",
+    "room": "Central units",
+    "kind": "rex",
+    "events": [
+      "connectivity",
+      "battery",
+      "power",
+      "tamper",
+      "firmware"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX006",
+    "name": "ReX 2",
+    "room": "Central units",
+    "kind": "rex_2",
+    "events": [
+      "connectivity",
+      "battery",
+      "power",
+      "tamper",
+      "firmware"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX007",
+    "name": "Superior Hub Hybrid 2",
+    "room": "Central units",
+    "kind": "superior_hub_hybrid_2",
+    "events": [
+      "supervision",
+      "connectivity",
+      "battery",
+      "power",
+      "tamper",
+      "interference",
+      "configuration",
+      "firmware"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX008",
+    "name": "Superior Hub Hybrid 2 (without casing)",
+    "room": "Central units",
+    "kind": "superior_hub_hybrid_2_without_casing",
+    "events": [
+      "supervision",
+      "connectivity",
+      "battery",
+      "power",
+      "tamper",
+      "interference",
+      "configuration",
+      "firmware"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX009",
+    "name": "Superior Hub Hybrid (2G) / (4G)",
+    "room": "Central units",
+    "kind": "superior_hub_hybrid_2g_4g",
+    "events": [
+      "supervision",
+      "connectivity",
+      "battery",
+      "power",
+      "tamper",
+      "interference",
+      "configuration",
+      "firmware"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX010",
+    "name": "Superior Hub Hybrid (4G) (without casing)",
+    "room": "Central units",
+    "kind": "superior_hub_hybrid_4g_without_casing",
+    "events": [
+      "supervision",
+      "connectivity",
+      "battery",
+      "power",
+      "tamper",
+      "interference",
+      "configuration",
+      "firmware"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX011",
+    "name": "Hub BP Jeweller",
+    "room": "Central units",
+    "kind": "hub_bp_jeweller",
+    "events": [
+      "supervision",
+      "connectivity",
+      "battery",
+      "power",
+      "tamper",
+      "interference",
+      "configuration",
+      "firmware"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX012",
+    "name": "Hub BP Jeweller (without casing)",
+    "room": "Central units",
+    "kind": "hub_bp_jeweller_without_casing",
+    "events": [
+      "supervision",
+      "connectivity",
+      "battery",
+      "power",
+      "tamper",
+      "interference",
+      "configuration",
+      "firmware"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX013",
+    "name": "Internal battery NB (7.2V/95Ah)",
+    "room": "Accessories",
+    "kind": "internal_battery_nb_7_2v_95ah",
+    "events": [],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX014",
+    "name": "Internal battery RB (6.4V/36Ah)",
+    "room": "Accessories",
+    "kind": "internal_battery_rb_6_4v_36ah",
+    "events": [],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX015",
+    "name": "Internal battery NB (7.2V/190Ah)",
+    "room": "Accessories",
+    "kind": "internal_battery_nb_7_2v_190ah",
+    "events": [],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX016",
+    "name": "Internal battery RB (6.4V/78Ah)",
+    "room": "Accessories",
+    "kind": "internal_battery_rb_6_4v_78ah",
+    "events": [],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX017",
+    "name": "SpeakerPhone Jeweller",
+    "room": "Accessories",
+    "kind": "speakerphone_jeweller",
+    "events": [
+      "connectivity",
+      "battery",
+      "tamper",
+      "bypass",
+      "tamper_bypass"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX018",
+    "name": "Superior SeismoProtect G3 Fibra",
+    "room": "Intrusion protection",
+    "kind": "superior_seismoprotect_g3_fibra",
+    "events": [
+      "burglary",
+      "accelerometer",
+      "tamper",
+      "battery",
+      "connectivity",
+      "bypass",
+      "tamper_bypass"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX019",
+    "name": "ExternalAntenna",
+    "room": "Accessories",
+    "kind": "externalantenna",
+    "events": [],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX020",
+    "name": "DoorBell",
+    "room": "Video surveillance",
+    "kind": "doorbell",
+    "events": [
+      "burglary",
+      "connectivity",
+      "power",
+      "tamper",
+      "configuration",
+      "firmware"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX021",
+    "name": "IndoorCam",
+    "room": "Video surveillance",
+    "kind": "indoorcam",
+    "events": [
+      "burglary",
+      "connectivity",
+      "power",
+      "tamper",
+      "configuration",
+      "firmware"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX022",
+    "name": "MountCam A1",
+    "room": "Video surveillance",
+    "kind": "mountcam_a1",
+    "events": [
+      "burglary",
+      "connectivity",
+      "power",
+      "tamper",
+      "configuration",
+      "firmware"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX023",
+    "name": "MountCam A2",
+    "room": "Video surveillance",
+    "kind": "mountcam_a2",
+    "events": [
+      "burglary",
+      "connectivity",
+      "power",
+      "tamper",
+      "configuration",
+      "firmware"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX024",
+    "name": "MountCam B1",
+    "room": "Video surveillance",
+    "kind": "mountcam_b1",
+    "events": [
+      "burglary",
+      "connectivity",
+      "power",
+      "tamper",
+      "configuration",
+      "firmware"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX025",
+    "name": "MountCam B2",
+    "room": "Video surveillance",
+    "kind": "mountcam_b2",
+    "events": [
+      "burglary",
+      "connectivity",
+      "power",
+      "tamper",
+      "configuration",
+      "firmware"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX026",
+    "name": "BulletCam HL",
+    "room": "Video surveillance",
+    "kind": "bulletcam_hl",
+    "events": [
+      "burglary",
+      "connectivity",
+      "power",
+      "tamper",
+      "configuration",
+      "firmware"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX027",
+    "name": "BulletCam",
+    "room": "Video surveillance",
+    "kind": "bulletcam",
+    "events": [
+      "burglary",
+      "connectivity",
+      "power",
+      "tamper",
+      "configuration",
+      "firmware"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX028",
+    "name": "Superior TurretCam HLVF",
+    "room": "Video surveillance",
+    "kind": "superior_turretcam_hlvf",
+    "events": [
+      "burglary",
+      "connectivity",
+      "power",
+      "tamper",
+      "configuration",
+      "firmware"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX029",
+    "name": "Superior BulletCam HLVF",
+    "room": "Video surveillance",
+    "kind": "superior_bulletcam_hlvf",
+    "events": [
+      "burglary",
+      "connectivity",
+      "power",
+      "tamper",
+      "configuration",
+      "firmware"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX030",
+    "name": "Superior DomeCam HLVF",
+    "room": "Video surveillance",
+    "kind": "superior_domecam_hlvf",
+    "events": [
+      "burglary",
+      "connectivity",
+      "power",
+      "tamper",
+      "configuration",
+      "firmware"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX031",
+    "name": "TurretCam HLVF",
+    "room": "Video surveillance",
+    "kind": "turretcam_hlvf",
+    "events": [
+      "burglary",
+      "connectivity",
+      "power",
+      "tamper",
+      "configuration",
+      "firmware"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX032",
+    "name": "BulletCam HLVF",
+    "room": "Video surveillance",
+    "kind": "bulletcam_hlvf",
+    "events": [
+      "burglary",
+      "connectivity",
+      "power",
+      "tamper",
+      "configuration",
+      "firmware"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX033",
+    "name": "DomeCam HLVF",
+    "room": "Video surveillance",
+    "kind": "domecam_hlvf",
+    "events": [
+      "burglary",
+      "connectivity",
+      "power",
+      "tamper",
+      "configuration",
+      "firmware"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX034",
+    "name": "TurretCam HL",
+    "room": "Video surveillance",
+    "kind": "turretcam_hl",
+    "events": [
+      "burglary",
+      "connectivity",
+      "power",
+      "tamper",
+      "configuration",
+      "firmware"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX035",
+    "name": "TurretCam",
+    "room": "Video surveillance",
+    "kind": "turretcam",
+    "events": [
+      "burglary",
+      "connectivity",
+      "power",
+      "tamper",
+      "configuration",
+      "firmware"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX036",
+    "name": "DomeCam Mini HL",
+    "room": "Video surveillance",
+    "kind": "domecam_mini_hl",
+    "events": [
+      "burglary",
+      "connectivity",
+      "power",
+      "tamper",
+      "configuration",
+      "firmware"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX037",
+    "name": "DomeCam Mini",
+    "room": "Video surveillance",
+    "kind": "domecam_mini",
+    "events": [
+      "burglary",
+      "connectivity",
+      "power",
+      "tamper",
+      "configuration",
+      "firmware"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX038",
+    "name": "NVR",
+    "room": "Video surveillance",
+    "kind": "nvr",
+    "events": [
+      "connectivity",
+      "power",
+      "configuration",
+      "firmware"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX039",
+    "name": "NVR H series",
+    "room": "Video surveillance",
+    "kind": "nvr_h_series",
+    "events": [
+      "connectivity",
+      "power",
+      "configuration",
+      "firmware"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX040",
+    "name": "JunctionBox (118x59)",
+    "room": "Accessories",
+    "kind": "junctionbox_118x59",
+    "events": [],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX041",
+    "name": "LifeQuality",
+    "room": "Accessories",
+    "kind": "lifequality",
+    "events": [
+      "temperature",
+      "co",
+      "gas_or_co",
+      "battery",
+      "connectivity"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX042",
+    "name": "LightSwitch (1-gang) Jeweller",
+    "room": "Automation",
+    "kind": "lightswitch_1_gang_jeweller",
+    "events": [
+      "power",
+      "connectivity",
+      "hardware",
+      "firmware"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX043",
+    "name": "LightSwitch (2-gang) Jeweller",
+    "room": "Automation",
+    "kind": "lightswitch_2_gang_jeweller",
+    "events": [
+      "power",
+      "connectivity",
+      "hardware",
+      "firmware"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX044",
+    "name": "LightSwitch (2-way) Jeweller",
+    "room": "Automation",
+    "kind": "lightswitch_2_way_jeweller",
+    "events": [
+      "power",
+      "connectivity",
+      "hardware",
+      "firmware"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX045",
+    "name": "LightSwitch (2-gang/2-way) Jeweller",
+    "room": "Automation",
+    "kind": "lightswitch_2_gang_2_way_jeweller",
+    "events": [
+      "power",
+      "connectivity",
+      "hardware",
+      "firmware"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX046",
+    "name": "LightSwitch (Crossover) Jeweller",
+    "room": "Automation",
+    "kind": "lightswitch_crossover_jeweller",
+    "events": [
+      "power",
+      "connectivity",
+      "hardware",
+      "firmware"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX047",
+    "name": "LightSwitch (Dimmer) Jeweller",
+    "room": "Automation",
+    "kind": "lightswitch_dimmer_jeweller",
+    "events": [
+      "power",
+      "connectivity",
+      "hardware",
+      "firmware"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX048",
+    "name": "Bypass (Dimmer) [55]",
+    "room": "Accessories",
+    "kind": "bypass_dimmer_55",
+    "events": [],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX049",
+    "name": "LightSwitch (1-gang) [120] Jeweller",
+    "room": "Automation",
+    "kind": "lightswitch_1_gang_120_jeweller",
+    "events": [
+      "power",
+      "connectivity",
+      "hardware",
+      "firmware"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX050",
+    "name": "LightSwitch (3-way) [120] Jeweller",
+    "room": "Automation",
+    "kind": "lightswitch_3_way_120_jeweller",
+    "events": [
+      "power",
+      "connectivity",
+      "hardware",
+      "firmware"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX051",
+    "name": "LightSwitch (4-way) [120] Jeweller",
+    "room": "Automation",
+    "kind": "lightswitch_4_way_120_jeweller",
+    "events": [
+      "power",
+      "connectivity",
+      "hardware",
+      "firmware"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX052",
+    "name": "Socket (type F) Jeweller",
+    "room": "Automation",
+    "kind": "socket_type_f_jeweller",
+    "events": [
+      "power",
+      "connectivity",
+      "hardware",
+      "firmware"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX053",
+    "name": "Socket (type G) Jeweller",
+    "room": "Automation",
+    "kind": "socket_type_g_jeweller",
+    "events": [
+      "power",
+      "connectivity",
+      "hardware",
+      "firmware"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX054",
+    "name": "Socket (type B) Jeweller",
+    "room": "Automation",
+    "kind": "socket_type_b_jeweller",
+    "events": [
+      "power",
+      "connectivity",
+      "hardware",
+      "firmware"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX055",
+    "name": "WallSwitch",
+    "room": "Automation",
+    "kind": "wallswitch",
+    "events": [
+      "power",
+      "connectivity",
+      "hardware",
+      "firmware"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX056",
+    "name": "Relay",
+    "room": "Automation",
+    "kind": "relay",
+    "events": [
+      "power",
+      "connectivity",
+      "hardware",
+      "firmware"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX057",
+    "name": "Outlet [type F] Jeweller",
+    "room": "Automation",
+    "kind": "outlet_type_f_jeweller",
+    "events": [
+      "power",
+      "connectivity",
+      "hardware",
+      "firmware"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX058",
+    "name": "Outlet (basic) [type F]",
+    "room": "Automation",
+    "kind": "outlet_basic_type_f",
+    "events": [],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX059",
+    "name": "Outlet [type E] Jeweller",
+    "room": "Automation",
+    "kind": "outlet_type_e_jeweller",
+    "events": [
+      "power",
+      "connectivity",
+      "hardware",
+      "firmware"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX060",
+    "name": "Outlet (basic) [type E]",
+    "room": "Automation",
+    "kind": "outlet_basic_type_e",
+    "events": [],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX061",
+    "name": "Outlet (LAN)",
+    "room": "Automation",
+    "kind": "outlet_lan",
+    "events": [],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX062",
+    "name": "CoverPlate",
+    "room": "Accessories",
+    "kind": "coverplate",
+    "events": [],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX063",
+    "name": "SurfaceBox [55]",
+    "room": "Accessories",
+    "kind": "surfacebox_55",
+    "events": [],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX064",
+    "name": "Ajax WaterStop",
+    "room": "Automation",
+    "kind": "ajax_waterstop",
+    "events": [
+      "battery",
+      "connectivity",
+      "tamper",
+      "hardware"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX065",
+    "name": "MotionCam Jeweller",
+    "room": "Video surveillance",
+    "kind": "motioncam_jeweller",
+    "events": [
+      "burglary",
+      "tamper",
+      "battery",
+      "connectivity",
+      "bypass",
+      "tamper_bypass",
+      "accelerometer"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX066",
+    "name": "Superior MotionCam Fibra",
+    "room": "Video surveillance",
+    "kind": "superior_motioncam_fibra",
+    "events": [
+      "burglary",
+      "tamper",
+      "battery",
+      "connectivity",
+      "bypass",
+      "tamper_bypass",
+      "accelerometer"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX067",
+    "name": "MotionCam (PhOD) Jeweller",
+    "room": "Video surveillance",
+    "kind": "motioncam_phod_jeweller",
+    "events": [
+      "burglary",
+      "tamper",
+      "battery",
+      "connectivity",
+      "bypass",
+      "tamper_bypass",
+      "accelerometer"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX068",
+    "name": "Superior MotionCam HD (PhOD) Jeweller",
+    "room": "Video surveillance",
+    "kind": "superior_motioncam_hd_phod_jeweller",
+    "events": [
+      "burglary",
+      "tamper",
+      "battery",
+      "connectivity",
+      "bypass",
+      "tamper_bypass",
+      "accelerometer"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX069",
+    "name": "Superior MotionCam (PhOD) Jeweller",
+    "room": "Video surveillance",
+    "kind": "superior_motioncam_phod_jeweller",
+    "events": [
+      "burglary",
+      "tamper",
+      "battery",
+      "connectivity",
+      "bypass",
+      "tamper_bypass",
+      "accelerometer"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX070",
+    "name": "Superior MotionCam AM (PhOD) Jeweller",
+    "room": "Video surveillance",
+    "kind": "superior_motioncam_am_phod_jeweller",
+    "events": [
+      "burglary",
+      "tamper",
+      "battery",
+      "connectivity",
+      "bypass",
+      "tamper_bypass",
+      "accelerometer"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX071",
+    "name": "Superior MotionCam (PhOD) Fibra",
+    "room": "Video surveillance",
+    "kind": "superior_motioncam_phod_fibra",
+    "events": [
+      "burglary",
+      "tamper",
+      "battery",
+      "connectivity",
+      "bypass",
+      "tamper_bypass",
+      "accelerometer"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX072",
+    "name": "MotionProtect Jeweller",
+    "room": "Intrusion protection",
+    "kind": "motionprotect_jeweller",
+    "events": [
+      "burglary",
+      "tamper",
+      "battery",
+      "connectivity",
+      "bypass",
+      "tamper_bypass",
+      "accelerometer"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX073",
+    "name": "Superior MotionProtect Jeweller",
+    "room": "Intrusion protection",
+    "kind": "superior_motionprotect_jeweller",
+    "events": [
+      "burglary",
+      "tamper",
+      "battery",
+      "connectivity",
+      "bypass",
+      "tamper_bypass",
+      "accelerometer"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX074",
+    "name": "Superior MotionProtect G3 Fibra",
+    "room": "Intrusion protection",
+    "kind": "superior_motionprotect_g3_fibra",
+    "events": [
+      "burglary",
+      "tamper",
+      "battery",
+      "connectivity",
+      "bypass",
+      "tamper_bypass",
+      "accelerometer"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX075",
+    "name": "Superior MotionProtect Plus G3 Fibra",
+    "room": "Intrusion protection",
+    "kind": "superior_motionprotect_plus_g3_fibra",
+    "events": [
+      "burglary",
+      "tamper",
+      "battery",
+      "connectivity",
+      "bypass",
+      "tamper_bypass",
+      "accelerometer"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX076",
+    "name": "Superior MotionProtect Fibra",
+    "room": "Intrusion protection",
+    "kind": "superior_motionprotect_fibra",
+    "events": [
+      "burglary",
+      "tamper",
+      "battery",
+      "connectivity",
+      "bypass",
+      "tamper_bypass",
+      "accelerometer"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX077",
+    "name": "MotionProtect Plus Jeweller",
+    "room": "Intrusion protection",
+    "kind": "motionprotect_plus_jeweller",
+    "events": [
+      "burglary",
+      "tamper",
+      "battery",
+      "connectivity",
+      "bypass",
+      "tamper_bypass",
+      "accelerometer"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX078",
+    "name": "Superior MotionProtect Plus Jeweller",
+    "room": "Intrusion protection",
+    "kind": "superior_motionprotect_plus_jeweller",
+    "events": [
+      "burglary",
+      "tamper",
+      "battery",
+      "connectivity",
+      "bypass",
+      "tamper_bypass",
+      "accelerometer"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX079",
+    "name": "Superior MotionProtect Plus Fibra",
+    "room": "Intrusion protection",
+    "kind": "superior_motionprotect_plus_fibra",
+    "events": [
+      "burglary",
+      "tamper",
+      "battery",
+      "connectivity",
+      "bypass",
+      "tamper_bypass",
+      "accelerometer"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX080",
+    "name": "CombiProtect",
+    "room": "Intrusion protection",
+    "kind": "combiprotect",
+    "events": [
+      "burglary",
+      "tamper",
+      "battery",
+      "connectivity",
+      "bypass",
+      "tamper_bypass",
+      "accelerometer"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX081",
+    "name": "Superior CombiProtect Jeweller",
+    "room": "Intrusion protection",
+    "kind": "superior_combiprotect_jeweller",
+    "events": [
+      "burglary",
+      "tamper",
+      "battery",
+      "connectivity",
+      "bypass",
+      "tamper_bypass",
+      "accelerometer"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX082",
+    "name": "Superior CombiProtect Fibra",
+    "room": "Intrusion protection",
+    "kind": "superior_combiprotect_fibra",
+    "events": [
+      "burglary",
+      "tamper",
+      "battery",
+      "connectivity",
+      "bypass",
+      "tamper_bypass",
+      "accelerometer"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX083",
+    "name": "DoorProtect",
+    "room": "Intrusion protection",
+    "kind": "doorprotect",
+    "events": [
+      "burglary",
+      "tamper",
+      "battery",
+      "connectivity",
+      "bypass",
+      "tamper_bypass"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX084",
+    "name": "Superior DoorProtect Jeweller",
+    "room": "Intrusion protection",
+    "kind": "superior_doorprotect_jeweller",
+    "events": [
+      "burglary",
+      "tamper",
+      "battery",
+      "connectivity",
+      "bypass",
+      "tamper_bypass"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX085",
+    "name": "Superior DoorProtect Fibra",
+    "room": "Intrusion protection",
+    "kind": "superior_doorprotect_fibra",
+    "events": [
+      "burglary",
+      "tamper",
+      "battery",
+      "connectivity",
+      "bypass",
+      "tamper_bypass"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX086",
+    "name": "Superior DoorProtect G3 Fibra",
+    "room": "Intrusion protection",
+    "kind": "superior_doorprotect_g3_fibra",
+    "events": [
+      "burglary",
+      "tamper",
+      "battery",
+      "connectivity",
+      "bypass",
+      "tamper_bypass",
+      "accelerometer"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX087",
+    "name": "DoorProtect Plus",
+    "room": "Intrusion protection",
+    "kind": "doorprotect_plus",
+    "events": [
+      "burglary",
+      "tamper",
+      "battery",
+      "connectivity",
+      "bypass",
+      "tamper_bypass",
+      "accelerometer"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX088",
+    "name": "Superior DoorProtect Plus Jeweller",
+    "room": "Intrusion protection",
+    "kind": "superior_doorprotect_plus_jeweller",
+    "events": [
+      "burglary",
+      "tamper",
+      "battery",
+      "connectivity",
+      "bypass",
+      "tamper_bypass",
+      "accelerometer"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX089",
+    "name": "Superior DoorProtect Plus Fibra",
+    "room": "Intrusion protection",
+    "kind": "superior_doorprotect_plus_fibra",
+    "events": [
+      "burglary",
+      "tamper",
+      "battery",
+      "connectivity",
+      "bypass",
+      "tamper_bypass",
+      "accelerometer"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX090",
+    "name": "GlassProtect",
+    "room": "Intrusion protection",
+    "kind": "glassprotect",
+    "events": [
+      "burglary",
+      "tamper",
+      "battery",
+      "connectivity",
+      "bypass",
+      "tamper_bypass",
+      "accelerometer"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX091",
+    "name": "Superior GlassProtect Jeweller",
+    "room": "Intrusion protection",
+    "kind": "superior_glassprotect_jeweller",
+    "events": [
+      "burglary",
+      "tamper",
+      "battery",
+      "connectivity",
+      "bypass",
+      "tamper_bypass",
+      "accelerometer"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX092",
+    "name": "Superior GlassProtect Fibra",
+    "room": "Intrusion protection",
+    "kind": "superior_glassprotect_fibra",
+    "events": [
+      "burglary",
+      "tamper",
+      "battery",
+      "connectivity",
+      "bypass",
+      "tamper_bypass",
+      "accelerometer"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX093",
+    "name": "MotionProtect Curtain",
+    "room": "Intrusion protection",
+    "kind": "motionprotect_curtain",
+    "events": [
+      "burglary",
+      "tamper",
+      "battery",
+      "connectivity",
+      "bypass",
+      "tamper_bypass",
+      "accelerometer"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX094",
+    "name": "MotionProtect Outdoor Jeweller",
+    "room": "Intrusion protection",
+    "kind": "motionprotect_outdoor_jeweller",
+    "events": [
+      "burglary",
+      "tamper",
+      "battery",
+      "connectivity",
+      "bypass",
+      "tamper_bypass",
+      "accelerometer"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX095",
+    "name": "MotionCam Outdoor Jeweller",
+    "room": "Video surveillance",
+    "kind": "motioncam_outdoor_jeweller",
+    "events": [
+      "burglary",
+      "tamper",
+      "battery",
+      "connectivity",
+      "bypass",
+      "tamper_bypass",
+      "accelerometer"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX096",
+    "name": "MotionCam Outdoor (PhOD) Jeweller",
+    "room": "Video surveillance",
+    "kind": "motioncam_outdoor_phod_jeweller",
+    "events": [
+      "burglary",
+      "tamper",
+      "battery",
+      "connectivity",
+      "bypass",
+      "tamper_bypass",
+      "accelerometer"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX097",
+    "name": "MotionCam Outdoor HighMount (PhOD) Jeweller",
+    "room": "Video surveillance",
+    "kind": "motioncam_outdoor_highmount_phod_jeweller",
+    "events": [
+      "burglary",
+      "tamper",
+      "battery",
+      "connectivity",
+      "bypass",
+      "tamper_bypass",
+      "accelerometer"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX098",
+    "name": "Curtain Outdoor Jeweller",
+    "room": "Intrusion protection",
+    "kind": "curtain_outdoor_jeweller",
+    "events": [
+      "burglary",
+      "tamper",
+      "battery",
+      "connectivity",
+      "bypass",
+      "tamper_bypass",
+      "accelerometer"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX099",
+    "name": "Curtain Outdoor Mini Jeweller",
+    "room": "Intrusion protection",
+    "kind": "curtain_outdoor_mini_jeweller",
+    "events": [
+      "burglary",
+      "tamper",
+      "battery",
+      "connectivity",
+      "bypass",
+      "tamper_bypass",
+      "accelerometer"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX100",
+    "name": "DualCurtain Outdoor",
+    "room": "Intrusion protection",
+    "kind": "dualcurtain_outdoor",
+    "events": [
+      "burglary",
+      "tamper",
+      "battery",
+      "connectivity",
+      "bypass",
+      "tamper_bypass",
+      "accelerometer"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX101",
+    "name": "CurtainCam Outdoor HighMount (PhOD) Jeweller",
+    "room": "Video surveillance",
+    "kind": "curtaincam_outdoor_highmount_phod_jeweller",
+    "events": [
+      "burglary",
+      "tamper",
+      "battery",
+      "connectivity",
+      "bypass",
+      "tamper_bypass",
+      "accelerometer"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX102",
+    "name": "Superior Hub G3 Jeweller",
+    "room": "Central units",
+    "kind": "superior_hub_g3_jeweller",
+    "events": [
+      "supervision",
+      "connectivity",
+      "battery",
+      "power",
+      "tamper",
+      "interference",
+      "configuration",
+      "firmware"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX103",
+    "name": "Superior Internal Battery (60h)",
+    "room": "Accessories",
+    "kind": "superior_internal_battery_60h",
+    "events": [],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX104",
+    "name": "Superior Internal Battery (16h)",
+    "room": "Accessories",
+    "kind": "superior_internal_battery_16h",
+    "events": [],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX105",
+    "name": "Superior ReX G3 Jeweller",
+    "room": "Central units",
+    "kind": "superior_rex_g3_jeweller",
+    "events": [
+      "connectivity",
+      "battery",
+      "power",
+      "tamper",
+      "firmware"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX106",
+    "name": "Superior MotionCam G3 (PhOD) Jeweller",
+    "room": "Video surveillance",
+    "kind": "superior_motioncam_g3_phod_jeweller",
+    "events": [
+      "burglary",
+      "tamper",
+      "battery",
+      "connectivity",
+      "bypass",
+      "tamper_bypass",
+      "accelerometer"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX107",
+    "name": "Superior DoorProtect G3 Jeweller",
+    "room": "Intrusion protection",
+    "kind": "superior_doorprotect_g3_jeweller",
+    "events": [
+      "burglary",
+      "tamper",
+      "battery",
+      "connectivity",
+      "bypass",
+      "tamper_bypass",
+      "accelerometer"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX108",
+    "name": "Superior MotionProtect G3 Jeweller",
+    "room": "Intrusion protection",
+    "kind": "superior_motionprotect_g3_jeweller",
+    "events": [
+      "burglary",
+      "tamper",
+      "battery",
+      "connectivity",
+      "bypass",
+      "tamper_bypass",
+      "accelerometer"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX109",
+    "name": "Superior StreetSiren Plus G3 Jeweller",
+    "room": "Sirens",
+    "kind": "superior_streetsiren_plus_g3_jeweller",
+    "events": [
+      "tamper",
+      "battery",
+      "connectivity",
+      "power",
+      "bypass",
+      "tamper_bypass"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX110",
+    "name": "Superior HomeSiren G3 Jeweller",
+    "room": "Sirens",
+    "kind": "superior_homesiren_g3_jeweller",
+    "events": [
+      "tamper",
+      "battery",
+      "connectivity",
+      "power",
+      "bypass",
+      "tamper_bypass"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX111",
+    "name": "Superior KeyPad TouchScreen G3 Jeweller",
+    "room": "Controls and panic buttons",
+    "kind": "superior_keypad_touchscreen_g3_jeweller",
+    "events": [
+      "arming",
+      "night_mode",
+      "duress",
+      "access",
+      "tamper",
+      "battery",
+      "connectivity",
+      "bypass",
+      "tamper_bypass"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX112",
+    "name": "Superior KeyPad Plus G3 Jeweller",
+    "room": "Controls and panic buttons",
+    "kind": "superior_keypad_plus_g3_jeweller",
+    "events": [
+      "arming",
+      "night_mode",
+      "duress",
+      "access",
+      "tamper",
+      "battery",
+      "connectivity",
+      "bypass",
+      "tamper_bypass"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX113",
+    "name": "Superior DoubleButton G3 Jeweller",
+    "room": "Controls and panic buttons",
+    "kind": "superior_doublebutton_g3_jeweller",
+    "events": [
+      "panic",
+      "duress",
+      "tamper",
+      "battery",
+      "connectivity",
+      "bypass"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX114",
+    "name": "Superior MultiTransmitter G3 Jeweller",
+    "room": "Integrations and modules",
+    "kind": "superior_multitransmitter_g3_jeweller",
+    "events": [
+      "burglary",
+      "fire",
+      "medical",
+      "panic",
+      "emergency",
+      "gas_or_co",
+      "water_leak",
+      "temperature",
+      "tamper",
+      "duress",
+      "accelerometer",
+      "hardware",
+      "arming",
+      "night_mode",
+      "battery",
+      "connectivity",
+      "power",
+      "bypass",
+      "tamper_bypass"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX115",
+    "name": "Superior MultiTransmitter G3 Jeweller (without casing)",
+    "room": "Integrations and modules",
+    "kind": "superior_multitransmitter_g3_jeweller_without_casing",
+    "events": [
+      "burglary",
+      "fire",
+      "medical",
+      "panic",
+      "emergency",
+      "gas_or_co",
+      "water_leak",
+      "temperature",
+      "tamper",
+      "duress",
+      "accelerometer",
+      "hardware",
+      "arming",
+      "night_mode",
+      "battery",
+      "connectivity",
+      "power",
+      "bypass",
+      "tamper_bypass"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX116",
+    "name": "EN54 Fire Hub Jeweller",
+    "room": "Central units",
+    "kind": "en54_fire_hub_jeweller",
+    "events": [
+      "supervision",
+      "connectivity",
+      "battery",
+      "power",
+      "tamper",
+      "interference",
+      "configuration",
+      "firmware"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX117",
+    "name": "GlandBox",
+    "room": "Accessories",
+    "kind": "glandbox",
+    "events": [],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX118",
+    "name": "EN54 Fire ReX Jeweller",
+    "room": "Central units",
+    "kind": "en54_fire_rex_jeweller",
+    "events": [
+      "connectivity",
+      "battery",
+      "power",
+      "tamper",
+      "firmware"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX119",
+    "name": "EN54 Internal Battery (24h)",
+    "room": "Accessories",
+    "kind": "en54_internal_battery_24h",
+    "events": [],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX120",
+    "name": "EN54 Internal Battery (72h)",
+    "room": "Accessories",
+    "kind": "en54_internal_battery_72h",
+    "events": [],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX121",
+    "name": "EN54 FireProtect (Heat) Jeweller",
+    "room": "Fire and life safety",
+    "kind": "en54_fireprotect_heat_jeweller",
+    "events": [
+      "fire",
+      "temperature",
+      "fire_detector",
+      "tamper",
+      "battery",
+      "connectivity",
+      "bypass",
+      "tamper_bypass"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX122",
+    "name": "EN54 FireProtect (Heat/Sounder) Jeweller",
+    "room": "Fire and life safety",
+    "kind": "en54_fireprotect_heat_sounder_jeweller",
+    "events": [
+      "fire",
+      "temperature",
+      "fire_detector",
+      "tamper",
+      "battery",
+      "connectivity",
+      "bypass",
+      "tamper_bypass"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX123",
+    "name": "EN54 FireProtect (Smoke) Jeweller",
+    "room": "Fire and life safety",
+    "kind": "en54_fireprotect_smoke_jeweller",
+    "events": [
+      "fire",
+      "smoke",
+      "fire_detector",
+      "tamper",
+      "battery",
+      "connectivity",
+      "bypass",
+      "tamper_bypass"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX124",
+    "name": "EN54 FireProtect (Smoke/Sounder) Jeweller",
+    "room": "Fire and life safety",
+    "kind": "en54_fireprotect_smoke_sounder_jeweller",
+    "events": [
+      "fire",
+      "smoke",
+      "fire_detector",
+      "tamper",
+      "battery",
+      "connectivity",
+      "bypass",
+      "tamper_bypass"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX125",
+    "name": "EN54 FireProtect (Sounder) Jeweller",
+    "room": "Fire and life safety",
+    "kind": "en54_fireprotect_sounder_jeweller",
+    "events": [
+      "fire",
+      "fire_detector",
+      "tamper",
+      "battery",
+      "connectivity",
+      "bypass",
+      "tamper_bypass"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX126",
+    "name": "EN54 FireProtect (Sounder/VAD) Jeweller",
+    "room": "Fire and life safety",
+    "kind": "en54_fireprotect_sounder_vad_jeweller",
+    "events": [
+      "fire",
+      "fire_detector",
+      "tamper",
+      "battery",
+      "connectivity",
+      "bypass",
+      "tamper_bypass"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX127",
+    "name": "EN54 FireProtect (VAD) Jeweller",
+    "room": "Fire and life safety",
+    "kind": "en54_fireprotect_vad_jeweller",
+    "events": [
+      "fire",
+      "fire_detector",
+      "tamper",
+      "battery",
+      "connectivity",
+      "bypass",
+      "tamper_bypass"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX128",
+    "name": "EN54 I/O Module (2X2) Jeweller",
+    "room": "Integrations and modules",
+    "kind": "en54_i_o_module_2x2_jeweller",
+    "events": [
+      "fire",
+      "tamper",
+      "power",
+      "connectivity",
+      "hardware",
+      "bypass",
+      "tamper_bypass"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX129",
+    "name": "FireProtect 2 AC (Heat/Smoke/CO)",
+    "room": "Fire and life safety",
+    "kind": "fireprotect_2_ac_heat_smoke_co",
+    "events": [
+      "fire",
+      "smoke",
+      "temperature",
+      "co",
+      "gas_or_co",
+      "fire_detector",
+      "tamper",
+      "battery",
+      "connectivity",
+      "bypass",
+      "tamper_bypass"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX130",
+    "name": "FireProtect 2 AC (Heat/Smoke)",
+    "room": "Fire and life safety",
+    "kind": "fireprotect_2_ac_heat_smoke",
+    "events": [
+      "fire",
+      "smoke",
+      "temperature",
+      "fire_detector",
+      "tamper",
+      "battery",
+      "connectivity",
+      "bypass",
+      "tamper_bypass"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX131",
+    "name": "FireProtect 2 AC (Heat/CO)",
+    "room": "Fire and life safety",
+    "kind": "fireprotect_2_ac_heat_co",
+    "events": [
+      "fire",
+      "temperature",
+      "co",
+      "gas_or_co",
+      "fire_detector",
+      "tamper",
+      "battery",
+      "connectivity",
+      "bypass",
+      "tamper_bypass"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX132",
+    "name": "FireProtect 2 AC (Heat)",
+    "room": "Fire and life safety",
+    "kind": "fireprotect_2_ac_heat",
+    "events": [
+      "fire",
+      "temperature",
+      "fire_detector",
+      "tamper",
+      "battery",
+      "connectivity",
+      "bypass",
+      "tamper_bypass"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX133",
+    "name": "FireProtect 2 AC (CO)",
+    "room": "Fire and life safety",
+    "kind": "fireprotect_2_ac_co",
+    "events": [
+      "co",
+      "gas_or_co",
+      "fire_detector",
+      "tamper",
+      "battery",
+      "connectivity",
+      "bypass",
+      "tamper_bypass"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX134",
+    "name": "FireProtect 2 SB (Heat/Smoke/CO) Jeweller",
+    "room": "Fire and life safety",
+    "kind": "fireprotect_2_sb_heat_smoke_co_jeweller",
+    "events": [
+      "fire",
+      "smoke",
+      "temperature",
+      "co",
+      "gas_or_co",
+      "fire_detector",
+      "tamper",
+      "battery",
+      "connectivity",
+      "bypass",
+      "tamper_bypass"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX135",
+    "name": "FireProtect 2 RB (Heat/Smoke/CO) Jeweller",
+    "room": "Fire and life safety",
+    "kind": "fireprotect_2_rb_heat_smoke_co_jeweller",
+    "events": [
+      "fire",
+      "smoke",
+      "temperature",
+      "co",
+      "gas_or_co",
+      "fire_detector",
+      "tamper",
+      "battery",
+      "connectivity",
+      "bypass",
+      "tamper_bypass"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX136",
+    "name": "FireProtect 2 SB (Heat/Smoke) Jeweller",
+    "room": "Fire and life safety",
+    "kind": "fireprotect_2_sb_heat_smoke_jeweller",
+    "events": [
+      "fire",
+      "smoke",
+      "temperature",
+      "fire_detector",
+      "tamper",
+      "battery",
+      "connectivity",
+      "bypass",
+      "tamper_bypass"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX137",
+    "name": "FireProtect 2 RB (Heat/Smoke) Jeweller",
+    "room": "Fire and life safety",
+    "kind": "fireprotect_2_rb_heat_smoke_jeweller",
+    "events": [
+      "fire",
+      "smoke",
+      "temperature",
+      "fire_detector",
+      "tamper",
+      "battery",
+      "connectivity",
+      "bypass",
+      "tamper_bypass"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX138",
+    "name": "FireProtect 2 SB (Heat/CO) Jeweller",
+    "room": "Fire and life safety",
+    "kind": "fireprotect_2_sb_heat_co_jeweller",
+    "events": [
+      "fire",
+      "temperature",
+      "co",
+      "gas_or_co",
+      "fire_detector",
+      "tamper",
+      "battery",
+      "connectivity",
+      "bypass",
+      "tamper_bypass"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX139",
+    "name": "FireProtect 2 RB (Heat/CO) Jeweller",
+    "room": "Fire and life safety",
+    "kind": "fireprotect_2_rb_heat_co_jeweller",
+    "events": [
+      "fire",
+      "temperature",
+      "co",
+      "gas_or_co",
+      "fire_detector",
+      "tamper",
+      "battery",
+      "connectivity",
+      "bypass",
+      "tamper_bypass"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX140",
+    "name": "FireProtect 2 SB (CO) Jeweller",
+    "room": "Fire and life safety",
+    "kind": "fireprotect_2_sb_co_jeweller",
+    "events": [
+      "co",
+      "gas_or_co",
+      "fire_detector",
+      "tamper",
+      "battery",
+      "connectivity",
+      "bypass",
+      "tamper_bypass"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX141",
+    "name": "FireProtect 2 RB (CO) Jeweller",
+    "room": "Fire and life safety",
+    "kind": "fireprotect_2_rb_co_jeweller",
+    "events": [
+      "co",
+      "gas_or_co",
+      "fire_detector",
+      "tamper",
+      "battery",
+      "connectivity",
+      "bypass",
+      "tamper_bypass"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX142",
+    "name": "FireProtect 2 SB (Heat) Jeweller",
+    "room": "Fire and life safety",
+    "kind": "fireprotect_2_sb_heat_jeweller",
+    "events": [
+      "fire",
+      "temperature",
+      "fire_detector",
+      "tamper",
+      "battery",
+      "connectivity",
+      "bypass",
+      "tamper_bypass"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX143",
+    "name": "FireProtect 2 RB (Heat) Jeweller",
+    "room": "Fire and life safety",
+    "kind": "fireprotect_2_rb_heat_jeweller",
+    "events": [
+      "fire",
+      "temperature",
+      "fire_detector",
+      "tamper",
+      "battery",
+      "connectivity",
+      "bypass",
+      "tamper_bypass"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX144",
+    "name": "ManualCallPoint (Red) Jeweller",
+    "room": "Fire and life safety",
+    "kind": "manualcallpoint_red_jeweller",
+    "events": [
+      "fire",
+      "tamper",
+      "battery",
+      "connectivity",
+      "bypass",
+      "tamper_bypass"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX145",
+    "name": "CableTrunk",
+    "room": "Accessories",
+    "kind": "cabletrunk",
+    "events": [],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX146",
+    "name": "ManualCallPoint (Blue) Jeweller",
+    "room": "Fire and life safety",
+    "kind": "manualcallpoint_blue_jeweller",
+    "events": [
+      "fire",
+      "medical",
+      "panic",
+      "emergency",
+      "tamper",
+      "battery",
+      "connectivity",
+      "bypass",
+      "tamper_bypass"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX147",
+    "name": "ManualCallPoint (Green) Jeweller",
+    "room": "Fire and life safety",
+    "kind": "manualcallpoint_green_jeweller",
+    "events": [
+      "fire",
+      "medical",
+      "panic",
+      "emergency",
+      "tamper",
+      "battery",
+      "connectivity",
+      "bypass",
+      "tamper_bypass"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX148",
+    "name": "ManualCallPoint (Yellow) Jeweller",
+    "room": "Fire and life safety",
+    "kind": "manualcallpoint_yellow_jeweller",
+    "events": [
+      "fire",
+      "medical",
+      "panic",
+      "emergency",
+      "tamper",
+      "battery",
+      "connectivity",
+      "bypass",
+      "tamper_bypass"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX149",
+    "name": "ManualCallPoint (White) Jeweller",
+    "room": "Fire and life safety",
+    "kind": "manualcallpoint_white_jeweller",
+    "events": [
+      "fire",
+      "medical",
+      "panic",
+      "emergency",
+      "tamper",
+      "battery",
+      "connectivity",
+      "bypass",
+      "tamper_bypass"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX150",
+    "name": "FireProtect",
+    "room": "Fire and life safety",
+    "kind": "fireprotect",
+    "events": [
+      "fire",
+      "smoke",
+      "temperature",
+      "fire_detector",
+      "tamper",
+      "battery",
+      "connectivity",
+      "bypass",
+      "tamper_bypass"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX151",
+    "name": "FireProtect Plus",
+    "room": "Fire and life safety",
+    "kind": "fireprotect_plus",
+    "events": [
+      "fire",
+      "smoke",
+      "temperature",
+      "co",
+      "gas_or_co",
+      "fire_detector",
+      "tamper",
+      "battery",
+      "connectivity",
+      "bypass",
+      "tamper_bypass"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX152",
+    "name": "LeaksProtect",
+    "room": "Flood protection",
+    "kind": "leaksprotect",
+    "events": [
+      "water_leak",
+      "battery",
+      "connectivity",
+      "bypass",
+      "tamper_bypass"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX153",
+    "name": "Superior StreetSiren Plus Jeweller",
+    "room": "Sirens",
+    "kind": "superior_streetsiren_plus_jeweller",
+    "events": [
+      "tamper",
+      "battery",
+      "connectivity",
+      "power",
+      "bypass",
+      "tamper_bypass"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX154",
+    "name": "Superior StreetSiren Plus Fibra",
+    "room": "Sirens",
+    "kind": "superior_streetsiren_plus_fibra",
+    "events": [
+      "tamper",
+      "battery",
+      "connectivity",
+      "power",
+      "bypass",
+      "tamper_bypass"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX155",
+    "name": "HomeSiren",
+    "room": "Sirens",
+    "kind": "homesiren",
+    "events": [
+      "tamper",
+      "battery",
+      "connectivity",
+      "power",
+      "bypass",
+      "tamper_bypass"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX156",
+    "name": "Superior HomeSiren Jeweller",
+    "room": "Sirens",
+    "kind": "superior_homesiren_jeweller",
+    "events": [
+      "tamper",
+      "battery",
+      "connectivity",
+      "power",
+      "bypass",
+      "tamper_bypass"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX157",
+    "name": "Superior HomeSiren Fibra",
+    "room": "Sirens",
+    "kind": "superior_homesiren_fibra",
+    "events": [
+      "tamper",
+      "battery",
+      "connectivity",
+      "power",
+      "bypass",
+      "tamper_bypass"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX158",
+    "name": "StreetSiren Jeweller",
+    "room": "Sirens",
+    "kind": "streetsiren_jeweller",
+    "events": [
+      "tamper",
+      "battery",
+      "connectivity",
+      "power",
+      "bypass",
+      "tamper_bypass"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX159",
+    "name": "Superior StreetSiren Fibra",
+    "room": "Sirens",
+    "kind": "superior_streetsiren_fibra",
+    "events": [
+      "tamper",
+      "battery",
+      "connectivity",
+      "power",
+      "bypass",
+      "tamper_bypass"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX160",
+    "name": "StreetSiren DoubleDeck",
+    "room": "Sirens",
+    "kind": "streetsiren_doubledeck",
+    "events": [
+      "tamper",
+      "battery",
+      "connectivity",
+      "power",
+      "bypass",
+      "tamper_bypass"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX161",
+    "name": "Superior StreetSiren DoubleDeck Jeweller",
+    "room": "Sirens",
+    "kind": "superior_streetsiren_doubledeck_jeweller",
+    "events": [
+      "tamper",
+      "battery",
+      "connectivity",
+      "power",
+      "bypass",
+      "tamper_bypass"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX162",
+    "name": "Superior StreetSiren DoubleDeck Fibra",
+    "room": "Sirens",
+    "kind": "superior_streetsiren_doubledeck_fibra",
+    "events": [
+      "tamper",
+      "battery",
+      "connectivity",
+      "power",
+      "bypass",
+      "tamper_bypass"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX163",
+    "name": "DoubleButton",
+    "room": "Controls and panic buttons",
+    "kind": "doublebutton",
+    "events": [
+      "panic",
+      "duress",
+      "tamper",
+      "battery",
+      "connectivity",
+      "bypass"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX164",
+    "name": "Button",
+    "room": "Controls and panic buttons",
+    "kind": "button",
+    "events": [
+      "panic",
+      "medical",
+      "emergency",
+      "burglary",
+      "fire",
+      "water_leak",
+      "gas_or_co",
+      "arming",
+      "night_mode",
+      "battery",
+      "connectivity",
+      "bypass"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX165",
+    "name": "Superior Button Jeweller",
+    "room": "Controls and panic buttons",
+    "kind": "superior_button_jeweller",
+    "events": [
+      "panic",
+      "medical",
+      "emergency",
+      "burglary",
+      "fire",
+      "water_leak",
+      "gas_or_co",
+      "arming",
+      "night_mode",
+      "battery",
+      "connectivity",
+      "bypass"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX166",
+    "name": "Ajax SpaceControl",
+    "room": "Controls and panic buttons",
+    "kind": "ajax_spacecontrol",
+    "events": [
+      "arming",
+      "night_mode",
+      "panic",
+      "duress",
+      "battery",
+      "connectivity",
+      "bypass"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX167",
+    "name": "Ajax Superior SpaceControl Jeweller",
+    "room": "Controls and panic buttons",
+    "kind": "ajax_superior_spacecontrol_jeweller",
+    "events": [
+      "arming",
+      "night_mode",
+      "panic",
+      "duress",
+      "battery",
+      "connectivity",
+      "bypass"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX168",
+    "name": "KeyPad TouchScreen",
+    "room": "Controls and panic buttons",
+    "kind": "keypad_touchscreen",
+    "events": [
+      "arming",
+      "night_mode",
+      "duress",
+      "access",
+      "tamper",
+      "battery",
+      "connectivity",
+      "bypass",
+      "tamper_bypass"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX169",
+    "name": "Superior KeyPad TouchScreen Fibra",
+    "room": "Controls and panic buttons",
+    "kind": "superior_keypad_touchscreen_fibra",
+    "events": [
+      "arming",
+      "night_mode",
+      "duress",
+      "access",
+      "tamper",
+      "battery",
+      "connectivity",
+      "bypass",
+      "tamper_bypass"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX170",
+    "name": "KeyPad",
+    "room": "Controls and panic buttons",
+    "kind": "keypad",
+    "events": [
+      "arming",
+      "night_mode",
+      "duress",
+      "access",
+      "tamper",
+      "battery",
+      "connectivity",
+      "bypass",
+      "tamper_bypass"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX171",
+    "name": "KeyPad Outdoor Jeweller",
+    "room": "Controls and panic buttons",
+    "kind": "keypad_outdoor_jeweller",
+    "events": [
+      "arming",
+      "night_mode",
+      "duress",
+      "access",
+      "tamper",
+      "battery",
+      "connectivity",
+      "bypass",
+      "tamper_bypass"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX172",
+    "name": "Superior KeyPad Outdoor Fibra",
+    "room": "Controls and panic buttons",
+    "kind": "superior_keypad_outdoor_fibra",
+    "events": [
+      "arming",
+      "night_mode",
+      "duress",
+      "access",
+      "tamper",
+      "battery",
+      "connectivity",
+      "bypass",
+      "tamper_bypass"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX173",
+    "name": "Superior KeyPad Fibra",
+    "room": "Controls and panic buttons",
+    "kind": "superior_keypad_fibra",
+    "events": [
+      "arming",
+      "night_mode",
+      "duress",
+      "access",
+      "tamper",
+      "battery",
+      "connectivity",
+      "bypass",
+      "tamper_bypass"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX174",
+    "name": "KeyPad Plus",
+    "room": "Controls and panic buttons",
+    "kind": "keypad_plus",
+    "events": [
+      "arming",
+      "night_mode",
+      "duress",
+      "access",
+      "tamper",
+      "battery",
+      "connectivity",
+      "bypass",
+      "tamper_bypass"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX175",
+    "name": "Superior KeyPad Plus Jeweller",
+    "room": "Controls and panic buttons",
+    "kind": "superior_keypad_plus_jeweller",
+    "events": [
+      "arming",
+      "night_mode",
+      "duress",
+      "access",
+      "tamper",
+      "battery",
+      "connectivity",
+      "bypass",
+      "tamper_bypass"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX176",
+    "name": "Tag",
+    "room": "Controls and panic buttons",
+    "kind": "tag",
+    "events": [
+      "arming",
+      "night_mode",
+      "duress",
+      "access"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX177",
+    "name": "Pass",
+    "room": "Controls and panic buttons",
+    "kind": "pass",
+    "events": [
+      "arming",
+      "night_mode",
+      "duress",
+      "access"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX178",
+    "name": "uartBridge",
+    "room": "Integrations and modules",
+    "kind": "uartbridge",
+    "events": [
+      "supervision",
+      "connectivity",
+      "power",
+      "tamper",
+      "configuration"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX179",
+    "name": "ocBridge Plus",
+    "room": "Integrations and modules",
+    "kind": "ocbridge_plus",
+    "events": [
+      "supervision",
+      "connectivity",
+      "power",
+      "tamper",
+      "configuration"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX180",
+    "name": "Transmitter Jeweller",
+    "room": "Integrations and modules",
+    "kind": "transmitter_jeweller",
+    "events": [
+      "burglary",
+      "fire",
+      "medical",
+      "panic",
+      "emergency",
+      "gas_or_co",
+      "water_leak",
+      "temperature",
+      "tamper",
+      "duress",
+      "accelerometer",
+      "hardware",
+      "arming",
+      "night_mode",
+      "battery",
+      "connectivity",
+      "power",
+      "bypass",
+      "tamper_bypass"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX181",
+    "name": "Superior Transmitter Fibra",
+    "room": "Integrations and modules",
+    "kind": "superior_transmitter_fibra",
+    "events": [
+      "burglary",
+      "fire",
+      "medical",
+      "panic",
+      "emergency",
+      "gas_or_co",
+      "water_leak",
+      "temperature",
+      "tamper",
+      "duress",
+      "accelerometer",
+      "hardware",
+      "arming",
+      "night_mode",
+      "battery",
+      "connectivity",
+      "power",
+      "bypass",
+      "tamper_bypass"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX182",
+    "name": "MultiTransmitter Jeweller",
+    "room": "Integrations and modules",
+    "kind": "multitransmitter_jeweller",
+    "events": [
+      "burglary",
+      "fire",
+      "medical",
+      "panic",
+      "emergency",
+      "gas_or_co",
+      "water_leak",
+      "temperature",
+      "tamper",
+      "duress",
+      "accelerometer",
+      "hardware",
+      "arming",
+      "night_mode",
+      "battery",
+      "connectivity",
+      "power",
+      "bypass",
+      "tamper_bypass"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX183",
+    "name": "Superior MultiTransmitter Fibra",
+    "room": "Integrations and modules",
+    "kind": "superior_multitransmitter_fibra",
+    "events": [
+      "burglary",
+      "fire",
+      "medical",
+      "panic",
+      "emergency",
+      "gas_or_co",
+      "water_leak",
+      "temperature",
+      "tamper",
+      "duress",
+      "accelerometer",
+      "hardware",
+      "arming",
+      "night_mode",
+      "battery",
+      "connectivity",
+      "power",
+      "bypass",
+      "tamper_bypass"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX184",
+    "name": "Superior MultiTransmitter Fibra (without casing)",
+    "room": "Integrations and modules",
+    "kind": "superior_multitransmitter_fibra_without_casing",
+    "events": [
+      "burglary",
+      "fire",
+      "medical",
+      "panic",
+      "emergency",
+      "gas_or_co",
+      "water_leak",
+      "temperature",
+      "tamper",
+      "duress",
+      "accelerometer",
+      "hardware",
+      "arming",
+      "night_mode",
+      "battery",
+      "connectivity",
+      "power",
+      "bypass",
+      "tamper_bypass"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX185",
+    "name": "Superior MultiTransmitter IO (4X4) Fibra",
+    "room": "Integrations and modules",
+    "kind": "superior_multitransmitter_io_4x4_fibra",
+    "events": [
+      "burglary",
+      "fire",
+      "medical",
+      "panic",
+      "emergency",
+      "gas_or_co",
+      "water_leak",
+      "temperature",
+      "tamper",
+      "duress",
+      "accelerometer",
+      "hardware",
+      "arming",
+      "night_mode",
+      "battery",
+      "connectivity",
+      "power",
+      "bypass",
+      "tamper_bypass"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX186",
+    "name": "vhfBridge",
+    "room": "Integrations and modules",
+    "kind": "vhfbridge",
+    "events": [
+      "supervision",
+      "connectivity",
+      "power",
+      "tamper",
+      "configuration"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX187",
+    "name": "LockBridge (D) Jeweller",
+    "room": "Integrations and modules",
+    "kind": "lockbridge_d_jeweller",
+    "events": [
+      "arming",
+      "night_mode",
+      "connectivity",
+      "battery",
+      "tamper",
+      "hardware"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX188",
+    "name": "6V PSU (type A)",
+    "room": "Accessories",
+    "kind": "6v_psu_type_a",
+    "events": [],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX189",
+    "name": "12V PSU for Hub/Hub Plus/ReX",
+    "room": "Central units",
+    "kind": "12v_psu_for_hub_hub_plus_rex",
+    "events": [],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX190",
+    "name": "12V PSU for Hub 2/ReX 2",
+    "room": "Central units",
+    "kind": "12v_psu_for_hub_2_rex_2",
+    "events": [],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX191",
+    "name": "12-24V PSU (type A)",
+    "room": "Accessories",
+    "kind": "12_24v_psu_type_a",
+    "events": [],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX192",
+    "name": "12V PSU for NVR",
+    "room": "Video surveillance",
+    "kind": "12v_psu_for_nvr",
+    "events": [],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX193",
+    "name": "Superior LineSupply (45 W) / (75 W) Fibra",
+    "room": "Integrations and modules",
+    "kind": "superior_linesupply_45_w_75_w_fibra",
+    "events": [
+      "power",
+      "connectivity",
+      "tamper",
+      "hardware",
+      "bypass",
+      "tamper_bypass"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX194",
+    "name": "Superior LineSplit Fibra",
+    "room": "Integrations and modules",
+    "kind": "superior_linesplit_fibra",
+    "events": [
+      "power",
+      "connectivity",
+      "tamper",
+      "hardware",
+      "bypass",
+      "tamper_bypass"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX195",
+    "name": "Superior LineProtect Fibra",
+    "room": "Integrations and modules",
+    "kind": "superior_lineprotect_fibra",
+    "events": [
+      "power",
+      "connectivity",
+      "tamper",
+      "hardware",
+      "bypass",
+      "tamper_bypass"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX196",
+    "name": "Superior MultiRelay Fibra",
+    "room": "Automation",
+    "kind": "superior_multirelay_fibra",
+    "events": [
+      "power",
+      "connectivity",
+      "tamper",
+      "hardware",
+      "bypass",
+      "tamper_bypass"
+    ],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX197",
+    "name": "Case A (106)",
+    "room": "Accessories",
+    "kind": "case_a_106",
+    "events": [],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX198",
+    "name": "Case B (175)",
+    "room": "Accessories",
+    "kind": "case_b_175",
+    "events": [],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX199",
+    "name": "Case C (260)",
+    "room": "Accessories",
+    "kind": "case_c_260",
+    "events": [],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX200",
+    "name": "Case D (430)",
+    "room": "Accessories",
+    "kind": "case_d_430",
+    "events": [],
+    "auto_discovered": false
+  },
+  {
+    "account": "0001",
+    "zone": "EX201",
+    "name": "Case E (395)",
+    "room": "Accessories",
+    "kind": "case_e_395",
+    "events": [],
     "auto_discovered": false
   }
 ]

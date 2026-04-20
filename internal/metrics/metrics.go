@@ -105,12 +105,12 @@ func New(reg prometheus.Registerer) *Metrics {
 		}, []string{"account", "partition", "group", "zone", "device", "device_name", "room", "device_kind", "device_events"}),
 		zoneTrouble: prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Name: "ajax_zone_trouble_active",
-			Help: "Whether trouble is currently active for a zone.",
-		}, []string{"account", "zone"}),
+			Help: "Whether trouble is currently active for a zone/device.",
+		}, []string{"account", "partition", "group", "zone", "device", "device_name", "room", "device_kind", "device_events"}),
 		zoneLastEvent: prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Name: "ajax_zone_last_event_timestamp_seconds",
-			Help: "Unix timestamp for the last received event per zone.",
-		}, []string{"account", "zone"}),
+			Help: "Unix timestamp for the last received event per zone/device.",
+		}, []string{"account", "partition", "group", "zone", "device", "device_name", "room", "device_kind", "device_events"}),
 	}
 
 	reg.MustRegister(
@@ -175,16 +175,13 @@ func (m *Metrics) SetSnapshot(snapshot state.Snapshot) {
 		m.accountLastPing.With(labels).Set(timestamp(account.LastPingAt))
 	}
 	for _, zone := range snapshot.Zones {
-		labels := prometheus.Labels{
-			"account": labelValue(zone.Account, "unknown"),
-			"zone":    labelValue(zone.Zone, "unknown"),
-		}
+		labels := deviceLabels(zone)
 		m.zoneTrouble.With(labels).Set(boolFloat(zone.TroubleActive))
 		m.zoneLastEvent.With(labels).Set(timestamp(zone.LastEventAt))
 
 		alarmLabels := deviceLabels(zone)
-		alarmLabels["alarm_signal"] = labelValue(zone.AlarmSignal, "")
-		alarmLabels["alarm_action"] = labelValue(zone.AlarmAction, "")
+		alarmLabels["alarm_signal"] = labelValue(zone.AlarmSignal, "none")
+		alarmLabels["alarm_action"] = labelValue(zone.AlarmAction, "none")
 		m.zoneAlarm.With(alarmLabels).Set(boolFloat(zone.AlarmActive))
 		if !zone.AlarmStartedAt.IsZero() {
 			m.zoneAlarmLast.With(alarmLabels).Set(timestamp(zone.AlarmStartedAt))

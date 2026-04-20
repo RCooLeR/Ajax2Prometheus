@@ -68,6 +68,7 @@ func Run(parent context.Context, cfg config.Config, log zerolog.Logger) error {
 	registry := prometheus.NewRegistry()
 	metricSet := metrics.New(registry)
 	stateEngine := state.NewEngine(cfg.OfflineGrace, devices)
+	metricSet.SetSnapshot(stateEngine.Snapshot())
 	var siaForwarder *forward.Group
 	forwardAddrs := cfg.ForwardAddresses()
 	if len(forwardAddrs) > 0 {

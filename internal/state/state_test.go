@@ -1,12 +1,60 @@
 package state
 
 import (
+	"context"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/RCooLeR/Ajax2Prometheus/internal/devicecatalog"
 	"github.com/RCooLeR/Ajax2Prometheus/internal/event"
 )
+
+func TestNewEngineSeedsCatalogDevicesAsInactiveZones(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "devices.json")
+	data := []byte(`[{
+  "account": "0001",
+  "zone": "7",
+  "partition": "1",
+  "group": "garage",
+  "device": "ri1",
+  "name": "Garage door",
+  "room": "Garage",
+  "kind": "doorprotect",
+  "events": ["burglary", "tamper", "battery", "connectivity"]
+}]`)
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	catalog, err := devicecatalog.Load(context.Background(), path)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	engine := NewEngine(time.Minute, catalog)
+	snapshot := engine.Snapshot()
+
+	if len(snapshot.Accounts) != 0 {
+		t.Fatalf("accounts length = %d, want 0 before first event", len(snapshot.Accounts))
+	}
+	if len(snapshot.Zones) != 1 {
+		t.Fatalf("zones length = %d, want 1", len(snapshot.Zones))
+	}
+	zone := snapshot.Zones[0]
+	if zone.Account != "0001" || zone.Zone != "7" || zone.Partition != "1" || zone.Group != "garage" || zone.Device != "ri1" {
+		t.Fatalf("unexpected zone identity: %#v", zone)
+	}
+	if zone.DeviceName != "Garage door" || zone.Room != "Garage" || zone.Kind != "doorprotect" {
+		t.Fatalf("unexpected zone labels: %#v", zone)
+	}
+	if zone.DeviceEventsLabel != "burglary,tamper,battery,connectivity" {
+		t.Fatalf("device events label = %q", zone.DeviceEventsLabel)
+	}
+	if zone.AlarmActive || zone.TamperActive || zone.TroubleActive || !zone.LastEventAt.IsZero() {
+		t.Fatalf("catalog-only zone should be inactive with no event timestamp: %#v", zone)
+	}
+}
 
 func TestBypassRestoreClearsTrouble(t *testing.T) {
 	for _, tc := range []struct {

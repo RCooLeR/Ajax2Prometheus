@@ -109,3 +109,37 @@ ajax_zone_alarm_active{account="0001",alarm_action="none",alarm_signal="none",de
 		t.Fatal(err)
 	}
 }
+
+func TestZoneTroubleAndLastEventMetricsIncludeDeviceLabels(t *testing.T) {
+	registry := prometheus.NewRegistry()
+	m := New(registry)
+	m.SetSnapshot(state.Snapshot{
+		Zones: []state.Zone{
+			{
+				Account:           "0001",
+				Partition:         "1",
+				Group:             "garage",
+				Zone:              "12",
+				Device:            "ri1",
+				DeviceName:        "Garage door",
+				Room:              "Garage",
+				Kind:              "doorprotect",
+				DeviceEventsLabel: "burglary,tamper,battery,connectivity",
+				TroubleActive:     true,
+				LastEventAt:       time.Unix(300, 0),
+			},
+		},
+	})
+
+	expected := `
+# HELP ajax_zone_last_event_timestamp_seconds Unix timestamp for the last received event per zone/device.
+# TYPE ajax_zone_last_event_timestamp_seconds gauge
+ajax_zone_last_event_timestamp_seconds{account="0001",device="ri1",device_events="burglary,tamper,battery,connectivity",device_kind="doorprotect",device_name="Garage door",group="garage",partition="1",room="Garage",zone="12"} 300
+# HELP ajax_zone_trouble_active Whether trouble is currently active for a zone/device.
+# TYPE ajax_zone_trouble_active gauge
+ajax_zone_trouble_active{account="0001",device="ri1",device_events="burglary,tamper,battery,connectivity",device_kind="doorprotect",device_name="Garage door",group="garage",partition="1",room="Garage",zone="12"} 1
+`
+	if err := testutil.GatherAndCompare(registry, strings.NewReader(expected), "ajax_zone_trouble_active", "ajax_zone_last_event_timestamp_seconds"); err != nil {
+		t.Fatal(err)
+	}
+}

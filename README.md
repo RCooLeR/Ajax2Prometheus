@@ -116,7 +116,7 @@ Core metrics:
 - `ajax_zone_trouble_active`
 - `ajax_zone_last_event_timestamp_seconds`
 
-Zone metrics include stable catalog labels where available: `zone`, `partition`, `group`, `device`, `device_name`, `room`, `device_kind`, and `device_events`.
+All `ajax_zone_*` metrics include stable catalog labels where available: `account`, `partition`, `group`, `zone`, `device`, `device_name`, `room`, `device_kind`, and `device_events`. Alarm metrics also include `alarm_signal` and `alarm_action`.
 
 ## Device Catalog
 
@@ -144,6 +144,35 @@ For Ajax SIA-DCS payloads like `Nri1/BA007`:
 - `007` is the zone/device number to map in `devices.json`
 
 In the Ajax app, the device number is shown in the device details at the very bottom of the screen.
+
+Devices listed in `devices.json` are exported to `/state` and `/metrics` immediately after startup, even before the first event arrives for that device. Inactive device metrics start at `0` with a last-event timestamp of `0`.
+
+The `events` field is a Grafana/Prometheus label, not an Ajax setting. The app also updates it automatically when real events arrive, but you can prefill it with the normalized signal labels below so dashboards do not need to wait for alarms or faults.
+
+Common event labels supported by this app:
+
+| Ajax device kind | Suggested `events` values |
+| --- | --- |
+| Hub | `supervision`, `connectivity`, `battery`, `power`, `tamper`, `interference`, `configuration`, `firmware` |
+| User or mobile app | `arming`, `night_mode`, `duress`, `panic` |
+| KeyPad, KeyPad Plus, KeyPad TouchScreen | `arming`, `night_mode`, `duress`, `access`, `tamper`, `battery`, `connectivity`, `bypass`, `tamper_bypass` |
+| SpaceControl, control buttons, key fobs | `arming`, `night_mode`, `panic`, `duress`, `battery`, `connectivity`, `bypass` |
+| Button, DoubleButton, panic/medical buttons | `panic`, `medical`, `emergency`, `tamper`, `battery`, `connectivity`, `bypass` |
+| MotionProtect, MotionCam, DoorProtect, GlassProtect, CombiProtect, curtain/opening/motion detectors | `burglary`, `tamper`, `battery`, `connectivity`, `bypass`, `tamper_bypass`, `accelerometer` |
+| MotionCam and detectors with photo verification | `burglary`, `tamper`, `battery`, `connectivity`, `bypass`, `tamper_bypass`, `accelerometer` |
+| FireProtect, FireProtect Plus, FireProtect 2 | `fire`, `smoke`, `temperature`, `gas_or_co`, `co`, `fire_detector`, `tamper`, `battery`, `connectivity`, `bypass`, `tamper_bypass` |
+| LeaksProtect | `water_leak`, `battery`, `connectivity`, `bypass`, `tamper_bypass` |
+| Transmitter, MultiTransmitter, wired input modules | `burglary`, `fire`, `medical`, `panic`, `emergency`, `gas_or_co`, `water_leak`, `temperature`, `tamper`, `duress`, `accelerometer`, `hardware`, `arming`, `night_mode`, `battery`, `connectivity`, `power`, `bypass`, `tamper_bypass` |
+| HomeSiren, StreetSiren, sirens | `tamper`, `battery`, `connectivity`, `power`, `bypass`, `tamper_bypass` |
+| Relay, WallSwitch, Socket, automation modules | `power`, `connectivity`, `hardware`, `firmware` |
+| ReX, ReX 2, range extenders | `connectivity`, `power`, `battery`, `tamper`, `firmware` |
+
+Raw labels that may be auto-discovered from received SIA events are: `access`, `accelerometer`, `arming`, `battery`, `burglary`, `bypass`, `co`, `configuration`, `connectivity`, `duress`, `emergency`, `fire`, `fire_detector`, `firmware`, `gas`, `gas_or_co`, `hardware`, `interference`, `medical`, `night_mode`, `panic`, `power`, `smoke`, `supervision`, `tamper`, `tamper_bypass`, `temperature`, and `water_leak`.
+
+Ajax documents direct SIA DC-09 event delivery and the SIA-DCS/ADM-CID payload shape in its support docs:
+
+- <https://support.ajax.systems/en/how-to-use-sia-for-cms-connection/>
+- <https://support.ajax.systems/en/manuals/cloud-signaling/>
 
 ## Logging
 
