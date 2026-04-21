@@ -259,3 +259,11 @@ Old entities remain after changing zones or names:
 - Remove stale MQTT entities from Home Assistant.
 - Clear retained stale discovery topics from the broker if needed.
 - Keep `account` and `zone` stable when editing `devices.json`.
+
+## Dashboard Cards
+
+See [ha-cards.md](./ha-cards.md) for ready-to-paste Lovelace examples:
+
+- a polished `button-card` + `stack-in-card` zone card
+- a built-in Home Assistant fallback without custom cards
+- a compact account overview grid

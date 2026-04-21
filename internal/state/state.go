@@ -210,6 +210,7 @@ func (e *Engine) seedCatalogDevices() {
 		}
 		zone := e.zone(device.Account, device.Zone)
 		applyDeviceMetadata(zone, device)
+		applyCatalogState(zone, device)
 	}
 }
 
@@ -295,6 +296,28 @@ func applyDeviceMetadata(zone *Zone, device devicecatalog.Device) {
 				zone.SignalActive[signal] = false
 			}
 		}
+	}
+}
+
+func applyCatalogState(zone *Zone, device devicecatalog.Device) {
+	if zone == nil {
+		return
+	}
+	if !device.LastSeenAt.IsZero() && device.LastSeenAt.After(zone.LastEventAt) {
+		zone.LastEventAt = device.LastSeenAt
+		zone.LastEventCode = device.LastEventCode
+		zone.LastEventName = device.LastEventName
+		zone.LastSignal = device.LastSignal
+		return
+	}
+	if zone.LastEventCode == "" {
+		zone.LastEventCode = device.LastEventCode
+	}
+	if zone.LastEventName == "" {
+		zone.LastEventName = device.LastEventName
+	}
+	if zone.LastSignal == "" {
+		zone.LastSignal = device.LastSignal
 	}
 }
 

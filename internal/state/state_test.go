@@ -61,6 +61,44 @@ func TestNewEngineSeedsCatalogDevicesAsInactiveZones(t *testing.T) {
 	}
 }
 
+func TestNewEngineSeedsCatalogLastSeenAndLastEventIntoZones(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "devices.json")
+	data := []byte(`[{
+  "account": "0001",
+  "zone": "7",
+  "name": "Garage fire sensor",
+  "room": "Garage",
+  "kind": "fireprotect",
+  "events": ["fire", "smoke", "battery"],
+  "last_seen_at": "2026-04-20T12:34:56Z",
+  "last_event_code": "TU",
+  "last_event_name": "Tamper bypass restored or reactivated",
+  "last_signal": "tamper_bypass"
+}]`)
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	catalog, err := devicecatalog.Load(context.Background(), path)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	engine := NewEngine(time.Minute, catalog)
+	snapshot := engine.Snapshot()
+
+	if len(snapshot.Zones) != 1 {
+		t.Fatalf("zones length = %d, want 1", len(snapshot.Zones))
+	}
+	zone := snapshot.Zones[0]
+	wantTime := time.Date(2026, 4, 20, 12, 34, 56, 0, time.UTC)
+	if !zone.LastEventAt.Equal(wantTime) {
+		t.Fatalf("last event at = %s, want %s", zone.LastEventAt, wantTime)
+	}
+	if zone.LastEventCode != "TU" || zone.LastEventName != "Tamper bypass restored or reactivated" || zone.LastSignal != "tamper_bypass" {
+		t.Fatalf("unexpected seeded catalog state: %#v", zone)
+	}
+}
+
 func TestZoneSignalActiveTracksAlarmTroubleAndRestore(t *testing.T) {
 	engine := NewEngine(time.Minute, devicecatalog.Empty())
 

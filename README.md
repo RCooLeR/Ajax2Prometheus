@@ -162,6 +162,8 @@ Set `AJAX2PROM_MQTT_BROKER` to enable MQTT publishing. Home Assistant discovery 
 
 See [ha.md](./ha.md) for step-by-step Home Assistant setup and troubleshooting.
 
+See [ha-cards.md](./ha-cards.md) for Lovelace card examples built around the discovered Ajax account and zone entities.
+
 MQTT is intentionally non-blocking for SIA handling. If the MQTT broker is down or slow, Ajax ACK responses are still sent normally.
 
 Published state topics:

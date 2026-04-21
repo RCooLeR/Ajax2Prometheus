@@ -141,3 +141,52 @@ func TestUpsertFromEventUpdatesExistingDeviceEvents(t *testing.T) {
 		t.Fatalf("manual labels should be preserved: %#v", device)
 	}
 }
+
+func TestUpsertFromEventPersistsLastSeenAndLastEventFields(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "devices.json")
+	if err := os.WriteFile(path, []byte(`[{"account":"0001","zone":"7","name":"Kitchen transmitter","room":"Kitchen","kind":"ajax_transmitter","events":["tamper"]}]`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	catalog, err := Load(context.Background(), path)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	receivedAt := time.Date(2026, 4, 21, 10, 11, 12, 0, time.UTC)
+	result, err := catalog.UpsertFromEvent(context.Background(), event.Normalized{
+		Account:     "0001",
+		Zone:        "7",
+		EventCode:   "TU",
+		EventClass:  event.ClassRestore,
+		EventName:   "Tamper bypass restored or reactivated",
+		Signal:      "tamper_bypass",
+		Source:      "sensor",
+		ReceivedAt:  receivedAt,
+		ParseStatus: event.ParseStatusOK,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !result.Updated {
+		t.Fatalf("expected updated result, got %#v", result)
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var devices []Device
+	if err := json.Unmarshal(data, &devices); err != nil {
+		t.Fatal(err)
+	}
+	if len(devices) != 1 {
+		t.Fatalf("devices length = %d", len(devices))
+	}
+	device := devices[0]
+	if !device.LastSeenAt.Equal(receivedAt) {
+		t.Fatalf("last_seen_at = %s, want %s", device.LastSeenAt, receivedAt)
+	}
+	if device.LastEventCode != "TU" || device.LastEventName != "Tamper bypass restored or reactivated" || device.LastSignal != "tamper_bypass" {
+		t.Fatalf("unexpected persisted last event fields: %#v", device)
+	}
+}
