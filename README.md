@@ -63,6 +63,26 @@ services:
 
 ```
 
+Published images:
+
+- `rcooler/ajax2prometheus:latest`
+- `rcooler/ajax2prometheus:vX.Y.Z`
+- `rcooler/ajax2prometheus:vX.Y`
+- `rcooler/ajax2prometheus:vX`
+
+Git tags matching `v*` trigger `.github/workflows/release.yml`, which runs GoReleaser and pushes a multi-arch Docker image for `linux/amd64` and `linux/arm64` to Docker Hub.
+
+Required GitHub Actions secrets:
+
+- `DOCKERHUB_USERNAME`
+- `DOCKERHUB_TOKEN`
+
+Local dry-run:
+
+```powershell
+go run github.com/goreleaser/goreleaser/v2@latest release --snapshot --clean
+```
+
 ## Ajax Setup
 
 Configure the Ajax hub monitoring station connection:

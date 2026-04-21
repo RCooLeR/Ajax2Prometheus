@@ -1,5 +1,8 @@
 # --- Stage 1: Build the Go binary ---
-FROM golang:1.26.2-alpine AS builder
+FROM --platform=$BUILDPLATFORM golang:1.26.2-alpine AS builder
+
+ARG TARGETOS
+ARG TARGETARCH
 
 # Install git and CA certs (if needed for Go modules)
 RUN apk add --no-cache git ca-certificates
@@ -10,7 +13,7 @@ COPY . .
 
 RUN go mod download
 
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o /out/ajax2prometheus ./cmd/ajax2prometheus
+RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -trimpath -ldflags="-s -w" -o /out/ajax2prometheus ./cmd/ajax2prometheus
 
 # --- Stage 2: Create a lightweight image with the binary only ---
 FROM alpine:3.23

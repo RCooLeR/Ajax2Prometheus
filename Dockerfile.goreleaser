@@ -1,0 +1,23 @@
+FROM alpine:3.23
+
+ARG TARGETPLATFORM
+
+RUN apk upgrade --no-cache && apk add --no-cache ca-certificates
+
+RUN addgroup -S ajax2prometheus && adduser -S -G ajax2prometheus ajax2prometheus
+RUN mkdir -p /data && chown ajax2prometheus:ajax2prometheus /data
+
+WORKDIR /app
+
+COPY --chown=ajax2prometheus:ajax2prometheus $TARGETPLATFORM/ajax2prometheus /app/ajax2prometheus
+
+USER ajax2prometheus
+
+EXPOSE 8080 8099
+
+ENV AJAX2PROM_HTTP_ADDR=:8080
+ENV AJAX2PROM_SIA_ADDR=:8099
+ENV AJAX2PROM_LOG_PRETTY=false
+ENV AJAX2PROM_DEVICES_PATH=/data/devices.json
+
+ENTRYPOINT ["/app/ajax2prometheus"]

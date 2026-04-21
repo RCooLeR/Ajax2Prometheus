@@ -1,0 +1,61 @@
+version: 2
+
+project_name: ajax2prometheus
+
+before:
+  hooks:
+    - go test ./...
+
+builds:
+  - id: ajax2prometheus
+    main: ./cmd/ajax2prometheus
+    binary: ajax2prometheus
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    flags:
+      - -trimpath
+    mod_timestamp: "{{ .CommitTimestamp }}"
+    ldflags:
+      - -s -w -X main.version={{ .Version }} -X main.commit={{ .Commit }} -X main.date={{ .CommitDate }}
+
+checksum:
+  name_template: checksums.txt
+
+docker_digest:
+  name_template: digests.txt
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  use: git
+  sort: asc
+
+dockers_v2:
+  - id: ajax2prometheus
+    ids:
+      - ajax2prometheus
+    dockerfile: Dockerfile.goreleaser
+    images:
+      - rcooler/ajax2prometheus
+    tags:
+      - v{{ .Version }}
+      - "{{ if not .Prerelease }}latest{{ end }}"
+      - "{{ if not .Prerelease }}v{{ .Major }}{{ end }}"
+      - "{{ if not .Prerelease }}v{{ .Major }}.{{ .Minor }}{{ end }}"
+    labels:
+      org.opencontainers.image.title: "{{ .ProjectName }}"
+      org.opencontainers.image.description: "Ajax security hub SIA DC-09 to Prometheus exporter"
+      org.opencontainers.image.url: "{{ .GitURL }}"
+      org.opencontainers.image.source: "{{ .GitURL }}"
+      org.opencontainers.image.version: "{{ .Version }}"
+      org.opencontainers.image.revision: "{{ .FullCommit }}"
+      org.opencontainers.image.created: "{{ .Date }}"
+    platforms:
+      - linux/amd64
+      - linux/arm64
