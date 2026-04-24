@@ -44,10 +44,10 @@ dockers_v2:
     images:
       - rcooler/ajax2prometheus
     tags:
-      - v{{ .Version }}
+      - "{{ .Version }}"
       - "{{ if not .Prerelease }}latest{{ end }}"
-      - "{{ if not .Prerelease }}v{{ .Major }}{{ end }}"
-      - "{{ if not .Prerelease }}v{{ .Major }}.{{ .Minor }}{{ end }}"
+      - "{{ if not .Prerelease }}{{ .Major }}{{ end }}"
+      - "{{ if not .Prerelease }}{{ .Major }}.{{ .Minor }}{{ end }}"
     labels:
       org.opencontainers.image.title: "{{ .ProjectName }}"
       org.opencontainers.image.description: "Ajax security hub SIA DC-09 to Prometheus exporter"

@@ -66,9 +66,9 @@ services:
 Published images:
 
 - `rcooler/ajax2prometheus:latest`
-- `rcooler/ajax2prometheus:vX.Y.Z`
-- `rcooler/ajax2prometheus:vX.Y`
-- `rcooler/ajax2prometheus:vX`
+- `rcooler/ajax2prometheus:X.Y.Z`
+- `rcooler/ajax2prometheus:X.Y`
+- `rcooler/ajax2prometheus:X`
 
 Git tags matching `v*` trigger `.github/workflows/release.yml`, which runs GoReleaser and pushes a multi-arch Docker image for `linux/amd64` and `linux/arm64` to Docker Hub.
 
