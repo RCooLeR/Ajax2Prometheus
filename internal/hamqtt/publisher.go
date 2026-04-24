@@ -35,11 +35,36 @@ type Config struct {
 }
 
 type Publisher struct {
-	cfg        Config
-	client     paho.Client
-	log        zerolog.Logger
-	mu         sync.Mutex
-	discovered map[string]struct{}
+	cfg             Config
+	client          paho.Client
+	log             zerolog.Logger
+	mu              sync.Mutex
+	discovered      map[string]struct{}
+	publishedStates map[string]string
+	accountPlans    map[string]accountPlan
+	zonePlans       map[string]zonePlan
+}
+
+type Update struct {
+	Accounts []state.Account
+	Zones    []state.Zone
+}
+
+type accountPlan struct {
+	stateTopic string
+	discovery  []discoveryMessage
+}
+
+type zonePlan struct {
+	signature  string
+	stateTopic string
+	discovery  []discoveryMessage
+}
+
+type discoveryMessage struct {
+	key     string
+	topic   string
+	payload []byte
 }
 
 type deviceInfo struct {
@@ -132,9 +157,12 @@ func New(cfg Config, log zerolog.Logger) *Publisher {
 		cfg.Timeout = 5 * time.Second
 	}
 	return &Publisher{
-		cfg:        cfg,
-		log:        log,
-		discovered: make(map[string]struct{}),
+		cfg:             cfg,
+		log:             log,
+		discovered:      make(map[string]struct{}),
+		publishedStates: make(map[string]string),
+		accountPlans:    make(map[string]accountPlan),
+		zonePlans:       make(map[string]zonePlan),
 	}
 }
 
@@ -159,6 +187,7 @@ func (p *Publisher) Connect(ctx context.Context) error {
 	opts.SetPingTimeout(10 * time.Second)
 	opts.SetWill(p.availabilityTopic(), payloadOffline, 1, true)
 	opts.OnConnect = func(client paho.Client) {
+		p.resetCaches()
 		token := client.Publish(p.availabilityTopic(), 1, true, payloadOnline)
 		token.WaitTimeout(p.cfg.Timeout)
 		p.log.Info().Str("broker", p.cfg.Broker).Msg("MQTT connected")
@@ -182,6 +211,13 @@ func (p *Publisher) Close() {
 }
 
 func (p *Publisher) PublishSnapshot(ctx context.Context, snapshot state.Snapshot) error {
+	return p.PublishUpdate(ctx, Update{
+		Accounts: snapshot.Accounts,
+		Zones:    snapshot.Zones,
+	})
+}
+
+func (p *Publisher) PublishUpdate(ctx context.Context, update Update) error {
 	if !p.Enabled() || p.client == nil {
 		return nil
 	}
@@ -193,24 +229,13 @@ func (p *Publisher) PublishSnapshot(ctx context.Context, snapshot state.Snapshot
 	}
 
 	var errs []error
-	accounts := append([]state.Account(nil), snapshot.Accounts...)
-	sort.Slice(accounts, func(i, j int) bool {
-		return accounts[i].Account < accounts[j].Account
-	})
-	for _, account := range accounts {
+	for _, account := range update.Accounts {
 		if err := p.publishAccount(ctx, account); err != nil {
 			errs = append(errs, err)
 		}
 	}
 
-	zones := append([]state.Zone(nil), snapshot.Zones...)
-	sort.Slice(zones, func(i, j int) bool {
-		if zones[i].Account == zones[j].Account {
-			return zones[i].Zone < zones[j].Zone
-		}
-		return zones[i].Account < zones[j].Account
-	})
-	for _, zone := range zones {
+	for _, zone := range update.Zones {
 		if err := p.publishZone(ctx, zone); err != nil {
 			errs = append(errs, err)
 		}
@@ -220,10 +245,13 @@ func (p *Publisher) PublishSnapshot(ctx context.Context, snapshot state.Snapshot
 }
 
 func (p *Publisher) publishAccount(ctx context.Context, account state.Account) error {
-	topic := p.accountStateTopic(account.Account)
+	plan, err := p.accountPlanFor(account)
+	if err != nil {
+		return err
+	}
 	if p.cfg.Discovery {
-		for _, ent := range accountEntities(account.Account) {
-			if err := p.publishDiscovery(ctx, ent, topic, accountDevice(account), p.cfg.ClientID); err != nil {
+		for _, message := range plan.discovery {
+			if err := p.publishDiscoveryMessage(ctx, message); err != nil {
 				return err
 			}
 		}
@@ -232,15 +260,17 @@ func (p *Publisher) publishAccount(ctx context.Context, account state.Account) e
 	if err != nil {
 		return err
 	}
-	return p.publish(ctx, topic, payload, p.cfg.Retain)
+	return p.publishState(ctx, plan.stateTopic, payload, p.cfg.Retain)
 }
 
 func (p *Publisher) publishZone(ctx context.Context, zone state.Zone) error {
-	topic := p.zoneStateTopic(zone.Account, zone.Zone)
+	plan, err := p.zonePlanFor(zone)
+	if err != nil {
+		return err
+	}
 	if p.cfg.Discovery {
-		device := zoneDevice(zone)
-		for _, ent := range zoneEntities(zone) {
-			if err := p.publishDiscovery(ctx, ent, topic, device, p.cfg.ClientID); err != nil {
+		for _, message := range plan.discovery {
+			if err := p.publishDiscoveryMessage(ctx, message); err != nil {
 				return err
 			}
 		}
@@ -249,48 +279,28 @@ func (p *Publisher) publishZone(ctx context.Context, zone state.Zone) error {
 	if err != nil {
 		return err
 	}
-	return p.publish(ctx, topic, payload, p.cfg.Retain)
+	return p.publishState(ctx, plan.stateTopic, payload, p.cfg.Retain)
 }
 
-func (p *Publisher) publishDiscovery(ctx context.Context, ent entity, stateTopic string, device deviceInfo, node string) error {
-	key := ent.Component + "/" + ent.ObjectID
-	p.mu.Lock()
-	if _, ok := p.discovered[key]; ok {
-		p.mu.Unlock()
+func (p *Publisher) publishDiscoveryMessage(ctx context.Context, message discoveryMessage) error {
+	if !p.markDiscoveredPending(message.key) {
 		return nil
 	}
-	p.mu.Unlock()
-
-	cfg := discoveryConfig{
-		Name:                ent.Name,
-		UniqueID:            p.uniqueID(ent.ObjectID),
-		StateTopic:          stateTopic,
-		ValueTemplate:       ent.ValueTemplate,
-		AvailabilityTopic:   p.availabilityTopic(),
-		PayloadAvailable:    payloadOnline,
-		PayloadNotAvailable: payloadOffline,
-		DeviceClass:         ent.DeviceClass,
-		EntityCategory:      ent.EntityCategory,
-		Icon:                ent.Icon,
-		Device:              device,
-	}
-	if ent.Binary {
-		cfg.PayloadOn = payloadOn
-		cfg.PayloadOff = payloadOff
-	}
-
-	payload, err := json.Marshal(cfg)
-	if err != nil {
+	if err := p.publish(ctx, message.topic, message.payload, true); err != nil {
+		p.clearDiscovered(message.key)
 		return err
 	}
-	topic := p.discoveryTopic(ent.Component, node, ent.ObjectID)
-	if err := p.publish(ctx, topic, payload, true); err != nil {
+	return nil
+}
+
+func (p *Publisher) publishState(ctx context.Context, topic string, payload []byte, retain bool) error {
+	if !p.shouldPublishState(topic, payload) {
+		return nil
+	}
+	if err := p.publish(ctx, topic, payload, retain); err != nil {
+		p.clearPublishedState(topic)
 		return err
 	}
-
-	p.mu.Lock()
-	p.discovered[key] = struct{}{}
-	p.mu.Unlock()
 	return nil
 }
 
@@ -305,11 +315,6 @@ func (p *Publisher) publish(ctx context.Context, topic string, payload interface
 }
 
 func (p *Publisher) wait(ctx context.Context, token paho.Token) error {
-	done := make(chan struct{})
-	go func() {
-		token.Wait()
-		close(done)
-	}()
 	timer := time.NewTimer(p.cfg.Timeout)
 	defer timer.Stop()
 	select {
@@ -317,9 +322,153 @@ func (p *Publisher) wait(ctx context.Context, token paho.Token) error {
 		return ctx.Err()
 	case <-timer.C:
 		return fmt.Errorf("MQTT operation timed out after %s", p.cfg.Timeout)
-	case <-done:
+	case <-token.Done():
 		return token.Error()
 	}
+}
+
+func (p *Publisher) resetCaches() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.discovered = make(map[string]struct{})
+	p.publishedStates = make(map[string]string)
+}
+
+func (p *Publisher) markDiscoveredPending(key string) bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if _, ok := p.discovered[key]; ok {
+		return false
+	}
+	p.discovered[key] = struct{}{}
+	return true
+}
+
+func (p *Publisher) clearDiscovered(key string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	delete(p.discovered, key)
+}
+
+func (p *Publisher) shouldPublishState(topic string, payload []byte) bool {
+	value := string(payload)
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if cached, ok := p.publishedStates[topic]; ok && cached == value {
+		return false
+	}
+	p.publishedStates[topic] = value
+	return true
+}
+
+func (p *Publisher) clearPublishedState(topic string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	delete(p.publishedStates, topic)
+}
+
+func (p *Publisher) accountPlanFor(account state.Account) (accountPlan, error) {
+	key := account.Account
+	p.mu.Lock()
+	plan, ok := p.accountPlans[key]
+	p.mu.Unlock()
+	if ok {
+		return plan, nil
+	}
+
+	discovery, err := p.buildDiscoveryMessages(
+		accountEntities(account.Account),
+		p.accountStateTopic(account.Account),
+		accountDevice(account),
+		p.cfg.ClientID,
+	)
+	if err != nil {
+		return accountPlan{}, err
+	}
+	plan = accountPlan{
+		stateTopic: p.accountStateTopic(account.Account),
+		discovery:  discovery,
+	}
+
+	p.mu.Lock()
+	if cached, ok := p.accountPlans[key]; ok {
+		p.mu.Unlock()
+		return cached, nil
+	}
+	p.accountPlans[key] = plan
+	p.mu.Unlock()
+	return plan, nil
+}
+
+func (p *Publisher) zonePlanFor(zone state.Zone) (zonePlan, error) {
+	key := zonePlanKey(zone.Account, zone.Zone)
+	signature := zoneDiscoverySignature(zone)
+
+	p.mu.Lock()
+	plan, ok := p.zonePlans[key]
+	p.mu.Unlock()
+	if ok && plan.signature == signature {
+		return plan, nil
+	}
+
+	discovery, err := p.buildDiscoveryMessages(
+		zoneEntities(zone),
+		p.zoneStateTopic(zone.Account, zone.Zone),
+		zoneDevice(zone),
+		p.cfg.ClientID,
+	)
+	if err != nil {
+		return zonePlan{}, err
+	}
+	plan = zonePlan{
+		signature:  signature,
+		stateTopic: p.zoneStateTopic(zone.Account, zone.Zone),
+		discovery:  discovery,
+	}
+
+	p.mu.Lock()
+	cached, ok := p.zonePlans[key]
+	if ok && cached.signature == signature {
+		p.mu.Unlock()
+		return cached, nil
+	}
+	p.zonePlans[key] = plan
+	p.mu.Unlock()
+	return plan, nil
+}
+
+func (p *Publisher) buildDiscoveryMessages(entities []entity, stateTopic string, device deviceInfo, node string) ([]discoveryMessage, error) {
+	messages := make([]discoveryMessage, 0, len(entities))
+	for _, ent := range entities {
+		cfg := discoveryConfig{
+			Name:                ent.Name,
+			UniqueID:            p.uniqueID(ent.ObjectID),
+			StateTopic:          stateTopic,
+			ValueTemplate:       ent.ValueTemplate,
+			AvailabilityTopic:   p.availabilityTopic(),
+			PayloadAvailable:    payloadOnline,
+			PayloadNotAvailable: payloadOffline,
+			DeviceClass:         ent.DeviceClass,
+			EntityCategory:      ent.EntityCategory,
+			Icon:                ent.Icon,
+			Device:              device,
+		}
+		if ent.Binary {
+			cfg.PayloadOn = payloadOn
+			cfg.PayloadOff = payloadOff
+		}
+
+		payload, err := json.Marshal(cfg)
+		if err != nil {
+			return nil, err
+		}
+		messages = append(messages, discoveryMessage{
+			key:     ent.Component + "/" + ent.ObjectID,
+			topic:   p.discoveryTopic(ent.Component, node, ent.ObjectID),
+			payload: payload,
+		})
+	}
+	return messages, nil
 }
 
 func (p *Publisher) availabilityTopic() string {
@@ -645,6 +794,30 @@ func topicPart(value string) string {
 		return "unknown"
 	}
 	return strings.NewReplacer("#", "_", "+", "_", " ", "_").Replace(value)
+}
+
+func zonePlanKey(account, zone string) string {
+	return account + "/" + zone
+}
+
+func zoneDiscoverySignature(zone state.Zone) string {
+	signals := sortedSignals(zone.DeviceEvents, zone.SignalActive)
+	var b strings.Builder
+	b.Grow(len(zone.Account) + len(zone.Zone) + len(zone.DeviceName) + len(zone.Room) + len(zone.Kind) + len(signals)*16 + 8)
+	b.WriteString(zone.Account)
+	b.WriteByte('|')
+	b.WriteString(zone.Zone)
+	b.WriteByte('|')
+	b.WriteString(zone.DeviceName)
+	b.WriteByte('|')
+	b.WriteString(zone.Room)
+	b.WriteByte('|')
+	b.WriteString(zone.Kind)
+	for _, signal := range signals {
+		b.WriteByte('|')
+		b.WriteString(signal)
+	}
+	return b.String()
 }
 
 func trimTopic(value string) string {

@@ -37,7 +37,7 @@ type App struct {
 	responder *sia.Responder
 	forwarder *forward.Group
 	mqtt      *hamqtt.Publisher
-	mqttQueue chan state.Snapshot
+	mqttQueue chan hamqtt.Update
 }
 
 func Run(parent context.Context, cfg config.Config, log zerolog.Logger) error {
@@ -73,7 +73,7 @@ func Run(parent context.Context, cfg config.Config, log zerolog.Logger) error {
 	stateEngine := state.NewEngine(cfg.OfflineGrace, devices)
 	metricSet.SetSnapshot(stateEngine.Snapshot())
 	var mqttPublisher *hamqtt.Publisher
-	var mqttQueue chan state.Snapshot
+	var mqttQueue chan hamqtt.Update
 	if cfg.MQTTEnabled() {
 		mqttPublisher = hamqtt.New(hamqtt.Config{
 			Broker:          cfg.MQTTBroker,
@@ -89,7 +89,7 @@ func Run(parent context.Context, cfg config.Config, log zerolog.Logger) error {
 		if err := mqttPublisher.Connect(ctx); err != nil {
 			log.Warn().Err(err).Str("broker", cfg.MQTTBroker).Msg("MQTT connect failed; continuing without blocking SIA")
 		}
-		mqttQueue = make(chan state.Snapshot, 1)
+		mqttQueue = make(chan hamqtt.Update, 1)
 		defer mqttPublisher.Close()
 	}
 	var siaForwarder *forward.Group
@@ -140,7 +140,11 @@ func Run(parent context.Context, cfg config.Config, log zerolog.Logger) error {
 	go application.refreshOnline(ctx)
 	if application.mqtt != nil {
 		go application.publishMQTTSnapshots(ctx)
-		application.enqueueMQTTSnapshot(stateEngine.Snapshot())
+		initialSnapshot := stateEngine.Snapshot()
+		application.enqueueMQTTUpdate(hamqtt.Update{
+			Accounts: initialSnapshot.Accounts,
+			Zones:    initialSnapshot.Zones,
+		})
 	}
 
 	wg.Wait()
@@ -207,7 +211,7 @@ func (a *App) handleSIAFrame(ctx context.Context, raw []byte, remoteAddr string)
 	a.discoverDevice(ctx, evt)
 	snapshot = a.state.Apply(*evt)
 	a.metrics.SetSnapshot(snapshot)
-	a.enqueueMQTTSnapshot(snapshot)
+	a.enqueueMQTTUpdate(mqttUpdateForEvent(snapshot, evt))
 	forwardResults = a.forwardAjaxFrame(ctx, raw, evt)
 	a.log.Info().
 		Interface("event", normalizedLogEvent(evt)).
@@ -303,12 +307,12 @@ func (a *App) observeForwardResults(results []forward.Result) {
 	}
 }
 
-func (a *App) enqueueMQTTSnapshot(snapshot state.Snapshot) {
+func (a *App) enqueueMQTTUpdate(update hamqtt.Update) {
 	if a.mqtt == nil || a.mqttQueue == nil {
 		return
 	}
 	select {
-	case a.mqttQueue <- snapshot:
+	case a.mqttQueue <- update:
 		return
 	default:
 	}
@@ -317,7 +321,7 @@ func (a *App) enqueueMQTTSnapshot(snapshot state.Snapshot) {
 	default:
 	}
 	select {
-	case a.mqttQueue <- snapshot:
+	case a.mqttQueue <- update:
 	default:
 	}
 }
@@ -327,9 +331,9 @@ func (a *App) publishMQTTSnapshots(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			return
-		case snapshot := <-a.mqttQueue:
-			if err := a.mqtt.PublishSnapshot(ctx, snapshot); err != nil {
-				a.log.Debug().Err(err).Msg("publish MQTT snapshot")
+		case update := <-a.mqttQueue:
+			if err := a.mqtt.PublishUpdate(ctx, update); err != nil {
+				a.log.Debug().Err(err).Msg("publish MQTT update")
 			}
 		}
 	}
@@ -509,9 +513,43 @@ func (a *App) refreshOnline(ctx context.Context) {
 		case now := <-ticker.C:
 			snapshot := a.state.RefreshOnline(now.UTC())
 			a.metrics.SetSnapshot(snapshot)
-			a.enqueueMQTTSnapshot(snapshot)
+			a.enqueueMQTTUpdate(hamqtt.Update{Accounts: snapshot.Accounts})
 		}
 	}
+}
+
+func mqttUpdateForEvent(snapshot state.Snapshot, evt *event.Normalized) hamqtt.Update {
+	update := hamqtt.Update{}
+	if evt == nil {
+		return update
+	}
+	if account, ok := snapshotAccount(snapshot, evt.Account); ok {
+		update.Accounts = append(update.Accounts, account)
+	}
+	if evt.Zone != "" {
+		if zone, ok := snapshotZone(snapshot, evt.Account, evt.Zone); ok {
+			update.Zones = append(update.Zones, zone)
+		}
+	}
+	return update
+}
+
+func snapshotAccount(snapshot state.Snapshot, accountID string) (state.Account, bool) {
+	for _, account := range snapshot.Accounts {
+		if account.Account == accountID {
+			return account, true
+		}
+	}
+	return state.Account{}, false
+}
+
+func snapshotZone(snapshot state.Snapshot, accountID, zoneID string) (state.Zone, bool) {
+	for _, zone := range snapshot.Zones {
+		if zone.Account == accountID && zone.Zone == zoneID {
+			return zone, true
+		}
+	}
+	return state.Zone{}, false
 }
 
 func minDuration(a, b time.Duration) time.Duration {

@@ -186,6 +186,14 @@ const ZONE_STYLE_SIGNAL_SUFFIXES = new Proxy({}, {
 
 const DASHBOARD_BASE_WIDTH = 1920;
 const DASHBOARD_BASE_HEIGHT = 1080;
+const SHORT_TIMESTAMP_FORMATTER = new Intl.DateTimeFormat(undefined, {
+  month: "short",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit"
+});
+const RELATIVE_TIME_FORMATTER = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
+const ROOM_META_CACHE = new Map();
 
 function transliterate(value) {
   return String(value || "")
@@ -242,12 +250,7 @@ function formatShortTimestamp(value) {
     return String(value);
   }
 
-  return new Intl.DateTimeFormat(undefined, {
-    month: "short",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit"
-  }).format(date);
+  return SHORT_TIMESTAMP_FORMATTER.format(date);
 }
 
 function formatRelative(value) {
@@ -270,8 +273,7 @@ function formatRelative(value) {
 
   for (const [unit, seconds] of units) {
     if (Math.abs(deltaSeconds) >= seconds || unit === "second") {
-      const formatter = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
-      return formatter.format(Math.round(deltaSeconds / seconds), unit);
+      return RELATIVE_TIME_FORMATTER.format(Math.round(deltaSeconds / seconds), unit);
     }
   }
 
@@ -302,15 +304,6 @@ function commandStatusCopy(systemTone) {
     : systemTone === "warning"
       ? "Attention needed"
       : "Nominal";
-}
-
-function countBy(list, iteratee) {
-  const map = new Map();
-  for (const item of list) {
-    const key = iteratee(item);
-    map.set(key, (map.get(key) || 0) + 1);
-  }
-  return map;
 }
 
 function makeEntityId(domain, prefix, suffix) {
@@ -396,45 +389,48 @@ function entitySourceCandidates(device, config) {
   });
 }
 
-function resolveEntitySource(hass, device, config) {
-  const candidates = entitySourceCandidates(device, config);
-  let best = candidates[0];
-  let bestScore = -1;
-
-  for (const candidate of candidates) {
-    const score = scoreEntitySource(hass, candidate, device);
-    if (score > bestScore) {
-      best = candidate;
-      bestScore = score;
-    }
+function roomMeta(room) {
+  if (ROOM_META_CACHE.has(room)) {
+    return ROOM_META_CACHE.get(room);
   }
 
-  return best;
-}
-
-function roomMeta(room) {
+  let meta;
   if (ROOM_META[room]) {
-    return ROOM_META[room];
+    meta = ROOM_META[room];
+    ROOM_META_CACHE.set(room, meta);
+    return meta;
   }
 
   const slug = entitySlug(room);
   if (slug.includes("budinok") || slug.includes("house")) {
-    return { icon: "mdi:home-city", accent: "#7dd3fc", theme: "home" };
+    meta = { icon: "mdi:home-city", accent: "#7dd3fc", theme: "home" };
+    ROOM_META_CACHE.set(room, meta);
+    return meta;
   }
   if (slug.includes("garazh") || slug.includes("garage")) {
-    return { icon: "mdi:garage", accent: "#f59e0b", theme: "garage" };
+    meta = { icon: "mdi:garage", accent: "#f59e0b", theme: "garage" };
+    ROOM_META_CACHE.set(room, meta);
+    return meta;
   }
   if (slug.includes("kotel")) {
-    return { icon: "mdi:boiler", accent: "#fb7185", theme: "boiler" };
+    meta = { icon: "mdi:boiler", accent: "#fb7185", theme: "boiler" };
+    ROOM_META_CACHE.set(room, meta);
+    return meta;
   }
   if (slug.includes("gorish") || slug.includes("attic")) {
-    return { icon: "mdi:home-roof", accent: "#c4b5fd", theme: "attic" };
+    meta = { icon: "mdi:home-roof", accent: "#c4b5fd", theme: "attic" };
+    ROOM_META_CACHE.set(room, meta);
+    return meta;
   }
   if (slug.includes("khat")) {
-    return { icon: "mdi:home-floor-1", accent: "#6ee7b7", theme: "annex" };
+    meta = { icon: "mdi:home-floor-1", accent: "#6ee7b7", theme: "annex" };
+    ROOM_META_CACHE.set(room, meta);
+    return meta;
   }
 
-  return { icon: "mdi:shield-home-outline", accent: "#7dd3fc", theme: "support" };
+  meta = { icon: "mdi:shield-home-outline", accent: "#7dd3fc", theme: "support" };
+  ROOM_META_CACHE.set(room, meta);
+  return meta;
 }
 
 function iconForKind(kind, room, events) {
@@ -461,10 +457,6 @@ function iconForKind(kind, room, events) {
 
 function readState(hass, entityId) {
   return hass?.states?.[entityId];
-}
-
-function isOn(hass, entityId) {
-  return readState(hass, entityId)?.state === "on";
 }
 
 function sortDevices(a, b) {
@@ -521,161 +513,81 @@ function summarizeHeadline(device) {
   return "Nominal";
 }
 
-function buildDeviceModel(hass, device, config) {
-  const source = resolveEntitySource(hass, device, config || {});
-  const alarmState = firstAvailableState(hass, baseEntityCandidates(source, "alarm"));
-  const tamperState = firstAvailableState(hass, baseEntityCandidates(source, "tamper"));
-  const troubleState = firstAvailableState(hass, baseEntityCandidates(source, "trouble"));
-  const lastEventNameState = firstAvailableState(hass, baseEntityCandidates(source, "lastEventName"));
-  const lastEventAtState = firstAvailableState(hass, baseEntityCandidates(source, "lastEventAt"));
-  const lastSignalState = firstAvailableState(hass, baseEntityCandidates(source, "lastSignal"));
-  const alarmSignalState = firstAvailableState(hass, baseEntityCandidates(source, "alarmSignal"));
-  const alarmActionState = firstAvailableState(hass, baseEntityCandidates(source, "alarmAction"));
-
-  const alarmActive = alarmState?.state === "on";
-  const tamperActive = tamperState?.state === "on";
-  const troubleActive = troubleState?.state === "on";
-  const lastEventName = lastEventNameState?.state || "Awaiting event";
-  const lastEventAt = lastEventAtState?.state || "";
-  const lastSignal = lastSignalState?.state || "idle";
-  const alarmSignal = alarmSignalState?.state || "none";
-  const alarmAction = alarmActionState?.state || "none";
-
-  const activeSignals = [];
-  const warningSignals = [];
-  const eventKeys = uniqueValues(device.events || []);
-
-  for (const signal of eventKeys) {
-    if (firstAvailableState(hass, signalEntityCandidates(source, signal))?.state === "on") {
-      activeSignals.push(signal);
-      warningSignals.push(signal);
-    }
-  }
-
-  if (alarmActive && alarmSignal && alarmSignal !== "none" && !activeSignals.includes(alarmSignal)) {
-    activeSignals.unshift(alarmSignal);
-  }
-
-  const fireLike = activeSignals.some((signal) => ["fire", "smoke", "co", "gas", "gas_or_co"].includes(signal));
-  const waterLike = activeSignals.some((signal) => ["water_leak", "leak", "flood"].includes(signal));
-  const intrusionLike = activeSignals.some((signal) => ["burglary", "panic", "duress", "emergency", "medical", "hold_up"].includes(signal));
-  const offline = activeSignals.includes("connectivity");
-  const batteryIssue = activeSignals.includes("battery");
-
-  let severity = 0;
-  if (fireLike || waterLike || alarmActive || intrusionLike) {
-    severity = 4;
-  } else if (tamperActive || troubleActive || offline) {
-    severity = 3;
-  } else if (batteryIssue || activeSignals.length > 0) {
-    severity = 2;
-  }
-
-  const signalBadges = activeSignals
-    .sort((left, right) => (SIGNAL_META[right]?.rank || 0) - (SIGNAL_META[left]?.rank || 0))
-    .slice(0, 5)
-    .map((signal) => ({
-      key: signal,
-      label: SIGNAL_META[signal]?.label || humanizeKey(signal),
-      icon: SIGNAL_META[signal]?.icon || "mdi:alert-circle-outline",
-      tone: SIGNAL_META[signal]?.tone || "warning"
-    }));
+function createCardRuntime(config, catalog) {
+  const account = String(config.account || catalog[0]?.account || "");
+  const devices = catalog.filter((device) => String(device.account) === account);
+  const availableRooms = uniqueValues(devices.map((device) => device.room));
+  const roomOrder = uniqueValues((config.room_order || DEFAULT_ROOM_ORDER).concat(availableRooms));
+  const orderedRooms = roomOrder.concat(availableRooms.filter((room) => !roomOrder.includes(room)));
 
   return {
-    ...device,
-    id: `${device.account}:${device.zone}`,
-    entityPrefix: source.prefix,
-    entityStyle: source.style,
-    icon: iconForKind(device.kind, device.room, device.events),
-    alarmActive,
-    tamperActive,
-    troubleActive,
-    activeSignals,
-    warningSignals,
-    signalBadges,
-    fireLike,
-    waterLike,
-    intrusionLike,
-    offline,
-    batteryIssue,
-    severity,
-    statusTone: severity >= 4 ? "critical" : severity >= 2 ? "warning" : "clear",
-    headline: summarizeHeadline({
-      alarmActive,
-      tamperActive,
-      troubleActive,
-      offline,
-      batteryIssue,
-      warningSignals,
-      fireLike,
-      waterLike,
-      intrusionLike
-    }),
-    kindLabel: humanizeKey(device.kind),
-    lastEventName,
-    lastEventAt,
-    lastEventAtUnix: Date.parse(lastEventAt) || 0,
-    lastSignal,
-    alarmSignal,
-    alarmAction,
-    lastEventShort: formatShortTimestamp(lastEventAt),
-    lastEventRelative: formatRelative(lastEventAt)
+    account,
+    devices,
+    availableRooms,
+    roomPositions: new Map(orderedRooms.map((room, index) => [room, index])),
+    deviceContexts: devices.map((device) => createDeviceContext(device, config)),
+    entitySourceCache: new Map(),
+    deviceModelCache: new Map()
   };
 }
 
-function buildDashboardModel(hass, config, catalog) {
-  const account = String(config.account || catalog[0]?.account || "");
+function createDeviceContext(device, config) {
+  return {
+    device,
+    id: `${device.account}:${device.zone}`,
+    kindLabel: humanizeKey(device.kind),
+    icon: iconForKind(device.kind, device.room, device.events),
+    eventKeys: uniqueValues(device.events || []),
+    sourceCandidates: entitySourceCandidates(device, config || {})
+  };
+}
+
+function resolveEntitySourceWithCache(hass, context, runtime) {
+  const cached = runtime.entitySourceCache.get(context.id);
+  if (cached?.score > 0) {
+    return cached.source;
+  }
+
+  let best = context.sourceCandidates[0];
+  let bestScore = -1;
+
+  for (const candidate of context.sourceCandidates) {
+    const score = scoreEntitySource(hass, candidate, context.device);
+    if (score > bestScore) {
+      best = candidate;
+      bestScore = score;
+    }
+  }
+
+  if (best && bestScore > 0) {
+    runtime.entitySourceCache.set(context.id, { source: best, score: bestScore });
+  }
+
+  return best;
+}
+
+function firstStateValue(hass, entityIds, fallback = "") {
+  return firstAvailableState(hass, entityIds)?.state || fallback;
+}
+
+function accountStateSignature(accountState) {
+  return [
+    accountState.online ? "1" : "0",
+    accountState.armed ? "1" : "0",
+    accountState.partiallyArmed ? "1" : "0",
+    accountState.nightMode ? "1" : "0",
+    accountState.alarmActive ? "1" : "0",
+    accountState.tamperActive ? "1" : "0",
+    accountState.troubleActive ? "1" : "0",
+    accountState.mode,
+    accountState.lastEvent,
+    accountState.lastEventAt,
+    accountState.lastPingAt
+  ].join("|");
+}
+
+function buildAccountState(hass, account, devices) {
   const accountSlug = slugPart(account);
-  const filteredCatalog = catalog.filter((item) => String(item.account) === account);
-  const devices = filteredCatalog.map((item) => buildDeviceModel(hass, item, config)).sort(sortDevices);
-  const availableRooms = uniqueValues(filteredCatalog.map((item) => item.room));
-  const roomOrder = uniqueValues((config.room_order || DEFAULT_ROOM_ORDER).concat(availableRooms));
-  const orderedRooms = roomOrder.concat(availableRooms.filter((room) => !roomOrder.includes(room)));
-  const roomPositions = new Map(orderedRooms.map((room, index) => [room, index]));
-
-  const rooms = orderedRooms
-    .map((room) => {
-      const roomDevices = devices.filter((device) => device.room === room);
-      if (roomDevices.length === 0) {
-        return null;
-      }
-
-      const critical = roomDevices.filter((device) => device.severity >= 4).length;
-      const warning = roomDevices.filter((device) => device.severity === 3 || device.severity === 2).length;
-      const offline = roomDevices.filter((device) => device.offline).length;
-      const alarmed = roomDevices.filter((device) => device.alarmActive).length;
-
-      const meta = roomMeta(room);
-
-      return {
-        name: room,
-        devices: roomDevices,
-        total: roomDevices.length,
-        critical,
-        warning,
-        offline,
-        alarmed,
-        accent: meta.accent,
-        icon: meta.icon,
-        theme: meta.theme,
-        position: roomPositions.get(room) || 999
-      };
-    })
-    .filter(Boolean)
-    .sort(sortRooms);
-
-  const activeDevices = devices.filter((device) => device.severity > 0).slice(0, 12);
-  const recentDevices = devices
-    .filter((device) => device.lastEventAtUnix > 0)
-    .slice()
-    .sort((left, right) => right.lastEventAtUnix - left.lastEventAtUnix)
-    .slice(0, 12);
-
-  const signalCount = countBy(
-    devices.flatMap((device) => device.activeSignals),
-    (signal) => signal
-  );
-
   const accountOnlineState = readState(hass, `binary_sensor.account_${accountSlug}_online`);
   const accountArmedState = readState(hass, `binary_sensor.account_${accountSlug}_armed`);
   const accountPartialState = readState(hass, `binary_sensor.account_${accountSlug}_partially_armed`);
@@ -710,18 +622,254 @@ function buildDashboardModel(hass, config, catalog) {
           ? "night_mode"
           : "disarmed";
   }
+  const latestDevice = devices
+    .filter((device) => device.lastEventAtUnix > 0)
+    .slice()
+    .sort((left, right) => right.lastEventAtUnix - left.lastEventAtUnix)[0];
   if (accountState.lastEvent === "Awaiting event") {
-    accountState.lastEvent = recentDevices[0]?.lastEventName || "Awaiting event";
-    accountState.lastEventAt = recentDevices[0]?.lastEventAt || "";
+    accountState.lastEvent = latestDevice?.lastEventName || "Awaiting event";
+    accountState.lastEventAt = latestDevice?.lastEventAt || "";
   }
+
+  return accountState;
+}
+
+function buildDeviceModel(hass, context, runtime, relativeBucket) {
+  const source = resolveEntitySourceWithCache(hass, context, runtime);
+  const sourceKey = `${source.style}:${source.prefix}`;
+  let cacheEntry = runtime.deviceModelCache.get(context.id);
+
+  if (!cacheEntry || cacheEntry.sourceKey !== sourceKey) {
+    cacheEntry = {
+      sourceKey,
+      baseCandidates: {
+        alarm: baseEntityCandidates(source, "alarm"),
+        tamper: baseEntityCandidates(source, "tamper"),
+        trouble: baseEntityCandidates(source, "trouble"),
+        lastEventName: baseEntityCandidates(source, "lastEventName"),
+        lastEventAt: baseEntityCandidates(source, "lastEventAt"),
+        lastSignal: baseEntityCandidates(source, "lastSignal"),
+        alarmSignal: baseEntityCandidates(source, "alarmSignal"),
+        alarmAction: baseEntityCandidates(source, "alarmAction")
+      },
+      signalCandidates: new Map(context.eventKeys.map((signal) => [signal, signalEntityCandidates(source, signal)]))
+    };
+    runtime.deviceModelCache.set(context.id, cacheEntry);
+  }
+
+  const alarmState = firstStateValue(hass, cacheEntry.baseCandidates.alarm, "off");
+  const tamperState = firstStateValue(hass, cacheEntry.baseCandidates.tamper, "off");
+  const troubleState = firstStateValue(hass, cacheEntry.baseCandidates.trouble, "off");
+  const lastEventName = firstStateValue(hass, cacheEntry.baseCandidates.lastEventName, "Awaiting event");
+  const lastEventAt = firstStateValue(hass, cacheEntry.baseCandidates.lastEventAt, "");
+  const lastSignal = firstStateValue(hass, cacheEntry.baseCandidates.lastSignal, "idle");
+  const alarmSignal = firstStateValue(hass, cacheEntry.baseCandidates.alarmSignal, "none");
+  const alarmAction = firstStateValue(hass, cacheEntry.baseCandidates.alarmAction, "none");
+
+  const alarmActive = alarmState === "on";
+  const tamperActive = tamperState === "on";
+  const troubleActive = troubleState === "on";
+  const activeSignals = [];
+  const warningSignals = [];
+  const signatureParts = [
+    sourceKey,
+    relativeBucket,
+    alarmState,
+    tamperState,
+    troubleState,
+    lastEventName,
+    lastEventAt,
+    lastSignal,
+    alarmSignal,
+    alarmAction
+  ];
+
+  for (const signal of context.eventKeys) {
+    const signalState = firstStateValue(hass, cacheEntry.signalCandidates.get(signal), "off");
+    signatureParts.push(`${signal}:${signalState}`);
+    if (signalState === "on") {
+      activeSignals.push(signal);
+      warningSignals.push(signal);
+    }
+  }
+
+  const signature = signatureParts.join("|");
+  if (cacheEntry.signature === signature && cacheEntry.model) {
+    return cacheEntry.model;
+  }
+
+  if (alarmActive && alarmSignal && alarmSignal !== "none" && !activeSignals.includes(alarmSignal)) {
+    activeSignals.unshift(alarmSignal);
+  }
+
+  const fireLike = activeSignals.some((signal) => ["fire", "smoke", "co", "gas", "gas_or_co"].includes(signal));
+  const waterLike = activeSignals.some((signal) => ["water_leak", "leak", "flood"].includes(signal));
+  const intrusionLike = activeSignals.some((signal) => ["burglary", "panic", "duress", "emergency", "medical", "hold_up"].includes(signal));
+  const offline = activeSignals.includes("connectivity");
+  const batteryIssue = activeSignals.includes("battery");
+
+  let severity = 0;
+  if (fireLike || waterLike || alarmActive || intrusionLike) {
+    severity = 4;
+  } else if (tamperActive || troubleActive || offline) {
+    severity = 3;
+  } else if (batteryIssue || activeSignals.length > 0) {
+    severity = 2;
+  }
+
+  const signalBadges = activeSignals
+    .sort((left, right) => (SIGNAL_META[right]?.rank || 0) - (SIGNAL_META[left]?.rank || 0))
+    .slice(0, 5)
+    .map((signal) => ({
+      key: signal,
+      label: SIGNAL_META[signal]?.label || humanizeKey(signal),
+      icon: SIGNAL_META[signal]?.icon || "mdi:alert-circle-outline",
+      tone: SIGNAL_META[signal]?.tone || "warning"
+    }));
+
+  const model = {
+    ...context.device,
+    id: context.id,
+    entityPrefix: source.prefix,
+    entityStyle: source.style,
+    icon: context.icon,
+    alarmActive,
+    tamperActive,
+    troubleActive,
+    activeSignals,
+    warningSignals,
+    signalBadges,
+    fireLike,
+    waterLike,
+    intrusionLike,
+    offline,
+    batteryIssue,
+    severity,
+    statusTone: severity >= 4 ? "critical" : severity >= 2 ? "warning" : "clear",
+    headline: summarizeHeadline({
+      alarmActive,
+      tamperActive,
+      troubleActive,
+      offline,
+      batteryIssue,
+      warningSignals,
+      fireLike,
+      waterLike,
+    intrusionLike
+    }),
+    kindLabel: context.kindLabel,
+    lastEventName,
+    lastEventAt,
+    lastEventAtUnix: Date.parse(lastEventAt) || 0,
+    lastSignal,
+    alarmSignal,
+    alarmAction,
+    lastEventShort: formatShortTimestamp(lastEventAt),
+    lastEventRelative: formatRelative(lastEventAt),
+    cacheSignature: signature
+  };
+
+  cacheEntry.signature = signature;
+  cacheEntry.model = model;
+  return model;
+}
+
+function buildDashboardModel(hass, config, catalog, runtime = createCardRuntime(config, catalog)) {
+  const relativeBucket = Math.floor(Date.now() / 60000);
+  const account = runtime.account || String(config.account || catalog[0]?.account || "");
+  const devices = runtime.deviceContexts.map((context) => buildDeviceModel(hass, context, runtime, relativeBucket)).sort(sortDevices);
+
+  const roomBuckets = new Map();
+  const signalCount = new Map();
+  const activeDevices = [];
+  const recentDevices = [];
+  const totals = {
+    devices: devices.length,
+    rooms: 0,
+    critical: 0,
+    attention: 0,
+    offline: 0,
+    healthy: 0
+  };
+
+  for (const device of devices) {
+    if (device.severity >= 4) {
+      totals.critical += 1;
+    } else if (device.severity >= 2) {
+      totals.attention += 1;
+    } else {
+      totals.healthy += 1;
+    }
+    if (device.offline) {
+      totals.offline += 1;
+    }
+    if (device.severity > 0 && activeDevices.length < 12) {
+      activeDevices.push(device);
+    }
+    if (device.lastEventAtUnix > 0) {
+      recentDevices.push(device);
+    }
+    for (const signal of device.activeSignals) {
+      signalCount.set(signal, (signalCount.get(signal) || 0) + 1);
+    }
+    if (!device.room || !runtime.roomPositions.has(device.room)) {
+      continue;
+    }
+
+    let room = roomBuckets.get(device.room);
+    if (!room) {
+      const meta = roomMeta(device.room);
+      room = {
+        name: device.room,
+        devices: [],
+        total: 0,
+        critical: 0,
+        warning: 0,
+        offline: 0,
+        alarmed: 0,
+        accent: meta.accent,
+        icon: meta.icon,
+        theme: meta.theme,
+        position: runtime.roomPositions.get(device.room) || 999
+      };
+      roomBuckets.set(device.room, room);
+    }
+
+    room.devices.push(device);
+    room.total += 1;
+    if (device.severity >= 4) {
+      room.critical += 1;
+    }
+    if (device.severity === 3 || device.severity === 2) {
+      room.warning += 1;
+    }
+    if (device.offline) {
+      room.offline += 1;
+    }
+    if (device.alarmActive) {
+      room.alarmed += 1;
+    }
+  }
+
+  const rooms = Array.from(roomBuckets.values()).sort(sortRooms);
+  totals.rooms = rooms.length;
+  recentDevices.sort((left, right) => right.lastEventAtUnix - left.lastEventAtUnix);
+
+  const accountState = buildAccountState(hass, account, devices);
+  const signature = [
+    relativeBucket,
+    accountStateSignature(accountState),
+    ...devices.map((device) => device.cacheSignature)
+  ].join("||");
 
   return {
     account,
     devices,
     rooms,
     activeDevices,
-    recentDevices,
+    recentDevices: recentDevices.slice(0, 12),
     accountState,
+    signature,
     signalSummary: [
       "fire",
       "smoke",
@@ -736,14 +884,7 @@ function buildDashboardModel(hass, config, catalog) {
       count: signalCount.get(signal) || 0,
       tone: SIGNAL_META[signal]?.tone || "warning"
     })),
-    totals: {
-      devices: devices.length,
-      rooms: rooms.length,
-      critical: devices.filter((device) => device.severity >= 4).length,
-      attention: devices.filter((device) => device.severity === 3 || device.severity === 2).length,
-      offline: devices.filter((device) => device.offline).length,
-      healthy: devices.filter((device) => device.severity === 0).length
-    }
+    totals
   };
 }
 
@@ -755,16 +896,28 @@ class AjaxSecurityDashboard extends HTMLElement {
     this._catalog = AJAX_EMBEDDED_DEVICE_CATALOG.slice();
     this._selectedRoom = null;
     this._model = null;
+    this._runtime = null;
+    this._elements = null;
+    this._renderFrame = 0;
+    this._pendingRenderKey = "";
+    this._lastRenderKey = "";
     this._resizeObserver = new ResizeObserver(() => this._updateScale());
+    this._onShadowClick = this._handleShadowClick.bind(this);
   }
 
   connectedCallback() {
     this._resizeObserver.observe(this);
+    this.shadowRoot.addEventListener("click", this._onShadowClick);
     this._updateScale();
   }
 
   disconnectedCallback() {
     this._resizeObserver.disconnect();
+    this.shadowRoot.removeEventListener("click", this._onShadowClick);
+    if (this._renderFrame) {
+      cancelAnimationFrame(this._renderFrame);
+      this._renderFrame = 0;
+    }
   }
 
   setConfig(config) {
@@ -783,13 +936,14 @@ class AjaxSecurityDashboard extends HTMLElement {
 
     this._config = merged;
     this._catalog = AJAX_EMBEDDED_DEVICE_CATALOG.filter((device) => String(device.account) === String(merged.account));
+    this._runtime = createCardRuntime(this._config, this._catalog);
     if (this._catalog.length === 0) {
       throw new Error(`Ajax Security Dashboard: no catalog entries found for account ${merged.account}.`);
     }
     if (!this._selectedRoom) {
       this._selectedRoom = merged.default_room || null;
     }
-    this._render();
+    this._scheduleRender("config");
   }
 
   set hass(hass) {
@@ -797,12 +951,20 @@ class AjaxSecurityDashboard extends HTMLElement {
     if (!this._config.account) {
       return;
     }
-    this._model = buildDashboardModel(hass, this._config, this._catalog);
-    if (!this._model.rooms.some((room) => room.name === this._selectedRoom)) {
-      const criticalRoom = this._model.rooms.find((room) => room.critical > 0 || room.warning > 0);
-      this._selectedRoom = criticalRoom?.name || this._config.default_room || this._model.rooms[0]?.name || null;
+    const model = buildDashboardModel(hass, this._config, this._catalog, this._runtime);
+    let selectedRoom = this._selectedRoom;
+    if (!model.rooms.some((room) => room.name === selectedRoom)) {
+      const criticalRoom = model.rooms.find((room) => room.critical > 0 || room.warning > 0);
+      selectedRoom = criticalRoom?.name || this._config.default_room || model.rooms[0]?.name || null;
     }
-    this._render();
+
+    const renderKey = `${model.signature}|room:${selectedRoom || ""}`;
+    this._model = model;
+    this._selectedRoom = selectedRoom;
+    if (renderKey === this._lastRenderKey) {
+      return;
+    }
+    this._scheduleRender(renderKey);
   }
 
   getCardSize() {
@@ -816,13 +978,33 @@ class AjaxSecurityDashboard extends HTMLElement {
     this.style.setProperty("--ajax-dashboard-height", `${Math.round(DASHBOARD_BASE_HEIGHT * scale)}px`);
   }
 
-  _bindEvents() {
-    for (const button of this.shadowRoot.querySelectorAll("[data-room]")) {
-      button.addEventListener("click", () => {
-        this._selectedRoom = button.dataset.room;
-        this._render();
-      });
+  _handleShadowClick(event) {
+    const target = event.target instanceof Element ? event.target : null;
+    const button = target?.closest("[data-room]");
+    if (!button || !this.shadowRoot.contains(button)) {
+      return;
     }
+    const nextRoom = button.dataset.room || null;
+    if (nextRoom === this._selectedRoom) {
+      return;
+    }
+    this._selectedRoom = nextRoom;
+    if (this._model) {
+      this._scheduleRender(`${this._model.signature}|room:${this._selectedRoom || ""}`);
+    } else {
+      this._scheduleRender("room-change");
+    }
+  }
+
+  _scheduleRender(renderKey) {
+    this._pendingRenderKey = renderKey || this._pendingRenderKey || "";
+    if (this._renderFrame) {
+      return;
+    }
+    this._renderFrame = requestAnimationFrame(() => {
+      this._renderFrame = 0;
+      this._render();
+    });
   }
 
   _renderSummaryTile(label, value, detail, tone) {
@@ -936,48 +1118,17 @@ class AjaxSecurityDashboard extends HTMLElement {
     `;
   }
 
-  _render() {
-    if (!this._config.account) {
-      return;
+  _renderCollection(items, renderItem, emptyText) {
+    if (!items.length) {
+      return `<div class="empty-note">${escapeHtml(emptyText)}</div>`;
     }
+    return items.map((item) => renderItem.call(this, item)).join("");
+  }
 
-    const model = this._model;
-    if (!model) {
-      this.shadowRoot.innerHTML = `
-        <ha-card>
-          <div style="padding:24px;">Waiting for Home Assistant state...</div>
-        </ha-card>
-      `;
-      return;
+  _ensureShell() {
+    if (this._elements) {
+      return this._elements;
     }
-
-    const selectedRoom =
-      model.rooms.find((room) => room.name === this._selectedRoom) ||
-      model.rooms[0] || {
-        name: "No rooms",
-        devices: [],
-        total: 0,
-        critical: 0,
-        warning: 0,
-        offline: 0,
-        alarmed: 0,
-        icon: "mdi:shield-home-outline"
-      };
-
-    const modeLabel = model.accountState.armed
-      ? "Armed"
-      : model.accountState.partiallyArmed
-        ? "Partially armed"
-        : model.accountState.nightMode
-          ? "Night mode"
-          : "Disarmed";
-
-    const lastPing = model.accountState.lastPingAt ? formatShortTimestamp(model.accountState.lastPingAt) : "No ping";
-    const systemTone = model.totals.critical > 0 || model.accountState.alarmActive
-      ? "critical"
-      : model.totals.attention > 0 || model.accountState.troubleActive || model.accountState.tamperActive
-        ? "warning"
-        : "clear";
 
     this.shadowRoot.innerHTML = `
       <style>
@@ -1152,21 +1303,13 @@ class AjaxSecurityDashboard extends HTMLElement {
           box-shadow: 0 0 14px rgba(111, 227, 162, 0.45);
         }
 
-        .account-chip.warning .dot {
-          background: var(--warning);
-          box-shadow: 0 0 14px rgba(255, 179, 71, 0.45);
-        }
-
-        .account-chip.critical .dot {
-          background: var(--critical);
-          box-shadow: 0 0 14px rgba(255, 107, 74, 0.45);
-        }
-
+        .account-chip.warning .dot,
         .account-chip.tone-warning .dot {
           background: var(--warning);
           box-shadow: 0 0 14px rgba(255, 179, 71, 0.45);
         }
 
+        .account-chip.critical .dot,
         .account-chip.tone-critical .dot {
           background: var(--critical);
           box-shadow: 0 0 14px rgba(255, 107, 74, 0.45);
@@ -1229,7 +1372,7 @@ class AjaxSecurityDashboard extends HTMLElement {
 
         .summary-grid {
           display: grid;
-          grid-template-columns: repeat(3, minmax(0, 1fr));
+          grid-template-columns: repeat(6, minmax(0, 1fr));
           gap: 10px;
         }
 
@@ -1237,22 +1380,6 @@ class AjaxSecurityDashboard extends HTMLElement {
           display: grid;
           gap: 12px;
           padding: 18px;
-        }
-
-        .ribbon-head {
-          display: flex;
-          align-items: baseline;
-          justify-content: space-between;
-        }
-
-        .ribbon-title {
-          font-size: 17px;
-          font-weight: 700;
-        }
-
-        .ribbon-copy {
-          color: var(--text-2);
-          font-size: 13px;
         }
 
         .room-pill-row {
@@ -1416,65 +1543,10 @@ class AjaxSecurityDashboard extends HTMLElement {
 
         .panel-center {
           display: grid;
-          grid-template-rows: auto auto 1fr;
+          grid-template-rows: auto 1fr;
           gap: 14px;
           min-height: 0;
           padding: 18px;
-        }
-
-        .room-hero {
-          display: grid;
-          grid-template-columns: 1fr auto;
-          gap: 12px;
-          align-items: center;
-          padding: 20px 22px;
-          border-radius: 24px;
-          background: linear-gradient(135deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.03));
-          border: 1px solid rgba(255, 255, 255, 0.08);
-        }
-
-        .room-hero-title {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          font-size: 24px;
-          font-weight: 800;
-          letter-spacing: -0.04em;
-        }
-
-        .room-hero-copy {
-          margin-top: 8px;
-          color: var(--text-2);
-          font-size: 14px;
-        }
-
-        .room-stat-row {
-          display: flex;
-          gap: 10px;
-          flex-wrap: wrap;
-          justify-content: flex-end;
-        }
-
-        .mini-stat {
-          min-width: 108px;
-          padding: 12px 14px;
-          border-radius: 18px;
-          background: rgba(255, 255, 255, 0.04);
-          border: 1px solid rgba(255, 255, 255, 0.06);
-        }
-
-        .mini-stat strong {
-          display: block;
-          margin-top: 4px;
-          font-size: 24px;
-          font-weight: 800;
-        }
-
-        .mini-stat span {
-          color: var(--text-2);
-          font-size: 12px;
-          text-transform: uppercase;
-          letter-spacing: 0.12em;
         }
 
         .device-grid {
@@ -1528,7 +1600,6 @@ class AjaxSecurityDashboard extends HTMLElement {
         .device-icon-wrap ha-icon,
         .activity-icon ha-icon,
         .room-pill ha-icon,
-        .room-hero ha-icon,
         .signal-row ha-icon,
         .subsystem-row ha-icon {
           --mdc-icon-size: 22px;
@@ -1647,101 +1718,46 @@ class AjaxSecurityDashboard extends HTMLElement {
                       </svg>
                     </div>
                   </div>
-                  <div class="top-strip">
-                    <span class="account-chip ${model.accountState.online ? "" : "warning"}">
-                      <span class="dot"></span>
-                      ${model.accountState.online ? "Online" : "Offline"}
-                    </span>
-                    <span class="account-chip ${model.accountState.alarmActive ? "critical" : systemTone === "warning" ? "warning" : ""}">
-                      <span class="dot"></span>
-                      ${escapeHtml(modeLabel)}
-                    </span>
-                    <span class="account-chip tone-${systemTone}">
-                      <span class="dot"></span>
-                      ${systemTone === "critical" ? "Respond now" : systemTone === "warning" ? "Attention needed" : "Nominal"}
-                    </span>
-                  </div>
+                  <div class="top-strip" data-top-strip></div>
                 </div>
                 <div class="header-content">
-                  <div class="header-mini-grid">
-                    ${this._renderMiniSummary("Devices", String(model.totals.devices), `${model.totals.healthy} nominal`, "clear")}
-                    ${this._renderMiniSummary("Critical", String(model.totals.critical), "Immediate response", model.totals.critical > 0 ? "critical" : "clear")}
-                    ${this._renderMiniSummary("Attention", String(model.totals.attention), `${model.totals.offline} connectivity`, model.totals.attention > 0 ? "warning" : "clear")}
-                    ${this._renderMiniSummary("Rooms", String(model.totals.rooms), `${selectedRoom.name} selected`, "clear")}
-                  </div>
-                  <div class="summary-grid">
-                    ${model.signalSummary.map((signal) => this._renderSignalRow(signal)).join("")}
-                  </div>
+                  <div class="header-mini-grid" data-mini-grid></div>
+                  <div class="summary-grid" data-summary-grid></div>
                 </div>
               </section>
 
               <section class="ribbon glass">
-                <div class="ribbon-head">
-                  <div class="ribbon-title">Room command ribbon</div>
-                  <div class="ribbon-copy">Tap a room to pivot the main device grid.</div>
-                </div>
-                <div class="room-pill-row">
-                  ${model.rooms.map((room) => this._renderRoomPill(room)).join("")}
-                </div>
+                <div class="room-pill-row" data-room-row></div>
               </section>
 
               <section class="main">
                 <section class="panel glass">
                   <div class="panel-head">
                     <div class="panel-title">Active queue</div>
-                    <div class="panel-copy">${model.activeDevices.length} surfaced devices</div>
+                    <div class="panel-copy" data-active-copy></div>
                   </div>
                   <div class="panel-body">
-                    <div class="list-stack">
-                      ${model.activeDevices.length
-                        ? model.activeDevices.map((device) => this._renderActivityItem(device)).join("")
-                        : `<div class="empty-note">No active alarms or warnings.</div>`}
-                    </div>
+                    <div class="list-stack" data-active-list></div>
                   </div>
                 </section>
- 
+
                 <section class="panel glass">
                   <div class="panel-center">
-                    <section class="room-hero">
-                      <div>
-                        <div class="room-hero-title">
-                          <ha-icon icon="${escapeHtml(selectedRoom.icon)}"></ha-icon>
-                          ${escapeHtml(selectedRoom.name)}
-                        </div>
-                        <div class="room-hero-copy">
-                          ${selectedRoom.total} devices in this zone cluster - ${selectedRoom.critical} critical - ${selectedRoom.warning} warnings - ${selectedRoom.offline} connectivity issues
-                        </div>
-                      </div>
-                      <div class="room-stat-row">
-                        <div class="mini-stat"><span>Devices</span><strong>${selectedRoom.total}</strong></div>
-                        <div class="mini-stat"><span>Critical</span><strong>${selectedRoom.critical}</strong></div>
-                        <div class="mini-stat"><span>Warnings</span><strong>${selectedRoom.warning}</strong></div>
-                        <div class="mini-stat"><span>Offline</span><strong>${selectedRoom.offline}</strong></div>
-                      </div>
-                    </section>
                     <div class="panel-head" style="padding: 0 4px;">
-                      <div class="panel-title">Device detail grid</div>
-                      <div class="panel-copy">Sorted by severity, then latest event.</div>
+                      <div class="panel-title" data-selected-room-title></div>
+                      <div class="panel-copy" data-selected-room-copy></div>
                     </div>
-                    <div class="device-grid">
-                      ${selectedRoom.devices.length
-                        ? selectedRoom.devices.map((device) => this._renderDeviceCard(device)).join("")
-                        : `<div class="empty-note">No devices found for this room.</div>`}
-                    </div>
+                    <div class="device-grid" data-device-grid></div>
                   </div>
                 </section>
 
                 <section class="panel glass">
                   <div class="panel-head">
                     <div class="panel-title">Recent activity</div>
-                    <div class="panel-copy">${model.recentDevices.length} latest device events</div>
+                    <div class="panel-copy" data-recent-copy></div>
                   </div>
                   <div class="panel-body">
-                    <div class="list-stack">
-                      ${model.recentDevices.length
-                        ? model.recentDevices.map((device) => this._renderActivityItem(device)).join("")
-                        : `<div class="empty-note">No recent device events yet.</div>`}
-                    </div>
+                    <div class="list-stack" data-recent-list></div>
                   </div>
                 </section>
               </section>
@@ -1751,7 +1767,94 @@ class AjaxSecurityDashboard extends HTMLElement {
       </ha-card>
     `;
 
-    this._bindEvents();
+    this._elements = {
+      topStrip: this.shadowRoot.querySelector("[data-top-strip]"),
+      miniGrid: this.shadowRoot.querySelector("[data-mini-grid]"),
+      summaryGrid: this.shadowRoot.querySelector("[data-summary-grid]"),
+      roomRow: this.shadowRoot.querySelector("[data-room-row]"),
+      activeCopy: this.shadowRoot.querySelector("[data-active-copy]"),
+      activeList: this.shadowRoot.querySelector("[data-active-list]"),
+      selectedRoomTitle: this.shadowRoot.querySelector("[data-selected-room-title]"),
+      selectedRoomCopy: this.shadowRoot.querySelector("[data-selected-room-copy]"),
+      deviceGrid: this.shadowRoot.querySelector("[data-device-grid]"),
+      recentCopy: this.shadowRoot.querySelector("[data-recent-copy]"),
+      recentList: this.shadowRoot.querySelector("[data-recent-list]")
+    };
+
+    return this._elements;
+  }
+
+  _render() {
+    if (!this._config.account) {
+      return;
+    }
+
+    const model = this._model;
+    if (!model) {
+      return;
+    }
+
+    const elements = this._ensureShell();
+
+    const selectedRoom =
+      model.rooms.find((room) => room.name === this._selectedRoom) ||
+      model.rooms[0] || {
+        name: "No rooms",
+        devices: [],
+        total: 0,
+        critical: 0,
+        warning: 0,
+        offline: 0,
+        alarmed: 0,
+        icon: "mdi:shield-home-outline"
+      };
+
+    const modeLabel = model.accountState.armed
+      ? "Armed"
+      : model.accountState.partiallyArmed
+        ? "Partially armed"
+        : model.accountState.nightMode
+          ? "Night mode"
+          : "Disarmed";
+
+    const systemTone = model.totals.critical > 0 || model.accountState.alarmActive
+      ? "critical"
+      : model.totals.attention > 0 || model.accountState.troubleActive || model.accountState.tamperActive
+        ? "warning"
+        : "clear";
+
+    elements.topStrip.innerHTML = `
+      <span class="account-chip ${model.accountState.online ? "" : "warning"}">
+        <span class="dot"></span>
+        ${model.accountState.online ? "Online" : "Offline"}
+      </span>
+      <span class="account-chip ${model.accountState.alarmActive ? "critical" : systemTone === "warning" ? "warning" : ""}">
+        <span class="dot"></span>
+        ${escapeHtml(modeLabel)}
+      </span>
+      <span class="account-chip tone-${systemTone}">
+        <span class="dot"></span>
+        ${systemTone === "critical" ? "Respond now" : systemTone === "warning" ? "Attention needed" : "Nominal"}
+      </span>
+    `;
+    elements.miniGrid.innerHTML = [
+      this._renderMiniSummary("Devices", String(model.totals.devices), `${model.totals.healthy} nominal`, "clear"),
+      this._renderMiniSummary("Critical", String(model.totals.critical), "Immediate response", model.totals.critical > 0 ? "critical" : "clear"),
+      this._renderMiniSummary("Attention", String(model.totals.attention), `${model.totals.offline} connectivity`, model.totals.attention > 0 ? "warning" : "clear"),
+      this._renderMiniSummary("Rooms", String(model.totals.rooms), `${selectedRoom.name} selected`, "clear")
+    ].join("");
+    elements.summaryGrid.innerHTML = model.signalSummary.map((signal) => this._renderSignalRow(signal)).join("");
+    elements.roomRow.innerHTML = model.rooms.map((room) => this._renderRoomPill(room)).join("");
+    elements.activeCopy.textContent = `${model.activeDevices.length} surfaced devices`;
+    elements.activeList.innerHTML = this._renderCollection(model.activeDevices, this._renderActivityItem, "No active alarms or warnings.");
+    elements.selectedRoomTitle.textContent = selectedRoom.name;
+    elements.selectedRoomCopy.textContent = `${selectedRoom.total} devices - sorted by severity, then latest event`;
+    elements.deviceGrid.innerHTML = this._renderCollection(selectedRoom.devices, this._renderDeviceCard, "No devices found for this room.");
+    elements.recentCopy.textContent = `${model.recentDevices.length} latest device events`;
+    elements.recentList.innerHTML = this._renderCollection(model.recentDevices, this._renderActivityItem, "No recent device events yet.");
+
+    this._lastRenderKey = this._pendingRenderKey || this._lastRenderKey;
+    this._pendingRenderKey = "";
   }
 }
 
@@ -1762,11 +1865,30 @@ class AjaxSecurityOverview extends HTMLElement {
     this._config = {};
     this._catalog = AJAX_EMBEDDED_DEVICE_CATALOG.slice();
     this._model = null;
+    this._runtime = null;
+    this._elements = null;
+    this._renderFrame = 0;
+    this._pendingRenderKey = "";
+    this._lastRenderKey = "";
+    this._onShadowClick = this._handleShadowClick.bind(this);
+  }
+
+  connectedCallback() {
+    this.shadowRoot.addEventListener("click", this._onShadowClick);
+  }
+
+  disconnectedCallback() {
+    this.shadowRoot.removeEventListener("click", this._onShadowClick);
+    if (this._renderFrame) {
+      cancelAnimationFrame(this._renderFrame);
+      this._renderFrame = 0;
+    }
   }
 
   setConfig(config) {
     const merged = {
       account: config.account || AJAX_EMBEDDED_DEVICE_CATALOG[0]?.account || "",
+      navigation_path: config.navigation_path || "",
       ...config
     };
 
@@ -1776,10 +1898,11 @@ class AjaxSecurityOverview extends HTMLElement {
 
     this._config = merged;
     this._catalog = AJAX_EMBEDDED_DEVICE_CATALOG.filter((device) => String(device.account) === String(merged.account));
+    this._runtime = createCardRuntime(this._config, this._catalog);
     if (this._catalog.length === 0) {
       throw new Error(`Ajax Security Overview: no catalog entries found for account ${merged.account}.`);
     }
-    this._render();
+    this._scheduleRender("config");
   }
 
   set hass(hass) {
@@ -1787,34 +1910,58 @@ class AjaxSecurityOverview extends HTMLElement {
     if (!this._config.account) {
       return;
     }
-    this._model = buildDashboardModel(hass, this._config, this._catalog);
-    this._render();
+    const model = buildDashboardModel(hass, this._config, this._catalog, this._runtime);
+    const renderKey = model.signature;
+    this._model = model;
+    if (renderKey === this._lastRenderKey) {
+      return;
+    }
+    this._scheduleRender(renderKey);
   }
 
   getCardSize() {
     return 6;
   }
 
-  _render() {
-    if (!this._config.account) {
+  _navigate() {
+    const path = String(this._config.navigation_path || "").trim();
+    if (!path) {
       return;
     }
+    this.dispatchEvent(new CustomEvent("hass-navigate", {
+      bubbles: true,
+      composed: true,
+      detail: { navigation_path: path }
+    }));
+  }
 
-    const model = this._model;
-    if (!model) {
-      this.shadowRoot.innerHTML = `
-        <ha-card>
-          <div style="padding:20px;">Waiting for Home Assistant state...</div>
-        </ha-card>
-      `;
+  _handleShadowClick(event) {
+    const target = event.target instanceof Element ? event.target : null;
+    if (!String(this._config.navigation_path || "").trim()) {
       return;
     }
+    const card = target?.closest("ha-card");
+    if (!card || !this.shadowRoot.contains(card)) {
+      return;
+    }
+    this._navigate();
+  }
 
-    const systemTone = systemToneFromModel(model);
-    const modeLabel = modeLabelFromAccount(model.accountState);
-    const lastPing = model.accountState.lastPingAt ? formatShortTimestamp(model.accountState.lastPingAt) : "No ping";
-    const commandStatus = commandStatusCopy(systemTone);
-    const chipClass = systemTone === "clear" ? "tone-clear" : systemTone === "warning" ? "tone-warning" : "tone-critical";
+  _scheduleRender(renderKey) {
+    this._pendingRenderKey = renderKey || this._pendingRenderKey || "";
+    if (this._renderFrame) {
+      return;
+    }
+    this._renderFrame = requestAnimationFrame(() => {
+      this._renderFrame = 0;
+      this._render();
+    });
+  }
+
+  _ensureShell() {
+    if (this._elements) {
+      return this._elements;
+    }
 
     this.shadowRoot.innerHTML = `
       <style>
@@ -1841,6 +1988,17 @@ class AjaxSecurityOverview extends HTMLElement {
             radial-gradient(circle at top right, rgba(255, 107, 74, 0.14), transparent 30%),
             linear-gradient(180deg, rgba(16, 36, 52, 0.96) 0%, rgba(7, 17, 26, 0.96) 100%);
           box-shadow: 0 22px 52px rgba(0, 0, 0, 0.24);
+          cursor: default;
+          transition: transform 160ms ease, box-shadow 160ms ease;
+        }
+
+        ha-card.clickable {
+          cursor: pointer;
+        }
+
+        ha-card.clickable:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 26px 60px rgba(0, 0, 0, 0.28);
         }
 
         .wrap {
@@ -1964,24 +2122,54 @@ class AjaxSecurityOverview extends HTMLElement {
       </style>
       <ha-card>
         <div class="wrap">
-          <div class="overview-row">
-            <span class="chip ${model.accountState.online ? "tone-clear" : "tone-warning"}">
-              <span class="chip-dot"></span>
-              Ajax ${model.accountState.online ? "online" : "offline"}
-            </span>
-            <span class="chip ${chipClass}">
-              <span class="chip-dot"></span>
-              ${escapeHtml(modeLabel)}
-            </span>
-            <span class="chip ${chipClass}">
-              <span class="chip-dot"></span>
-              Command status: ${escapeHtml(commandStatus)}
-            </span>
-            ${model.signalSummary.map((signal) => this._renderSignalSummary(signal)).join("")}
-          </div>
+          <div class="overview-row" data-overview-row></div>
         </div>
       </ha-card>
     `;
+
+    this._elements = {
+      card: this.shadowRoot.querySelector("ha-card"),
+      overviewRow: this.shadowRoot.querySelector("[data-overview-row]")
+    };
+    return this._elements;
+  }
+
+  _render() {
+    if (!this._config.account) {
+      return;
+    }
+
+    const model = this._model;
+    if (!model) {
+      return;
+    }
+
+    const elements = this._ensureShell();
+
+    const systemTone = systemToneFromModel(model);
+    const modeLabel = modeLabelFromAccount(model.accountState);
+    const commandStatus = commandStatusCopy(systemTone);
+    const chipClass = systemTone === "clear" ? "tone-clear" : systemTone === "warning" ? "tone-warning" : "tone-critical";
+
+    elements.card.classList.toggle("clickable", Boolean(String(this._config.navigation_path || "").trim()));
+    elements.overviewRow.innerHTML = `
+      <span class="chip ${model.accountState.online ? "tone-clear" : "tone-warning"}">
+        <span class="chip-dot"></span>
+        Ajax ${model.accountState.online ? "online" : "offline"}
+      </span>
+      <span class="chip ${chipClass}">
+        <span class="chip-dot"></span>
+        ${escapeHtml(modeLabel)}
+      </span>
+      <span class="chip ${chipClass}">
+        <span class="chip-dot"></span>
+        Command status: ${escapeHtml(commandStatus)}
+      </span>
+      ${model.signalSummary.map((signal) => this._renderSignalSummary(signal)).join("")}
+    `;
+
+    this._lastRenderKey = this._pendingRenderKey || this._lastRenderKey;
+    this._pendingRenderKey = "";
   }
 
   _renderSignalSummary(signal) {

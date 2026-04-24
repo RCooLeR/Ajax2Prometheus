@@ -53,6 +53,7 @@ cards:
 type: custom:ajax-security-overview
 title: Ajax overview
 account: "A0F80D"
+navigation_path: /ajax
 ```
 
 ## Config
@@ -60,6 +61,7 @@ account: "A0F80D"
 - `title`: Optional header title.
 - `subtitle`: Optional header subtitle.
 - `account`: Ajax account ID. Defaults to the first account in the embedded catalog.
+- `navigation_path`: Optional Lovelace path to open when the overview card is clicked.
 - `default_room`: Room shown in the main detail pane on first load.
 - `room_order`: Optional explicit room order for the ribbon.
 - `entity_prefix_overrides`: Optional mapping of device `zone` or exact `name` to a Home Assistant entity prefix if one device needs a manual override.
