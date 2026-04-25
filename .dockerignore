@@ -4,6 +4,6 @@
 *.test
 *.out
 .env
-data
+bridge/data
 devices.json
 *.log

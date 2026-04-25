@@ -1,0 +1,37 @@
+services:
+  ajaxbridge:
+    image: rcooler/ajax-bridge:latest
+    container_name: ajaxbridge
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+      - "8099:8099"
+    environment:
+      AJAXBRIDGE_HTTP_ADDR: ":8080"
+      AJAXBRIDGE_SIA_ADDR: ":8099"
+      AJAXBRIDGE_ACCOUNT: "0001"
+      AJAXBRIDGE_LOG_LEVEL: "info"
+      AJAXBRIDGE_LOG_PRETTY: "false"
+      AJAXBRIDGE_STRICT_CRC: "true"
+      AJAXBRIDGE_PING_INTERVAL: "60s"
+      AJAXBRIDGE_OFFLINE_GRACE: "180s"
+      AJAXBRIDGE_READ_TIMEOUT: "120s"
+      AJAXBRIDGE_FORWARD_TIMEOUT: "5s"
+      AJAXBRIDGE_FORWARD_REQUIRE_ACK: "false"
+      AJAXBRIDGE_DEVICES_PATH: "/data/devices.json"
+
+      # Optional: AES key configured in Ajax SIA monitoring settings.
+      # AJAXBRIDGE_ENCRYPTION_KEY: "REPLACE_WITH_32_HEX_AES_KEY"
+
+      # Optional: forward raw SIA frames to Home Assistant's SIA integration.
+      # Use an IP/hostname reachable from inside this container.
+      # AJAXBRIDGE_FORWARD_ADDR: "home-assistant.example:12345,cms.example:7700"
+    volumes:
+      # The app creates/updates /data/devices.json as new Ajax zones are seen.
+      - ./data:/data
+    healthcheck:
+      test: ["/app/ajaxbridge", "healthcheck"]
+      interval: 30s
+      timeout: 3s
+      start_period: 10s
+      retries: 3

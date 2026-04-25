@@ -5,7 +5,8 @@
 *.dylib
 *.test
 *.out
-ajax2prometheus
+/ajaxbridge
+bridge/ajaxbridge
 
 # Go coverage / profiling
 coverage.out
@@ -14,7 +15,6 @@ cover.out
 *.prof
 
 # Module workspace
-go.work
 go.work.sum
 
 # Environment / local secrets

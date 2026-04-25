@@ -1,15 +1,17 @@
 version: 2
 
-project_name: ajax2prometheus
+project_name: ajaxbridge
 
 before:
   hooks:
-    - go test ./...
+    - go test ./bridge/...
+    - npm --prefix ./ha-cards run build
+    - npm --prefix ./ha-cards run check
 
 builds:
-  - id: ajax2prometheus
-    main: ./cmd/ajax2prometheus
-    binary: ajax2prometheus
+  - id: ajaxbridge
+    main: ./bridge/cmd/ajaxbridge
+    binary: ajaxbridge
     env:
       - CGO_ENABLED=0
     goos:
@@ -24,7 +26,7 @@ builds:
       - -s -w -X main.version={{ .Version }} -X main.commit={{ .Commit }} -X main.date={{ .CommitDate }}
 
 checksum:
-  name_template: checksums.txt
+  disable: true
 
 docker_digest:
   name_template: digests.txt
@@ -32,17 +34,23 @@ docker_digest:
 snapshot:
   version_template: "{{ incpatch .Version }}-next"
 
+source:
+  enabled: true
+  name_template: "{{ .ProjectName }}_{{ .Version }}_source"
+  format: tar.gz
+
 changelog:
   use: git
   sort: asc
 
 dockers_v2:
-  - id: ajax2prometheus
+  - id: ajaxbridge
     ids:
-      - ajax2prometheus
-    dockerfile: Dockerfile.goreleaser
+      - ajaxbridge
+    dockerfile: bridge/Dockerfile.goreleaser
     images:
       - rcooler/ajax2prometheus
+      - rcooler/ajax-bridge
     tags:
       - "{{ .Version }}"
       - "{{ if not .Prerelease }}latest{{ end }}"
@@ -59,3 +67,6 @@ dockers_v2:
     platforms:
       - linux/amd64
       - linux/arm64
+
+release:
+  skip_upload: true

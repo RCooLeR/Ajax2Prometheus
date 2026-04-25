@@ -1,0 +1,10 @@
+{
+  "name": "ha-cards",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Purpose-built Home Assistant Lovelace cards for the AjaxBridge device catalog.",
+  "scripts": {
+    "build": "node tools/build.mjs",
+    "check": "node --check dist/ajax-security-dashboard.js"
+  }
+}
