@@ -6,7 +6,7 @@ Receives Ajax security hub SIA DC-09 events, keeps the current alarm state in me
 *If i ever get access to API will update to also have all sensors info, automation via Home Assistant etc.
 
 <p style="text-align: center">
-<img src="./ajax-bridge.png" alt="AjaxBridge" width="70%">
+<img src="./bridge/ajax-bridge.png" alt="AjaxBridge" width="70%">
 </p>
 
 This repository is split into two main areas:
