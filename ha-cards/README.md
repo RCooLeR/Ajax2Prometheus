@@ -1,101 +1,101 @@
-# Ajax HA Cards
+# Ajax Lovelace UI
 
-<p style="text-align: center">
-<img src="../bridge/ajax-bridge.png" width="70%" />
-</p>
+`ha-cards` builds the Home Assistant Lovelace cards for AjaxBridge.
 
-Purpose-built Home Assistant Lovelace cards for the AjaxBridge device inventory in `bridge/data/devices.json`.
+It ships two custom cards:
 
-## What is included
+- `custom:ajax-lovelace-detailed-card`
+- `custom:ajax-lovelace-chips-card`
 
-- One full-tab custom card: `ajax-security-dashboard`
-- One compact main-dashboard card: `ajax-security-overview`
-- Automatic scaling from a 1920x1080 design stage
-- Live state discovery from AjaxBridge MQTT entities
-- Layout tuned to the specific room and device set in this repository
+When loaded inside Home Assistant, the cards use live Home Assistant data from the area, device, and entity registries plus current entity state. The standalone Vite preview still works for local UI development.
 
-## Build
+## Development
 
-```powershell
-cd ha-cards
+```bash
+npm install
+npm run dev
+```
+
+Useful commands:
+
+- `npm run check`: TypeScript build check
+- `npm run build`: production build into `dist/`
+- `npm run preview`: serve the built `dist/` output locally
+
+## Build output
+
+`npm run build` writes:
+
+- `dist/ajax-lovelace.js`: the Home Assistant module that registers both cards
+- `dist/assets/*`: JS chunks, CSS, icons, and room assets used by the module
+- `dist/index.html`: standalone browser preview
+
+Copy the full `dist/` contents into Home Assistant, not only `ajax-lovelace.js`.
+
+## Home Assistant install
+
+1. Build the UI:
+
+```bash
 npm run build
-npm run check
 ```
 
-The build step embeds `../bridge/data/devices.json` when it exists, and falls back to `../bridge/devices.example.json` otherwise.
+2. Copy `dist/` into a folder under Home Assistant `www`, for example:
 
-## Docker note
+```text
+<ha-config>/www/ajax-lovelace/
+```
 
-If your bridge runs in Docker with a hyphenated service/container name, keep the MQTT namespace aligned with it. For example:
+3. Register the resource:
 
 ```yaml
-services:
-  ajax-bridge:
-    build: ./ajax-bridge
-    container_name: ajax-bridge
-    environment:
-      AJAXBRIDGE_MQTT_CLIENT_ID: "ajax-bridge"
-      AJAXBRIDGE_MQTT_TOPIC_PREFIX: "ajax-bridge"
-
-      # Legacy aliases still work too:
-      AJAX2PROM_MQTT_CLIENT_ID: "ajax-bridge"
-      AJAX2PROM_MQTT_TOPIC_PREFIX: "ajax-bridge"
+resources:
+  - url: /local/ajax-lovelace/ajax-lovelace.js
+    type: module
 ```
 
-The cards themselves do not need a separate MQTT prefix setting. They bind to the Home Assistant entities created by the bridge, so once discovery has published entities for the `ajax-bridge` namespace, the card examples continue to work normally.
+4. Add one of the cards.
 
-## Install in Home Assistant
-
-1. Copy `ha-cards/dist/ajax-security-dashboard.js` into your Home Assistant `www/ajax/` folder.
-2. Add it as a Lovelace resource:
-
-```yaml
-url: /local/ajax/ajax-security-dashboard.js
-type: module
-```
-
-3. Use a dashboard view in panel mode for the intended full-screen layout.
-4. Add the example card from `ha-cards/examples/ajax-security-dashboard.yaml`.
-5. For a normal dashboard tile/section, use `ha-cards/examples/ajax-security-overview.yaml`.
-
-## Recommended view config
+Detailed card:
 
 ```yaml
 title: Ajax
 path: ajax
 panel: true
 cards:
-  - type: custom:ajax-security-dashboard
-    title: Ajax Security Command Deck
-    subtitle: Main site security overview
-    account: "A0F80D"
+  - type: custom:ajax-lovelace-detailed-card
 ```
 
-## Compact overview example
+Compact chips card:
 
 ```yaml
-type: custom:ajax-security-overview
-title: Ajax overview
-account: "A0F80D"
-navigation_path: /ajax
+type: custom:ajax-lovelace-chips-card
+max_chips: 7
 ```
 
-## Config
+Ready-to-paste examples live in [`examples/`](./examples/):
 
-- `title`: Optional header title.
-- `subtitle`: Optional header subtitle.
-- `account`: Ajax account ID. Defaults to the first account in the embedded catalog.
-- `navigation_path`: Optional Lovelace path to open when the overview card is clicked.
-- `default_room`: Room shown in the main detail pane on first load.
-- `room_order`: Optional explicit room order for the ribbon.
-- `entity_prefix_overrides`: Optional mapping of device `zone` or exact `name` to a Home Assistant entity prefix if one
-  device needs a manual override.
+- [`ajax-lovelace-detailed-card.yaml`](./examples/ajax-lovelace-detailed-card.yaml)
+- [`ajax-lovelace-chips-card.yaml`](./examples/ajax-lovelace-chips-card.yaml)
+
+## Card behavior
+
+- Rooms come from Home Assistant areas.
+- Room hero backgrounds prefer area pictures and fall back to linked image or camera entities.
+- Ajax devices come from the Home Assistant device/entity registries plus MQTT entities published by AjaxBridge.
+- Dahua and Roller devices are grouped by Home Assistant device and rendered inside their assigned room.
+- Event rows are synthesized from current or latest Home Assistant entity state. The UI does not query AjaxBridge `/events` history directly yet.
+
+## Project structure
+
+- `src/ha/`: Home Assistant card registration and types
+- `src/data/liveDashboardData.ts`: live HA registry and state adapter
+- `src/cards/` and `src/components/`: presentational UI building blocks
+- `src/models/dashboard.ts`: shared typed dashboard model
+- `src/styles/`: theme and layout CSS
+- `public/assets/`: icons and room assets bundled by Vite
 
 ## Notes
 
-- The card now prefers your actual Home Assistant name-based entities such as
-  `binary_sensor.pozhezhnii_datchik_na_gorishchi_carbon_monoxide` and
-  `sensor.detektor_elektrozhivlennia_merezhi_last_signal`.
-- It still falls back to the repository MQTT discovery naming like `zone_<account>_<zone>_*` for any entities that use
-  the newer discovery object IDs.
-- The embedded catalog is intentionally specific to your current device set, not a generic public package.
+- The module resolves icons and room assets relative to the module URL, so `/local/ajax-lovelace/` and similar install paths both work.
+- `dist/index.html` is useful for local visual review, but Home Assistant custom-card usage is the main target.

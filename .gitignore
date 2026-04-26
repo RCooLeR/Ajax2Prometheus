@@ -39,6 +39,9 @@ Thumbs.db
 tmp/
 dist/
 build/
+node_modules/
+*.tsbuildinfo
+images-for-cards/
 
 # Docker overrides
 docker-compose.override.yml

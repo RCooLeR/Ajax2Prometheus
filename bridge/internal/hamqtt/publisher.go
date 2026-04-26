@@ -22,6 +22,8 @@ const (
 	payloadOff     = "OFF"
 )
 
+var legacyDiscoveryNodes = []string{"ajax2prometheus"}
+
 type Config struct {
 	Broker          string
 	Username        string
@@ -52,12 +54,14 @@ type Update struct {
 
 type accountPlan struct {
 	stateTopic string
+	cleanup    []discoveryMessage
 	discovery  []discoveryMessage
 }
 
 type zonePlan struct {
 	signature  string
 	stateTopic string
+	cleanup    []discoveryMessage
 	discovery  []discoveryMessage
 }
 
@@ -250,6 +254,11 @@ func (p *Publisher) publishAccount(ctx context.Context, account state.Account) e
 		return err
 	}
 	if p.cfg.Discovery {
+		for _, message := range plan.cleanup {
+			if err := p.publishDiscoveryMessage(ctx, message); err != nil {
+				return err
+			}
+		}
 		for _, message := range plan.discovery {
 			if err := p.publishDiscoveryMessage(ctx, message); err != nil {
 				return err
@@ -269,6 +278,11 @@ func (p *Publisher) publishZone(ctx context.Context, zone state.Zone) error {
 		return err
 	}
 	if p.cfg.Discovery {
+		for _, message := range plan.cleanup {
+			if err := p.publishDiscoveryMessage(ctx, message); err != nil {
+				return err
+			}
+		}
 		for _, message := range plan.discovery {
 			if err := p.publishDiscoveryMessage(ctx, message); err != nil {
 				return err
@@ -380,13 +394,14 @@ func (p *Publisher) accountPlanFor(account state.Account) (accountPlan, error) {
 		accountEntities(account.Account),
 		p.accountStateTopic(account.Account),
 		accountDevice(account),
-		p.cfg.ClientID,
+		p.discoveryNode(),
 	)
 	if err != nil {
 		return accountPlan{}, err
 	}
 	plan = accountPlan{
 		stateTopic: p.accountStateTopic(account.Account),
+		cleanup:    p.legacyCleanupMessages(accountEntities(account.Account)),
 		discovery:  discovery,
 	}
 
@@ -415,7 +430,7 @@ func (p *Publisher) zonePlanFor(zone state.Zone) (zonePlan, error) {
 		zoneEntities(zone),
 		p.zoneStateTopic(zone.Account, zone.Zone),
 		zoneDevice(zone),
-		p.cfg.ClientID,
+		p.discoveryNode(),
 	)
 	if err != nil {
 		return zonePlan{}, err
@@ -423,6 +438,7 @@ func (p *Publisher) zonePlanFor(zone state.Zone) (zonePlan, error) {
 	plan = zonePlan{
 		signature:  signature,
 		stateTopic: p.zoneStateTopic(zone.Account, zone.Zone),
+		cleanup:    p.legacyCleanupMessages(zoneEntities(zone)),
 		discovery:  discovery,
 	}
 
@@ -463,12 +479,30 @@ func (p *Publisher) buildDiscoveryMessages(entities []entity, stateTopic string,
 			return nil, err
 		}
 		messages = append(messages, discoveryMessage{
-			key:     ent.Component + "/" + ent.ObjectID,
+			key:     "discover:" + slug(node) + ":" + ent.Component + "/" + ent.ObjectID,
 			topic:   p.discoveryTopic(ent.Component, node, ent.ObjectID),
 			payload: payload,
 		})
 	}
 	return messages, nil
+}
+
+func (p *Publisher) legacyCleanupMessages(entities []entity) []discoveryMessage {
+	currentNode := slug(p.discoveryNode())
+	messages := make([]discoveryMessage, 0, len(entities)*len(legacyDiscoveryNodes))
+	for _, legacyNode := range legacyDiscoveryNodes {
+		if slug(legacyNode) == currentNode {
+			continue
+		}
+		for _, ent := range entities {
+			messages = append(messages, discoveryMessage{
+				key:     "cleanup:" + slug(legacyNode) + ":" + ent.Component + "/" + ent.ObjectID,
+				topic:   p.discoveryTopic(ent.Component, legacyNode, ent.ObjectID),
+				payload: []byte{},
+			})
+		}
+	}
+	return messages
 }
 
 func (p *Publisher) availabilityTopic() string {
@@ -494,7 +528,14 @@ func (p *Publisher) discoveryTopic(component, node, objectID string) string {
 }
 
 func (p *Publisher) uniqueID(objectID string) string {
-	return slug(p.cfg.ClientID + "_" + objectID)
+	return slug(p.discoveryNode() + "_" + objectID)
+}
+
+func (p *Publisher) discoveryNode() string {
+	if strings.TrimSpace(p.cfg.TopicPrefix) != "" {
+		return p.cfg.TopicPrefix
+	}
+	return p.cfg.ClientID
 }
 
 func accountDevice(account state.Account) deviceInfo {

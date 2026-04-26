@@ -49,7 +49,10 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Package Lovelace UI dist
+        run: tar -czf dist/ha-cards-dist.tar.gz -C ha-cards/dist .
+
       - name: Upload release assets
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release upload "${GITHUB_REF_NAME}" dist/*_source.tar.gz ha-cards/dist/ajax-security-dashboard.js --clobber
+        run: gh release upload "${GITHUB_REF_NAME}" dist/*_source.tar.gz dist/ha-cards-dist.tar.gz --clobber

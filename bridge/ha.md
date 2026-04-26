@@ -260,10 +260,21 @@ Old entities remain after changing zones or names:
 - Clear retained stale discovery topics from the broker if needed.
 - Keep `account` and `zone` stable when editing `devices.json`.
 
+Legacy `ajax2prometheus` MQTT entities remain after upgrading:
+
+- New AjaxBridge builds publish retained tombstones for legacy `homeassistant/.../ajax2prometheus/.../config` topics.
+- Restart AjaxBridge and reload the Home Assistant MQTT integration first.
+- If an old entity still remains, clear its retained discovery topic manually with an empty retained publish, for example:
+
+```powershell
+mosquitto_pub -h HOME_ASSISTANT_IP -u your_mqtt_user -P your_mqtt_password -r -n -t "homeassistant/binary_sensor/ajax2prometheus/zone_a0f80d_13_alarm_active/config"
+```
+
+- Clearing the discovery `.../config` topic removes the Home Assistant entity. Clearing only `ajax2prometheus/.../state` does not.
+
 ## Dashboard Cards
 
-See [../ha-cards/EXAMPLES.md](../ha-cards/EXAMPLES.md) for ready-to-paste Lovelace examples:
+See [../ha-cards/README.md](../ha-cards/README.md) for installation details and [../ha-cards/examples/](../ha-cards/examples/) for ready-to-paste Lovelace examples:
 
-- a polished `button-card` + `stack-in-card` zone card
-- a built-in Home Assistant fallback without custom cards
-- a compact account overview grid
+- `ajax-lovelace-detailed-card.yaml`
+- `ajax-lovelace-chips-card.yaml`

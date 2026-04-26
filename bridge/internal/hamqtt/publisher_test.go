@@ -221,11 +221,91 @@ func TestPublishUpdateRefreshesZoneDiscoveryWhenSignalSetChanges(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if got := len(client.publishes); got != firstCount+2 {
-		t.Fatalf("adding a new signal should publish one discovery config and one state update: got %d, want %d", got, firstCount+2)
+	if got := len(client.publishes); got != firstCount+3 {
+		t.Fatalf("adding a new signal should publish legacy cleanup, one discovery config, and one state update: got %d, want %d", got, firstCount+3)
 	}
 	if !client.hasTopic("homeassistant/binary_sensor/ajaxbridge/zone_a0f80d_3_signal_connectivity/config") {
 		t.Fatalf("missing discovery publish for new connectivity signal: %#v", client.publishes)
+	}
+	if !client.hasTopic("homeassistant/binary_sensor/ajax2prometheus/zone_a0f80d_3_signal_connectivity/config") {
+		t.Fatalf("missing cleanup publish for legacy connectivity signal discovery topic: %#v", client.publishes)
+	}
+}
+
+func TestPublishSnapshotCleansLegacyAjax2PrometheusDiscoveryTopics(t *testing.T) {
+	client := &stubClient{open: true}
+	publisher := New(Config{
+		Broker:          "tcp://mqtt.local:1883",
+		ClientID:        "ajaxbridge",
+		TopicPrefix:     "ajaxbridge",
+		Discovery:       true,
+		DiscoveryPrefix: "homeassistant",
+		Timeout:         time.Second,
+		Retain:          true,
+	}, zerologNop())
+	publisher.client = client
+
+	snapshot := state.Snapshot{
+		Zones: []state.Zone{{
+			Account:      "A0F80D",
+			Zone:         "13",
+			DeviceName:   "Attic fire detector",
+			Kind:         "FireProtect",
+			Room:         "Attic",
+			DeviceEvents: []string{"fire", "tamper"},
+			SignalActive: map[string]bool{},
+		}},
+	}
+
+	if err := publisher.PublishSnapshot(t.Context(), snapshot); err != nil {
+		t.Fatal(err)
+	}
+
+	legacyTopic := "homeassistant/binary_sensor/ajax2prometheus/zone_a0f80d_13_alarm_active/config"
+	if !client.hasTopic(legacyTopic) {
+		t.Fatalf("missing cleanup publish for legacy discovery topic %q: %#v", legacyTopic, client.publishes)
+	}
+	if payload := client.payloadForTopic(legacyTopic); payload == nil || stringValue(payload) != "" {
+		t.Fatalf("legacy cleanup payload = %#v, want empty retained payload", payload)
+	}
+
+	currentTopic := "homeassistant/binary_sensor/ajaxbridge/zone_a0f80d_13_alarm_active/config"
+	if !client.hasTopic(currentTopic) {
+		t.Fatalf("missing current discovery publish for topic %q: %#v", currentTopic, client.publishes)
+	}
+}
+
+func TestPublishSnapshotDoesNotCleanCurrentDiscoveryNode(t *testing.T) {
+	client := &stubClient{open: true}
+	publisher := New(Config{
+		Broker:          "tcp://mqtt.local:1883",
+		ClientID:        "legacy-client",
+		TopicPrefix:     "ajax2prometheus",
+		Discovery:       true,
+		DiscoveryPrefix: "homeassistant",
+		Timeout:         time.Second,
+		Retain:          true,
+	}, zerologNop())
+	publisher.client = client
+
+	snapshot := state.Snapshot{
+		Zones: []state.Zone{{
+			Account:      "A0F80D",
+			Zone:         "13",
+			DeviceEvents: []string{"fire"},
+		}},
+	}
+
+	if err := publisher.PublishSnapshot(t.Context(), snapshot); err != nil {
+		t.Fatal(err)
+	}
+
+	topic := "homeassistant/binary_sensor/ajax2prometheus/zone_a0f80d_13_alarm_active/config"
+	if !client.hasTopic(topic) {
+		t.Fatalf("missing discovery publish for current node %q: %#v", topic, client.publishes)
+	}
+	if payload := client.payloadForTopic(topic); stringValue(payload) == "" {
+		t.Fatalf("current discovery topic %q was incorrectly cleaned up", topic)
 	}
 }
 
@@ -301,6 +381,26 @@ func (c *stubClient) hasTopicContaining(fragment string) bool {
 		}
 	}
 	return false
+}
+
+func (c *stubClient) payloadForTopic(topic string) interface{} {
+	for _, publish := range c.publishes {
+		if publish.topic == topic {
+			return publish.payload
+		}
+	}
+	return nil
+}
+
+func stringValue(value interface{}) string {
+	switch typed := value.(type) {
+	case string:
+		return typed
+	case []byte:
+		return string(typed)
+	default:
+		return ""
+	}
 }
 
 type stubToken struct {

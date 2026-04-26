@@ -1,10 +1,23 @@
 {
   "name": "ha-cards",
-  "version": "0.1.0",
   "private": true,
-  "description": "Purpose-built Home Assistant Lovelace cards for the AjaxBridge device catalog.",
+  "version": "0.1.0",
+  "type": "module",
   "scripts": {
-    "build": "node tools/build.mjs",
-    "check": "node --check dist/ajax-security-dashboard.js"
+    "dev": "vite --host 0.0.0.0",
+    "check": "tsc -b",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "react": "latest",
+    "react-dom": "latest"
+  },
+  "devDependencies": {
+    "@types/react": "latest",
+    "@types/react-dom": "latest",
+    "@vitejs/plugin-react": "latest",
+    "typescript": "latest",
+    "vite": "latest"
   }
 }
