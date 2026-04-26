@@ -1,0 +1,398 @@
+<svg xmlns="http://www.w3.org/2000/svg" style="display:none">
+<symbol id="rooms-yard" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><path class="line" d="M128 186 V214"/>
+<path class="line" d="M92 166 C56 152 68 104 102 104 C104 74 150 68 158 104 C196 106 204 154 164 166 Z"/></g></symbol>
+<symbol id="rooms-terrace" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><path class="line" d="M58 112 H198"/>
+<path class="line" d="M82 112 V198"/>
+<path class="line" d="M174 112 V198"/>
+<path class="line" d="M92 198 H164"/>
+<path class="line" d="M76 88 H180 L198 112 H58 Z"/></g></symbol>
+<symbol id="rooms-bedroom" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><path class="line" d="M54 110 V196"/>
+<path class="line" d="M54 150 H210 V196"/>
+<path class="line" d="M78 112 H122 V148 H78 Z"/>
+<path class="line" d="M54 196 H210"/></g></symbol>
+<symbol id="rooms-office" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><path class="line" d="M62 118 H194"/>
+<path class="line" d="M78 118 V198"/>
+<path class="line" d="M178 118 V198"/>
+<path class="line" d="M96 92 H160 V118 H96 Z"/>
+<path class="line" d="M112 198 H144"/></g></symbol>
+<symbol id="rooms-living-room" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><path class="line" d="M74 132 V112 C74 96 86 88 104 88 H152 C170 88 182 96 182 112 V132"/>
+<path class="line" d="M58 132 H198 C210 132 218 142 218 154 V188 H38 V154 C38 142 46 132 58 132 Z"/>
+<path class="line" d="M66 188 V206"/>
+<path class="line" d="M190 188 V206"/></g></symbol>
+<symbol id="rooms-kitchen" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><path class="line" d="M68 70 H188 V204 H68 Z"/>
+<path class="line" d="M68 126 H188"/>
+<path class="line" d="M112 70 V126"/>
+<path class="line" d="M92 98 H94"/>
+<path class="line" d="M150 98 H152"/>
+<path class="line" d="M96 160 H160"/></g></symbol>
+<symbol id="rooms-garage" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><path class="line" d="M56 118 L128 70 L200 118 V204 H56 Z"/>
+<path class="line" d="M82 130 H174 V204 H82 Z"/>
+<path class="line" d="M82 154 H174"/>
+<path class="line" d="M82 178 H174"/></g></symbol>
+<symbol id="rooms-attic" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><path class="line" d="M52 158 L128 74 L204 158"/>
+<path class="line" d="M82 158 H174 L158 206 H98 Z"/>
+<path class="line" d="M110 132 H146"/></g></symbol>
+<symbol id="rooms-server-room" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><rect class="line" x="74" y="58" width="108" height="140" rx="14"/>
+<path class="line" d="M74 104 H182"/>
+<path class="line" d="M74 150 H182"/>
+<circle class="fill" cx="98" cy="82" r="5"/>
+<circle class="fill" cx="98" cy="128" r="5"/>
+<circle class="fill" cx="98" cy="174" r="5"/></g></symbol>
+<symbol id="rooms-kids-room" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><path class="line" d="M80 116 L128 76 L176 116 V174 C176 196 158 210 128 210 C98 210 80 196 80 174 Z"/>
+<circle class="line" cx="108" cy="142" r="8"/>
+<circle class="line" cx="148" cy="142" r="8"/>
+<path class="line" d="M108 176 C120 186 136 186 148 176"/></g></symbol>
+<symbol id="rooms-guests-room" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><path class="line" d="M54 110 V196"/>
+<path class="line" d="M54 150 H210 V196"/>
+<path class="line" d="M78 112 H122 V148 H78 Z"/>
+<path class="line" d="M54 196 H210"/>
+<path class="line" d="M152 112 H190 V148 H152 Z"/></g></symbol>
+<symbol id="rooms-bathroom" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><path class="line" d="M58 140 H210 V156 C210 184 188 206 160 206 H108 C80 206 58 184 58 156 Z"/>
+<path class="line" d="M82 140 V90 C82 76 94 66 108 66 H126"/>
+<path class="line" d="M120 84 H154"/>
+<path class="line" d="M86 206 L78 222"/>
+<path class="line" d="M186 206 L194 222"/></g></symbol>
+<symbol id="rooms-house" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><path class="line" d="M54 124 L128 62 L202 124"/>
+<path class="line" d="M74 116 V202 H182 V116"/>
+<path class="line" d="M112 202 V154 H144 V202"/></g></symbol>
+<symbol id="rooms-small-house" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><path class="line" d="M70 132 L128 82 L186 132"/>
+<path class="line" d="M86 128 V196 H170 V128"/>
+<path class="line" d="M116 196 V158 H140 V196"/></g></symbol>
+<symbol id="devices-hub" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><rect class="line" x="70" y="70" width="116" height="116" rx="28"/>
+<circle class="line" cx="128" cy="128" r="30"/>
+<path class="line" d="M112 128 H144"/>
+<path class="line" d="M128 112 V144"/></g></symbol>
+<symbol id="devices-motion-sensor" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><circle class="line" cx="92" cy="126" r="20"/>
+<path class="line" d="M128 86 C156 106 156 146 128 166"/>
+<path class="line" d="M154 62 C198 96 198 156 154 194"/></g></symbol>
+<symbol id="devices-door-sensor" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><rect class="line" x="88" y="62" width="82" height="148" rx="6"/>
+<circle class="fill" cx="150" cy="136" r="4"/></g></symbol>
+<symbol id="devices-window-sensor" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><rect class="line" x="68" y="72" width="120" height="120" rx="8"/>
+<path class="line" d="M128 72 V192"/>
+<path class="line" d="M68 132 H188"/></g></symbol>
+<symbol id="devices-camera" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><rect class="line" x="54" y="94" width="120" height="76" rx="16"/>
+<circle class="line" cx="114" cy="132" r="24"/>
+<path class="line" d="M174 116 L216 96 V168 L174 148 Z"/></g></symbol>
+<symbol id="devices-smoke-detector" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><rect class="line" x="78" y="62" width="100" height="54" rx="18"/>
+<path class="line" d="M94 144 C74 164 82 190 108 196"/>
+<path class="line" d="M128 140 C110 164 120 194 146 202"/>
+<path class="line" d="M160 144 C180 164 172 190 146 196"/></g></symbol>
+<symbol id="devices-fire-detector" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><path class="line" d="M128 214 C90 198 78 166 94 136 C106 112 126 104 122 66 C156 92 184 128 176 166 C170 196 150 210 128 214 Z"/>
+<path class="line" d="M128 194 C112 184 110 164 122 148 C132 136 136 126 136 112 C154 132 158 154 152 174 C148 186 140 192 128 194 Z"/></g></symbol>
+<symbol id="devices-leak-detector" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><path class="line" d="M128 58 C164 106 186 136 186 166 C186 198 160 222 128 222 C96 222 70 198 70 166 C70 136 92 106 128 58 Z"/>
+<path class="line" d="M102 168 C102 184 114 196 130 196"/></g></symbol>
+<symbol id="devices-siren" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><path class="line" d="M84 202 H172"/>
+<path class="line" d="M94 202 V122 C94 96 110 80 128 80 C146 80 162 96 162 122 V202"/>
+<path class="line" d="M72 88 L52 68"/>
+<path class="line" d="M184 88 L204 68"/>
+<path class="line" d="M128 62 V36"/></g></symbol>
+<symbol id="devices-keypad" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><rect class="line" x="78" y="54" width="100" height="156" rx="16"/>
+<circle class="fill" cx="104" cy="98" r="4"/>
+<circle class="fill" cx="104" cy="126" r="4"/>
+<circle class="fill" cx="104" cy="154" r="4"/>
+<circle class="fill" cx="128" cy="98" r="4"/>
+<circle class="fill" cx="128" cy="126" r="4"/>
+<circle class="fill" cx="128" cy="154" r="4"/>
+<circle class="fill" cx="152" cy="98" r="4"/>
+<circle class="fill" cx="152" cy="126" r="4"/>
+<circle class="fill" cx="152" cy="154" r="4"/></g></symbol>
+<symbol id="devices-panic-button" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><circle class="line" cx="128" cy="128" r="72"/>
+<circle class="line" cx="128" cy="128" r="34"/></g></symbol>
+<symbol id="devices-relay" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><rect class="line" x="68" y="88" width="120" height="80" rx="16"/>
+<path class="line" d="M88 128 H116 L140 104 V152 L168 128"/></g></symbol>
+<symbol id="devices-smart-plug" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><path class="line" d="M98 82 V124"/>
+<path class="line" d="M158 82 V124"/>
+<path class="line" d="M82 124 H174 V146 C174 174 154 196 128 196 C102 196 82 174 82 146 Z"/>
+<path class="line" d="M128 196 V222"/></g></symbol>
+<symbol id="devices-thermostat" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><path class="line" d="M118 70 C118 54 138 54 138 70 V148 C154 156 160 174 152 190 C144 208 112 208 104 190 C96 174 102 156 118 148 Z"/>
+<path class="line" d="M128 88 V164"/></g></symbol>
+<symbol id="devices-repeater" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><rect class="line" x="86" y="76" width="84" height="112" rx="18"/>
+<path class="line" d="M104 126 H152"/>
+<path class="line" d="M128 102 V150"/>
+<path class="line" d="M64 106 C50 122 50 146 64 162"/>
+<path class="line" d="M192 106 C206 122 206 146 192 162"/></g></symbol>
+<symbol id="devices-glass-break" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><path class="line" d="M80 56 H176 L160 128 H96 Z"/>
+<path class="line" d="M128 128 V206"/>
+<path class="line" d="M98 206 H158"/>
+<path class="line" d="M116 84 L138 104 L124 124"/></g></symbol>
+<symbol id="devices-curtain-motion" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><path class="line" d="M68 62 H188"/>
+<path class="line" d="M82 62 C106 100 94 150 82 206"/>
+<path class="line" d="M174 62 C150 100 162 150 174 206"/>
+<path class="line" d="M106 62 C126 118 126 164 106 206"/>
+<path class="line" d="M150 62 C130 118 130 164 150 206"/></g></symbol>
+<symbol id="devices-outdoor-motion" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><circle class="line" cx="92" cy="126" r="20"/>
+<path class="line" d="M128 86 C156 106 156 146 128 166"/>
+<path class="line" d="M154 62 C198 96 198 156 154 194"/>
+<path class="line" d="M58 206 H198"/></g></symbol>
+<symbol id="system-states-online" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><path class="line" d="M62 104 C100 70 156 70 194 104"/>
+<path class="line" d="M86 134 C110 112 146 112 170 134"/>
+<path class="line" d="M110 164 C120 154 136 154 146 164"/>
+<circle class="fill" cx="128" cy="190" r="6"/></g></symbol>
+<symbol id="system-states-offline" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><path class="line" d="M62 104 C100 70 156 70 194 104"/>
+<path class="line" d="M86 134 C110 112 146 112 170 134"/>
+<path class="line" d="M62 62 L194 194"/></g></symbol>
+<symbol id="system-states-armed" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><path class="line" d="M128 48 L190 76 V124 C190 166 164 198 128 214 C92 198 66 166 66 124 V76 Z"/>
+<rect class="line" x="100" y="122" width="56" height="46" rx="8"/>
+<path class="line" d="M112 122 V110 C112 90 144 90 144 110 V122"/></g></symbol>
+<symbol id="system-states-disarmed" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><path class="line" d="M128 48 L190 76 V124 C190 166 164 198 128 214 C92 198 66 166 66 124 V76 Z"/>
+<path class="line" d="M108 132 L124 148 L154 112"/></g></symbol>
+<symbol id="system-states-night-mode" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><path class="line" d="M166 190 C112 194 70 154 76 102 C80 70 100 50 126 42 C110 72 116 112 144 140 C164 160 190 168 214 162 C204 178 186 188 166 190 Z"/></g></symbol>
+<symbol id="system-states-alarm-active" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><path class="line" d="M72 92 L48 68"/>
+<path class="line" d="M184 92 L208 68"/>
+<circle class="line" cx="128" cy="136" r="58"/>
+<path class="line" d="M128 102 V140 L154 158"/>
+<path class="line" d="M96 210 H160"/></g></symbol>
+<symbol id="system-states-trouble" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><path class="line" d="M128 54 L214 204 H42 Z"/>
+<path class="line" d="M128 104 V152"/>
+<circle class="fill" cx="128" cy="178" r="5"/></g></symbol>
+<symbol id="system-states-ok" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><circle class="line" cx="128" cy="128" r="76"/>
+<path class="line" d="M88 132 L116 160 L172 98"/></g></symbol>
+<symbol id="system-states-maintenance" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><path class="line" d="M84 68 L188 172"/>
+<path class="line" d="M172 68 L68 172"/>
+<circle class="line" cx="184" cy="184" r="18"/>
+<circle class="line" cx="72" cy="184" r="18"/></g></symbol>
+<symbol id="system-states-updating" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><path class="line" d="M190 104 C178 78 152 62 124 66 C88 70 62 100 66 136"/>
+<path class="line" d="M190 104 H152"/>
+<path class="line" d="M66 152 C78 178 104 194 132 190 C168 186 194 156 190 120"/>
+<path class="line" d="M66 152 H104"/></g></symbol>
+<symbol id="system-states-power-loss" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><path class="line" d="M128 56 V126"/>
+<path class="line" d="M94 88 C72 104 62 132 70 160 C80 196 118 216 154 204 C190 192 208 152 194 118 C188 104 178 94 166 88"/></g></symbol>
+<symbol id="system-states-battery-low" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><rect class="line" x="58" y="100" width="142" height="58" rx="10"/>
+<path class="line" d="M200 116 H216 V142 H200"/>
+<path class="line" d="M82 128 H98"/></g></symbol>
+<symbol id="security-states-locked" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><rect class="line" x="82" y="118" width="92" height="76" rx="14"/>
+<path class="line" d="M104 118 V98 C104 66 152 66 152 98 V118"/></g></symbol>
+<symbol id="security-states-unlocked" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><rect class="line" x="82" y="118" width="92" height="76" rx="14"/>
+<path class="line" d="M104 118 V98 C104 66 152 66 152 98 V118"/>
+<path class="line" d="M152 98 C152 78 176 78 176 98"/></g></symbol>
+<symbol id="security-states-door-open" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><path class="line" d="M86 70 H170 V204 H86 Z"/>
+<path class="line" d="M102 84 L176 70 V204 L102 188 Z"/>
+<circle class="fill" cx="154" cy="136" r="4"/></g></symbol>
+<symbol id="security-states-door-closed" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><rect class="line" x="88" y="62" width="82" height="148" rx="6"/>
+<circle class="fill" cx="150" cy="136" r="4"/>
+<path class="line" d="M72 210 H184"/></g></symbol>
+<symbol id="security-states-window-open" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><rect class="line" x="68" y="72" width="120" height="120" rx="8"/>
+<path class="line" d="M128 72 V192"/>
+<path class="line" d="M68 132 H188"/>
+<path class="line" d="M188 92 L216 78 V178 L188 164"/></g></symbol>
+<symbol id="security-states-window-closed" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><rect class="line" x="68" y="72" width="120" height="120" rx="8"/>
+<path class="line" d="M128 72 V192"/>
+<path class="line" d="M68 132 H188"/></g></symbol>
+<symbol id="security-states-tamper" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><path class="line" d="M128 52 L202 88 V132 C202 178 170 204 128 220 C86 204 54 178 54 132 V88 Z"/>
+<path class="line" d="M128 90 V146"/>
+<circle class="fill" cx="128" cy="174" r="6"/></g></symbol>
+<symbol id="security-states-perimeter" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><rect class="line" x="58" y="58" width="140" height="140" rx="22" stroke-dasharray="12 10"/>
+<path class="line" d="M92 128 H164"/>
+<path class="line" d="M128 92 V164"/></g></symbol>
+<symbol id="security-states-safe" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><path class="line" d="M128 48 L190 76 V124 C190 166 164 198 128 214 C92 198 66 166 66 124 V76 Z"/>
+<path class="line" d="M100 132 L122 154 L160 112"/></g></symbol>
+<symbol id="security-states-breach" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><path class="line" d="M70 70 H186 V186 H70 Z"/>
+<path class="line" d="M94 70 L122 112 L102 146 L142 186"/>
+<path class="line" d="M152 70 L132 108 L158 142 L134 186"/></g></symbol>
+<symbol id="sensors-temperature" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><path class="line" d="M118 70 C118 54 138 54 138 70 V148 C154 156 160 174 152 190 C144 208 112 208 104 190 C96 174 102 156 118 148 Z"/>
+<path class="line" d="M128 88 V164"/></g></symbol>
+<symbol id="sensors-humidity" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><path class="line" d="M128 58 C164 106 186 136 186 166 C186 198 160 222 128 222 C96 222 70 198 70 166 C70 136 92 106 128 58 Z"/>
+<path class="line" d="M94 152 C112 142 144 142 162 152"/>
+<path class="line" d="M98 178 C116 168 140 168 158 178"/></g></symbol>
+<symbol id="sensors-motion" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><circle class="line" cx="92" cy="126" r="20"/>
+<path class="line" d="M128 86 C156 106 156 146 128 166"/>
+<path class="line" d="M154 62 C198 96 198 156 154 194"/></g></symbol>
+<symbol id="sensors-smoke" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><rect class="line" x="78" y="62" width="100" height="54" rx="18"/>
+<path class="line" d="M94 144 C74 164 82 190 108 196"/>
+<path class="line" d="M128 140 C110 164 120 194 146 202"/>
+<path class="line" d="M160 144 C180 164 172 190 146 196"/></g></symbol>
+<symbol id="sensors-fire" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><path class="line" d="M128 214 C90 198 78 166 94 136 C106 112 126 104 122 66 C156 92 184 128 176 166 C170 196 150 210 128 214 Z"/>
+<path class="line" d="M128 194 C112 184 110 164 122 148 C132 136 136 126 136 112 C154 132 158 154 152 174 C148 186 140 192 128 194 Z"/></g></symbol>
+<symbol id="sensors-gas" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><rect class="line" x="78" y="62" width="100" height="54" rx="18"/>
+<path class="line" d="M94 144 C74 164 82 190 108 196"/>
+<path class="line" d="M128 140 C110 164 120 194 146 202"/>
+<path class="line" d="M160 144 C180 164 172 190 146 196"/></g></symbol>
+<symbol id="sensors-co2" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><rect class="line" x="78" y="62" width="100" height="54" rx="18"/>
+<path class="line" d="M94 144 C74 164 82 190 108 196"/>
+<path class="line" d="M128 140 C110 164 120 194 146 202"/>
+<path class="line" d="M160 144 C180 164 172 190 146 196"/>
+<text class="mini" x="128" y="104">CO₂</text></g></symbol>
+<symbol id="sensors-water-leak" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><path class="line" d="M128 58 C164 106 186 136 186 166 C186 198 160 222 128 222 C96 222 70 198 70 166 C70 136 92 106 128 58 Z"/>
+<path class="line" d="M102 168 C102 184 114 196 130 196"/></g></symbol>
+<symbol id="sensors-battery" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><rect class="line" x="56" y="98" width="142" height="60" rx="10"/>
+<path class="line" d="M198 116 H216 V140 H198"/>
+<path class="line" d="M80 128 H166"/></g></symbol>
+<symbol id="sensors-signal" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><path class="line" d="M70 184 V154"/>
+<path class="line" d="M108 184 V126"/>
+<path class="line" d="M146 184 V98"/>
+<path class="line" d="M184 184 V70"/></g></symbol>
+<symbol id="sensors-noise" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><path class="line" d="M48 132 C70 104 94 104 116 132 C138 160 162 160 184 132 C196 116 208 110 220 112"/></g></symbol>
+<symbol id="sensors-vibration" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><rect class="line" x="98" y="76" width="60" height="104" rx="14"/>
+<path class="line" d="M68 98 C58 116 58 140 68 158"/>
+<path class="line" d="M188 98 C198 116 198 140 188 158"/>
+<path class="line" d="M48 82 C30 112 30 146 48 176"/>
+<path class="line" d="M208 82 C226 112 226 146 208 176"/></g></symbol>
+<symbol id="sensors-light" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><circle class="line" cx="128" cy="128" r="34"/>
+<path class="line" d="M128 52 V76 M128 180 V204 M52 128 H76 M180 128 H204 M74 74 L92 92 M164 164 L182 182 M182 74 L164 92 M92 164 L74 182"/></g></symbol>
+<symbol id="events-alarm" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><path class="line" d="M72 92 L48 68"/>
+<path class="line" d="M184 92 L208 68"/>
+<circle class="line" cx="128" cy="136" r="58"/>
+<path class="line" d="M128 102 V140 L154 158"/>
+<path class="line" d="M96 210 H160"/></g></symbol>
+<symbol id="events-motion-detected" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><circle class="line" cx="92" cy="126" r="20"/>
+<path class="line" d="M128 86 C156 106 156 146 128 166"/>
+<path class="line" d="M154 62 C198 96 198 156 154 194"/></g></symbol>
+<symbol id="events-door-opened" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><path class="line" d="M86 70 H170 V204 H86 Z"/>
+<path class="line" d="M102 84 L176 70 V204 L102 188 Z"/>
+<circle class="fill" cx="154" cy="136" r="4"/></g></symbol>
+<symbol id="events-window-opened" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><rect class="line" x="68" y="72" width="120" height="120" rx="8"/>
+<path class="line" d="M128 72 V192"/>
+<path class="line" d="M68 132 H188"/>
+<path class="line" d="M188 92 L216 78 V178 L188 164"/></g></symbol>
+<symbol id="events-fire-detected" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><path class="line" d="M128 214 C90 198 78 166 94 136 C106 112 126 104 122 66 C156 92 184 128 176 166 C170 196 150 210 128 214 Z"/>
+<path class="line" d="M128 194 C112 184 110 164 122 148 C132 136 136 126 136 112 C154 132 158 154 152 174 C148 186 140 192 128 194 Z"/></g></symbol>
+<symbol id="events-smoke-detected" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><rect class="line" x="78" y="62" width="100" height="54" rx="18"/>
+<path class="line" d="M94 144 C74 164 82 190 108 196"/>
+<path class="line" d="M128 140 C110 164 120 194 146 202"/>
+<path class="line" d="M160 144 C180 164 172 190 146 196"/></g></symbol>
+<symbol id="events-leak-detected" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><path class="line" d="M128 58 C164 106 186 136 186 166 C186 198 160 222 128 222 C96 222 70 198 70 166 C70 136 92 106 128 58 Z"/>
+<path class="line" d="M102 168 C102 184 114 196 130 196"/></g></symbol>
+<symbol id="events-gas-detected" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><rect class="line" x="78" y="62" width="100" height="54" rx="18"/>
+<path class="line" d="M94 144 C74 164 82 190 108 196"/>
+<path class="line" d="M128 140 C110 164 120 194 146 202"/>
+<path class="line" d="M160 144 C180 164 172 190 146 196"/></g></symbol>
+<symbol id="events-tamper-detected" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><path class="line" d="M128 52 L202 88 V132 C202 178 170 204 128 220 C86 204 54 178 54 132 V88 Z"/>
+<path class="line" d="M128 90 V146"/>
+<circle class="fill" cx="128" cy="174" r="6"/></g></symbol>
+<symbol id="events-armed-event" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><path class="line" d="M128 48 L190 76 V124 C190 166 164 198 128 214 C92 198 66 166 66 124 V76 Z"/>
+<rect class="line" x="100" y="122" width="56" height="46" rx="8"/>
+<path class="line" d="M112 122 V110 C112 90 144 90 144 110 V122"/></g></symbol>
+<symbol id="events-disarmed-event" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><path class="line" d="M128 48 L190 76 V124 C190 166 164 198 128 214 C92 198 66 166 66 124 V76 Z"/>
+<path class="line" d="M108 132 L124 148 L154 112"/></g></symbol>
+<symbol id="events-night-mode-event" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><path class="line" d="M166 190 C112 194 70 154 76 102 C80 70 100 50 126 42 C110 72 116 112 144 140 C164 160 190 168 214 162 C204 178 186 188 166 190 Z"/></g></symbol>
+<symbol id="events-device-offline" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><path class="line" d="M62 104 C100 70 156 70 194 104"/>
+<path class="line" d="M86 134 C110 112 146 112 170 134"/>
+<path class="line" d="M62 62 L194 194"/></g></symbol>
+<symbol id="events-battery-low-event" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><rect class="line" x="58" y="100" width="142" height="58" rx="10"/>
+<path class="line" d="M200 116 H216 V142 H200"/>
+<path class="line" d="M82 128 H98"/></g></symbol>
+<symbol id="events-power-lost" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><path class="line" d="M128 56 V126"/>
+<path class="line" d="M94 88 C72 104 62 132 70 160 C80 196 118 216 154 204 C190 192 208 152 194 118 C188 104 178 94 166 88"/></g></symbol>
+<symbol id="events-restored" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><circle class="line" cx="128" cy="128" r="76"/>
+<path class="line" d="M88 132 L116 160 L172 98"/></g></symbol>
+<symbol id="events-panic" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><path class="line" d="M72 92 L48 68"/>
+<path class="line" d="M184 92 L208 68"/>
+<circle class="line" cx="128" cy="136" r="58"/>
+<path class="line" d="M128 102 V140 L154 158"/>
+<path class="line" d="M96 210 H160"/>
+<path class="line" d="M128 76 V46"/></g></symbol>
+<symbol id="events-maintenance-event" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><path class="line" d="M84 68 L188 172"/>
+<path class="line" d="M172 68 L68 172"/>
+<circle class="line" cx="184" cy="184" r="18"/>
+<circle class="line" cx="72" cy="184" r="18"/></g></symbol>
+<symbol id="automation-scene" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><path class="line" d="M112 56 L128 100 L172 116 L128 132 L112 176 L96 132 L52 116 L96 100 Z"/>
+<path class="line" d="M184 64 L192 88 L216 96 L192 104 L184 128 L176 104 L152 96 L176 88 Z"/></g></symbol>
+<symbol id="automation-schedule" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><rect class="line" x="62" y="76" width="132" height="124" rx="14"/>
+<path class="line" d="M62 112 H194"/>
+<path class="line" d="M94 56 V90"/>
+<path class="line" d="M162 56 V90"/>
+<path class="line" d="M94 142 H96 M128 142 H130 M162 142 H164 M94 172 H96 M128 172 H130 M162 172 H164"/></g></symbol>
+<symbol id="automation-rule" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><circle class="line" cx="76" cy="86" r="24"/>
+<circle class="line" cx="180" cy="86" r="24"/>
+<circle class="line" cx="128" cy="178" r="24"/>
+<path class="line" d="M100 86 H156"/>
+<path class="line" d="M88 108 L116 156"/>
+<path class="line" d="M168 108 L140 156"/></g></symbol>
+<symbol id="automation-trigger" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><path class="line" d="M142 46 L78 138 H126 L112 214 L178 114 H132 Z"/></g></symbol>
+<symbol id="automation-condition" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><circle class="line" cx="78" cy="78" r="20"/>
+<circle class="line" cx="178" cy="78" r="20"/>
+<circle class="line" cx="128" cy="178" r="20"/>
+<path class="line" d="M96 88 L128 158 L160 88"/></g></symbol>
+<symbol id="automation-action" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><circle class="line" cx="128" cy="128" r="76"/>
+<path class="line" d="M110 92 L166 128 L110 164 Z"/></g></symbol>
+<symbol id="automation-automation-on" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><rect class="line" x="54" y="94" width="148" height="68" rx="34"/>
+<circle class="line" cx="166" cy="128" r="24"/></g></symbol>
+<symbol id="automation-automation-off" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><rect class="line" x="54" y="94" width="148" height="68" rx="34"/>
+<circle class="line" cx="90" cy="128" r="24"/></g></symbol>
+<symbol id="automation-timer" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><circle class="line" cx="128" cy="136" r="62"/>
+<path class="line" d="M108 58 H148"/>
+<path class="line" d="M128 74 V56"/>
+<path class="line" d="M128 102 V138 L154 154"/></g></symbol>
+<symbol id="navigation-home" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><path class="line" d="M54 124 L128 62 L202 124"/>
+<path class="line" d="M74 116 V202 H182 V116"/>
+<path class="line" d="M112 202 V154 H144 V202"/></g></symbol>
+<symbol id="navigation-rooms" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><rect class="line" x="62" y="62" width="52" height="52" rx="10"/>
+<rect class="line" x="142" y="62" width="52" height="52" rx="10"/>
+<rect class="line" x="62" y="142" width="52" height="52" rx="10"/>
+<rect class="line" x="142" y="142" width="52" height="52" rx="10"/></g></symbol>
+<symbol id="navigation-back" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><path class="line" d="M158 72 L102 128 L158 184"/>
+<path class="line" d="M108 128 H204"/></g></symbol>
+<symbol id="navigation-next" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><path class="line" d="M98 72 L154 128 L98 184"/>
+<path class="line" d="M52 128 H148"/></g></symbol>
+<symbol id="navigation-up" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><path class="line" d="M72 158 L128 102 L184 158"/>
+<path class="line" d="M128 108 V204"/></g></symbol>
+<symbol id="navigation-down" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><path class="line" d="M72 98 L128 154 L184 98"/>
+<path class="line" d="M128 52 V148"/></g></symbol>
+<symbol id="navigation-menu" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><path class="line" d="M64 86 H192"/>
+<path class="line" d="M64 128 H192"/>
+<path class="line" d="M64 170 H192"/></g></symbol>
+<symbol id="navigation-close" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><path class="line" d="M82 82 L174 174"/>
+<path class="line" d="M174 82 L82 174"/></g></symbol>
+<symbol id="navigation-search" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><circle class="line" cx="112" cy="112" r="50"/>
+<path class="line" d="M150 150 L198 198"/></g></symbol>
+<symbol id="navigation-settings" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><circle class="line" cx="128" cy="128" r="28"/>
+<path class="line" d="M128 52 V78 M128 178 V204 M52 128 H78 M178 128 H204 M74 74 L92 92 M164 164 L182 182 M182 74 L164 92 M92 164 L74 182"/></g></symbol>
+<symbol id="connectivity-wifi" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><path class="line" d="M62 104 C100 70 156 70 194 104"/>
+<path class="line" d="M86 134 C110 112 146 112 170 134"/>
+<path class="line" d="M110 164 C120 154 136 154 146 164"/>
+<circle class="fill" cx="128" cy="190" r="6"/></g></symbol>
+<symbol id="connectivity-wifi-off" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><path class="line" d="M62 104 C100 70 156 70 194 104"/>
+<path class="line" d="M86 134 C110 112 146 112 170 134"/>
+<path class="line" d="M62 62 L194 194"/></g></symbol>
+<symbol id="connectivity-ethernet" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><rect class="line" x="86" y="72" width="84" height="72" rx="12"/>
+<path class="line" d="M104 144 V184 H152 V144"/>
+<path class="line" d="M108 92 V118 M128 92 V118 M148 92 V118"/></g></symbol>
+<symbol id="connectivity-cloud" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><path class="line" d="M82 168 H174 C200 168 214 150 206 128 C198 108 180 104 166 110 C158 82 118 72 98 100 C68 100 50 124 58 146 C62 160 70 168 82 168 Z"/></g></symbol>
+<symbol id="connectivity-cloud-off" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><path class="line" d="M82 168 H174 C200 168 214 150 206 128 C198 108 180 104 166 110 C158 82 118 72 98 100 C68 100 50 124 58 146 C62 160 70 168 82 168 Z"/>
+<path class="line" d="M62 62 L194 194"/></g></symbol>
+<symbol id="connectivity-signal-low" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><path class="line" d="M70 184 V154"/>
+<path class="line muted" d="M108 184 V126"/>
+<path class="line muted" d="M146 184 V98"/>
+<path class="line muted" d="M184 184 V70"/></g></symbol>
+<symbol id="connectivity-signal-medium" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><path class="line" d="M70 184 V154"/>
+<path class="line" d="M108 184 V126"/>
+<path class="line" d="M146 184 V98"/>
+<path class="line muted" d="M184 184 V70"/></g></symbol>
+<symbol id="connectivity-signal-high" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><path class="line" d="M70 184 V154"/>
+<path class="line" d="M108 184 V126"/>
+<path class="line" d="M146 184 V98"/>
+<path class="line" d="M184 184 V70"/></g></symbol>
+<symbol id="connectivity-gsm" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><path class="line" d="M128 72 L92 204 H164 Z"/>
+<path class="line" d="M108 142 H148"/>
+<path class="line" d="M96 64 C70 88 70 122 96 146"/>
+<path class="line" d="M160 64 C186 88 186 122 160 146"/></g></symbol>
+<symbol id="connectivity-lan" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><rect class="line" x="64" y="126" width="128" height="54" rx="14"/>
+<path class="line" d="M92 126 L78 82"/>
+<path class="line" d="M164 126 L178 82"/>
+<circle class="fill" cx="96" cy="154" r="5"/>
+<circle class="fill" cx="120" cy="154" r="5"/></g></symbol>
+<symbol id="misc-info" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><circle class="line" cx="128" cy="128" r="76"/>
+<path class="line" d="M128 118 V170"/>
+<circle class="fill" cx="128" cy="88" r="6"/></g></symbol>
+<symbol id="misc-alert" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><path class="line" d="M128 54 L214 204 H42 Z"/>
+<path class="line" d="M128 104 V152"/>
+<circle class="fill" cx="128" cy="178" r="5"/></g></symbol>
+<symbol id="misc-check" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><circle class="line" cx="128" cy="128" r="76"/>
+<path class="line" d="M88 132 L116 160 L172 98"/></g></symbol>
+<symbol id="misc-plus" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><circle class="line" cx="128" cy="128" r="76"/>
+<path class="line" d="M128 88 V168"/>
+<path class="line" d="M88 128 H168"/></g></symbol>
+<symbol id="misc-minus" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><circle class="line" cx="128" cy="128" r="76"/>
+<path class="line" d="M88 128 H168"/></g></symbol>
+<symbol id="misc-edit" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><path class="line" d="M78 176 L72 204 L100 198 L182 116 L160 94 Z"/>
+<path class="line" d="M146 108 L168 130"/></g></symbol>
+<symbol id="misc-delete" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><path class="line" d="M78 90 H178"/>
+<path class="line" d="M104 90 V70 H152 V90"/>
+<path class="line" d="M92 90 L100 204 H156 L164 90"/>
+<path class="line" d="M118 120 V174 M138 120 V174"/></g></symbol>
+<symbol id="misc-favorite" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><path class="line" d="M128 54 L150 102 L202 108 L164 144 L174 196 L128 170 L82 196 L92 144 L54 108 L106 102 Z"/></g></symbol>
+<symbol id="misc-history" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><path class="line" d="M76 104 C90 74 126 58 160 72 C198 88 214 132 196 168 C178 204 134 218 98 198 C82 190 70 178 62 164"/>
+<path class="line" d="M76 104 H46 V74"/>
+<path class="line" d="M128 94 V134 L158 152"/></g></symbol>
+<symbol id="misc-energy" viewBox="0 0 256 256"><g stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><path class="line" d="M142 46 L78 138 H126 L112 214 L178 114 H132 Z"/></g></symbol>
+</svg>

@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256" role="img" aria-label="ethernet">
+  <defs>
+<filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+<g filter="url(#glow)" stroke="#22d3ee" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round">
+    <style>
+      .line { stroke: #22d3ee; fill: none; }
+      .muted { opacity: .28; }
+      .fill { fill: #22d3ee; stroke: none; }
+      .mini { fill: #22d3ee; stroke: none; font: 700 26px system-ui, sans-serif; text-anchor: middle; dominant-baseline: middle; }
+    </style>
+    <rect class="line" x="86" y="72" width="84" height="72" rx="12"/>
+<path class="line" d="M104 144 V184 H152 V144"/>
+<path class="line" d="M108 92 V118 M128 92 V118 M148 92 V118"/>
+  </g>
+</svg>

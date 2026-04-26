@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256" role="img" aria-label="favorite">
+  <defs>
+<filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+<g filter="url(#glow)" stroke="#ec4899" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round">
+    <style>
+      .line { stroke: #ec4899; fill: none; }
+      .muted { opacity: .28; }
+      .fill { fill: #ec4899; stroke: none; }
+      .mini { fill: #ec4899; stroke: none; font: 700 26px system-ui, sans-serif; text-anchor: middle; dominant-baseline: middle; }
+    </style>
+    <path class="line" d="M128 54 L150 102 L202 108 L164 144 L174 196 L128 170 L82 196 L92 144 L54 108 L106 102 Z"/>
+  </g>
+</svg>

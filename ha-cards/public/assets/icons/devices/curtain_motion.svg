@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256" role="img" aria-label="curtain_motion">
+  <defs>
+<filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+<g filter="url(#glow)" stroke="#3b82f6" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round">
+    <style>
+      .line { stroke: #3b82f6; fill: none; }
+      .muted { opacity: .28; }
+      .fill { fill: #3b82f6; stroke: none; }
+      .mini { fill: #3b82f6; stroke: none; font: 700 26px system-ui, sans-serif; text-anchor: middle; dominant-baseline: middle; }
+    </style>
+    <path class="line" d="M68 62 H188"/>
+<path class="line" d="M82 62 C106 100 94 150 82 206"/>
+<path class="line" d="M174 62 C150 100 162 150 174 206"/>
+<path class="line" d="M106 62 C126 118 126 164 106 206"/>
+<path class="line" d="M150 62 C130 118 130 164 150 206"/>
+  </g>
+</svg>

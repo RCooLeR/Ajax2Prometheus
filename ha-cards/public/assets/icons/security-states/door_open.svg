@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256" role="img" aria-label="door_open">
+  <defs>
+<filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+<g filter="url(#glow)" stroke="#ef4444" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round">
+    <style>
+      .line { stroke: #ef4444; fill: none; }
+      .muted { opacity: .28; }
+      .fill { fill: #ef4444; stroke: none; }
+      .mini { fill: #ef4444; stroke: none; font: 700 26px system-ui, sans-serif; text-anchor: middle; dominant-baseline: middle; }
+    </style>
+    <path class="line" d="M86 70 H170 V204 H86 Z"/>
+<path class="line" d="M102 84 L176 70 V204 L102 188 Z"/>
+<circle class="fill" cx="154" cy="136" r="4"/>
+  </g>
+</svg>

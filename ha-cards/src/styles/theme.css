@@ -1,0 +1,104 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Sora:wght@500;600;700&display=swap');
+
+.ajax-lovelace-theme {
+  color: #f4f8ff;
+  font-family: 'Space Grotesk', 'Segoe UI Variable Display', 'Trebuchet MS', sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  --bg-0: #060913;
+  --bg-1: #091224;
+  --panel: rgba(8, 14, 30, 0.56);
+  --panel-strong: rgba(5, 12, 26, 0.8);
+  --panel-soft: rgba(255, 255, 255, 0.04);
+  --border: rgba(173, 197, 255, 0.14);
+  --border-strong: rgba(173, 197, 255, 0.24);
+  --text-main: #f4f8ff;
+  --text-soft: rgba(233, 241, 255, 0.74);
+  --text-dim: rgba(191, 205, 229, 0.5);
+  --shadow: 0 32px 80px rgba(0, 0, 0, 0.48);
+  --radius-xl: 30px;
+  --radius-lg: 22px;
+  --radius-md: 18px;
+  --radius-sm: 14px;
+  --tone-cyan: #2de2e6;
+  --tone-cyan-rgb: 45, 226, 230;
+  --tone-green: #5cff8d;
+  --tone-green-rgb: 92, 255, 141;
+  --tone-amber: #ffb84d;
+  --tone-amber-rgb: 255, 184, 77;
+  --tone-red: #ff4f6d;
+  --tone-red-rgb: 255, 79, 109;
+  --tone-violet: #b582ff;
+  --tone-violet-rgb: 181, 130, 255;
+  --tone-slate: #8ca1c5;
+  --tone-slate-rgb: 140, 161, 197;
+}
+
+.ajax-lovelace-theme,
+.ajax-lovelace-theme *,
+.ajax-lovelace-theme *::before,
+.ajax-lovelace-theme *::after {
+  box-sizing: border-box;
+}
+
+.ajax-lovelace-theme {
+  color: var(--text-main);
+}
+
+.ajax-lovelace-theme button,
+.ajax-lovelace-theme input,
+.ajax-lovelace-theme textarea,
+.ajax-lovelace-theme select {
+  font: inherit;
+  color: inherit;
+}
+
+.ajax-lovelace-theme img {
+  display: block;
+  max-width: 100%;
+}
+
+.ajax-lovelace-theme a {
+  color: inherit;
+}
+
+.glass-panel {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02)),
+    var(--panel);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(24px);
+}
+
+.tone-cyan {
+  --tone-color: var(--tone-cyan);
+  --tone-rgb: var(--tone-cyan-rgb);
+}
+
+.tone-green {
+  --tone-color: var(--tone-green);
+  --tone-rgb: var(--tone-green-rgb);
+}
+
+.tone-amber {
+  --tone-color: var(--tone-amber);
+  --tone-rgb: var(--tone-amber-rgb);
+}
+
+.tone-red {
+  --tone-color: var(--tone-red);
+  --tone-rgb: var(--tone-red-rgb);
+}
+
+.tone-violet {
+  --tone-color: var(--tone-violet);
+  --tone-rgb: var(--tone-violet-rgb);
+}
+
+.tone-slate {
+  --tone-color: var(--tone-slate);
+  --tone-rgb: var(--tone-slate-rgb);
+}

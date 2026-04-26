@@ -1,0 +1,6 @@
+title: Ajax
+path: ajax
+panel: true
+cards:
+  - type: custom:ajax-lovelace-detailed-card
+    default_room: living-room

@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256" role="img" aria-label="living_room">
+  <defs>
+<filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+<g filter="url(#glow)" stroke="#22d3ee" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round">
+    <style>
+      .line { stroke: #22d3ee; fill: none; }
+      .muted { opacity: .28; }
+      .fill { fill: #22d3ee; stroke: none; }
+      .mini { fill: #22d3ee; stroke: none; font: 700 26px system-ui, sans-serif; text-anchor: middle; dominant-baseline: middle; }
+    </style>
+    <path class="line" d="M74 132 V112 C74 96 86 88 104 88 H152 C170 88 182 96 182 112 V132"/>
+<path class="line" d="M58 132 H198 C210 132 218 142 218 154 V188 H38 V154 C38 142 46 132 58 132 Z"/>
+<path class="line" d="M66 188 V206"/>
+<path class="line" d="M190 188 V206"/>
+  </g>
+</svg>

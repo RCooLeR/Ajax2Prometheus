@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256" role="img" aria-label="disarmed">
+  <defs>
+<filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+<g filter="url(#glow)" stroke="#22c55e" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round">
+    <style>
+      .line { stroke: #22c55e; fill: none; }
+      .muted { opacity: .28; }
+      .fill { fill: #22c55e; stroke: none; }
+      .mini { fill: #22c55e; stroke: none; font: 700 26px system-ui, sans-serif; text-anchor: middle; dominant-baseline: middle; }
+    </style>
+    <path class="line" d="M128 48 L190 76 V124 C190 166 164 198 128 214 C92 198 66 166 66 124 V76 Z"/>
+<path class="line" d="M108 132 L124 148 L154 112"/>
+  </g>
+</svg>
