@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256" role="img" aria-label="intrusion_detected">
+  <defs>
+    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <g filter="url(#glow)" stroke="#ef4444" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round">
+    <style>
+      .line { stroke: #ef4444; fill: none; }
+    </style>
+    <path class="line" d="M62 70 H194 V186 H62 Z"/>
+    <path class="line" d="M94 128 H160"/>
+    <path class="line" d="M138 106 L160 128 L138 150"/>
+    <path class="line" d="M62 70 L42 50"/>
+    <path class="line" d="M194 70 L214 50"/>
+  </g>
+</svg>

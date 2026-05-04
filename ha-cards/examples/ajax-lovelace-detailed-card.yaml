@@ -4,3 +4,4 @@ panel: true
 cards:
   - type: custom:ajax-lovelace-detailed-card
     default_room: living-room
+    dahua_base: https://ha.example.test/dahua-bridge

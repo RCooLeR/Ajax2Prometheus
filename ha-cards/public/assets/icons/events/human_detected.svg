@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256" role="img" aria-label="human_detected">
+  <defs>
+    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <g filter="url(#glow)" stroke="#a78bfa" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round">
+    <style>
+      .line { stroke: #a78bfa; fill: none; }
+    </style>
+    <circle class="line" cx="128" cy="84" r="24"/>
+    <path class="line" d="M86 182 C94 148 110 130 128 130 C146 130 162 148 170 182"/>
+    <path class="line" d="M72 196 H184"/>
+  </g>
+</svg>

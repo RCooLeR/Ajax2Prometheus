@@ -1,0 +1,223 @@
+[
+  {
+    "id": "yard",
+    "name": "Yard",
+    "type": "yard",
+    "summary": "Perimeter beams, driveway coverage, and outdoor camera watch.",
+    "heroLabel": "Outdoor perimeter",
+    "image": "yard.png",
+    "accent": "#2de2e6",
+    "icon": { "category": "rooms", "key": "yard" },
+    "statusTone": "cyan",
+    "stateChips": [
+      { "id": "yard-perimeter", "label": "Perimeter", "value": "Armed", "icon": { "category": "security-states", "key": "perimeter" }, "tone": "green", "active": true },
+      { "id": "yard-motion", "label": "Motion", "value": "Quiet", "icon": { "category": "sensors", "key": "motion" }, "tone": "cyan", "active": false },
+      { "id": "yard-cameras", "label": "Cameras", "value": "2 online", "icon": { "category": "devices", "key": "camera" }, "tone": "cyan", "active": true },
+      { "id": "yard-signal", "label": "Signal", "value": "Jeweller strong", "icon": { "category": "connectivity", "key": "signal_high" }, "tone": "green", "active": true }
+    ]
+  },
+  {
+    "id": "bedroom",
+    "name": "Bedroom",
+    "type": "bedroom",
+    "summary": "Night perimeter, balcony window protection, and comfort monitoring.",
+    "heroLabel": "Private zone",
+    "image": "bedroom.png",
+    "accent": "#a46bff",
+    "icon": { "category": "rooms", "key": "bedroom" },
+    "statusTone": "violet",
+    "stateChips": [
+      { "id": "bedroom-night", "label": "Night mode", "value": "Enabled", "icon": { "category": "system-states", "key": "night_mode" }, "tone": "violet", "active": true },
+      { "id": "bedroom-window", "label": "Window", "value": "Closed", "icon": { "category": "security-states", "key": "window_closed" }, "tone": "green", "active": true },
+      { "id": "bedroom-temp", "label": "Climate", "value": "21.7C / 47%", "icon": { "category": "sensors", "key": "temperature" }, "tone": "cyan", "active": true },
+      { "id": "bedroom-motion", "label": "Motion", "value": "Sleep quiet", "icon": { "category": "sensors", "key": "motion" }, "tone": "slate", "active": false }
+    ]
+  },
+  {
+    "id": "office",
+    "name": "Office",
+    "type": "office",
+    "summary": "Workstation, blinds, glass break protection, and network equipment.",
+    "heroLabel": "Focus room",
+    "image": "office.png",
+    "accent": "#49b6ff",
+    "icon": { "category": "rooms", "key": "office" },
+    "statusTone": "cyan",
+    "stateChips": [
+      { "id": "office-glass", "label": "Glass", "value": "Protected", "icon": { "category": "devices", "key": "glass_break" }, "tone": "green", "active": true },
+      { "id": "office-link", "label": "Network", "value": "1 device offline", "icon": { "category": "system-states", "key": "trouble" }, "tone": "amber", "active": true },
+      { "id": "office-motion", "label": "Curtains", "value": "Closed", "icon": { "category": "devices", "key": "curtain_motion" }, "tone": "cyan", "active": false },
+      { "id": "office-temp", "label": "Comfort", "value": "22.0C / 44%", "icon": { "category": "sensors", "key": "humidity" }, "tone": "cyan", "active": true }
+    ]
+  },
+  {
+    "id": "living-room",
+    "name": "Living Room",
+    "type": "living_room",
+    "summary": "Central family zone with door, motion, and entertainment devices.",
+    "heroLabel": "Main family area",
+    "image": "living-room.png",
+    "accent": "#4cf0c2",
+    "icon": { "category": "rooms", "key": "living_room" },
+    "statusTone": "green",
+    "stateChips": [
+      { "id": "living-doors", "label": "Entry", "value": "Closed", "icon": { "category": "security-states", "key": "door_closed" }, "tone": "green", "active": true },
+      { "id": "living-motion", "label": "Presence", "value": "Quiet", "icon": { "category": "sensors", "key": "motion" }, "tone": "cyan", "active": false },
+      { "id": "living-comfort", "label": "Comfort", "value": "22.4C / 45%", "icon": { "category": "sensors", "key": "temperature" }, "tone": "cyan", "active": true },
+      { "id": "living-power", "label": "Smart load", "value": "3 plugs active", "icon": { "category": "devices", "key": "smart_plug" }, "tone": "green", "active": true }
+    ]
+  },
+  {
+    "id": "kitchen",
+    "name": "Kitchen",
+    "type": "kitchen",
+    "summary": "Fire, smoke, and leak coverage around cooking and appliance zones.",
+    "heroLabel": "High-risk zone",
+    "image": "kitchen.png",
+    "accent": "#ff9d4d",
+    "icon": { "category": "rooms", "key": "kitchen" },
+    "statusTone": "amber",
+    "stateChips": [
+      { "id": "kitchen-smoke", "label": "Smoke", "value": "Clear", "icon": { "category": "sensors", "key": "smoke" }, "tone": "green", "active": true },
+      { "id": "kitchen-fire", "label": "Fire", "value": "Monitoring", "icon": { "category": "sensors", "key": "fire" }, "tone": "amber", "active": true },
+      { "id": "kitchen-leak", "label": "Water", "value": "Protected", "icon": { "category": "sensors", "key": "water_leak" }, "tone": "green", "active": true },
+      { "id": "kitchen-gas", "label": "Gas line", "value": "Stable", "icon": { "category": "sensors", "key": "gas" }, "tone": "cyan", "active": true }
+    ]
+  },
+  {
+    "id": "garage",
+    "name": "Garage",
+    "type": "garage",
+    "summary": "Vehicle bay, roller gate, and side-door access protection.",
+    "heroLabel": "Entry checkpoint",
+    "image": "garage.png",
+    "accent": "#ff4f6d",
+    "icon": { "category": "rooms", "key": "garage" },
+    "statusTone": "red",
+    "stateChips": [
+      { "id": "garage-gate", "label": "Main gate", "value": "Secured", "icon": { "category": "security-states", "key": "locked" }, "tone": "green", "active": true },
+      { "id": "garage-camera", "label": "Camera", "value": "Tracking ready", "icon": { "category": "devices", "key": "camera" }, "tone": "cyan", "active": true },
+      { "id": "garage-power", "label": "Backup", "value": "Power restored", "icon": { "category": "system-states", "key": "power_loss" }, "tone": "amber", "active": false },
+      { "id": "garage-motion", "label": "Outdoor beam", "value": "Standby", "icon": { "category": "devices", "key": "outdoor_motion" }, "tone": "red", "active": false }
+    ]
+  },
+  {
+    "id": "attic",
+    "name": "Attic",
+    "type": "attic",
+    "summary": "Storage access, smoke safety, and low-traffic movement detection.",
+    "heroLabel": "Upper utility",
+    "image": "attic.png",
+    "accent": "#c78dff",
+    "icon": { "category": "rooms", "key": "attic" },
+    "statusTone": "violet",
+    "stateChips": [
+      { "id": "attic-access", "label": "Hatch", "value": "Closed", "icon": { "category": "security-states", "key": "door_closed" }, "tone": "green", "active": true },
+      { "id": "attic-smoke", "label": "Smoke", "value": "Normal", "icon": { "category": "sensors", "key": "smoke" }, "tone": "green", "active": true },
+      { "id": "attic-temp", "label": "Temperature", "value": "18.9C", "icon": { "category": "sensors", "key": "temperature" }, "tone": "cyan", "active": true },
+      { "id": "attic-motion", "label": "Traffic", "value": "Rare", "icon": { "category": "sensors", "key": "motion" }, "tone": "slate", "active": false }
+    ]
+  },
+  {
+    "id": "server-room",
+    "name": "Server Room",
+    "type": "server_room",
+    "summary": "Network core, repeater coverage, power health, and thermal control.",
+    "heroLabel": "Infrastructure core",
+    "image": "server-room.png",
+    "accent": "#29a3ff",
+    "icon": { "category": "rooms", "key": "server_room" },
+    "statusTone": "cyan",
+    "stateChips": [
+      { "id": "server-link", "label": "Backhaul", "value": "LAN + cloud", "icon": { "category": "connectivity", "key": "lan" }, "tone": "cyan", "active": true },
+      { "id": "server-thermo", "label": "Thermostat", "value": "20.5C target", "icon": { "category": "devices", "key": "thermostat" }, "tone": "green", "active": true },
+      { "id": "server-battery", "label": "UPS", "value": "Low battery watch", "icon": { "category": "system-states", "key": "battery_low" }, "tone": "amber", "active": true },
+      { "id": "server-repeat", "label": "Repeater", "value": "Stable", "icon": { "category": "devices", "key": "repeater" }, "tone": "cyan", "active": true }
+    ]
+  },
+  {
+    "id": "kids-room",
+    "name": "Kids Room",
+    "type": "kids_room",
+    "summary": "Curtain motion, window security, and bedtime comfort scene.",
+    "heroLabel": "Family zone",
+    "image": "kids-room.png",
+    "accent": "#ff5ea8",
+    "icon": { "category": "rooms", "key": "kids_room" },
+    "statusTone": "violet",
+    "stateChips": [
+      { "id": "kids-window", "label": "Window", "value": "Closed", "icon": { "category": "security-states", "key": "window_closed" }, "tone": "green", "active": true },
+      { "id": "kids-curtain", "label": "Curtains", "value": "Protected", "icon": { "category": "devices", "key": "curtain_motion" }, "tone": "violet", "active": true },
+      { "id": "kids-temp", "label": "Climate", "value": "22.3C / 49%", "icon": { "category": "sensors", "key": "temperature" }, "tone": "cyan", "active": true },
+      { "id": "kids-night", "label": "Night scene", "value": "On", "icon": { "category": "system-states", "key": "night_mode" }, "tone": "violet", "active": true }
+    ]
+  },
+  {
+    "id": "guests-room",
+    "name": "Guests Room",
+    "type": "guests_room",
+    "summary": "Guest suite security with motion, window, and climate watch.",
+    "heroLabel": "Guest suite",
+    "image": "guests-room.png",
+    "accent": "#33d1bb",
+    "icon": { "category": "rooms", "key": "guests_room" },
+    "statusTone": "cyan",
+    "stateChips": [
+      { "id": "guest-mode", "label": "Room state", "value": "Disarmed", "icon": { "category": "system-states", "key": "disarmed" }, "tone": "slate", "active": false },
+      { "id": "guest-window", "label": "Window", "value": "Closed", "icon": { "category": "security-states", "key": "window_closed" }, "tone": "green", "active": true },
+      { "id": "guest-motion", "label": "Motion", "value": "Idle", "icon": { "category": "sensors", "key": "motion" }, "tone": "slate", "active": false },
+      { "id": "guest-air", "label": "Comfort", "value": "21.4C / 46%", "icon": { "category": "sensors", "key": "humidity" }, "tone": "cyan", "active": true }
+    ]
+  },
+  {
+    "id": "bathroom",
+    "name": "Bathroom",
+    "type": "bathroom",
+    "summary": "Leak-first protection with humidity swings and service ventilation.",
+    "heroLabel": "Wet zone",
+    "image": "bathroom.png",
+    "accent": "#67b6ff",
+    "icon": { "category": "rooms", "key": "bathroom" },
+    "statusTone": "cyan",
+    "stateChips": [
+      { "id": "bath-leak", "label": "Leak", "value": "Dry floor", "icon": { "category": "sensors", "key": "water_leak" }, "tone": "green", "active": true },
+      { "id": "bath-humidity", "label": "Humidity", "value": "58%", "icon": { "category": "sensors", "key": "humidity" }, "tone": "cyan", "active": true },
+      { "id": "bath-fire", "label": "Heat", "value": "No anomaly", "icon": { "category": "sensors", "key": "fire" }, "tone": "green", "active": true },
+      { "id": "bath-window", "label": "Vent mode", "value": "Auto", "icon": { "category": "misc", "key": "energy" }, "tone": "cyan", "active": true }
+    ]
+  },
+  {
+    "id": "house",
+    "name": "House",
+    "type": "house",
+    "summary": "Whole-property overview: hub health, access control, and siren readiness.",
+    "heroLabel": "Master overview",
+    "image": "house.png",
+    "accent": "#3cff9a",
+    "icon": { "category": "rooms", "key": "house" },
+    "statusTone": "green",
+    "stateChips": [
+      { "id": "house-mode", "label": "Security mode", "value": "Armed", "icon": { "category": "system-states", "key": "armed" }, "tone": "green", "active": true },
+      { "id": "house-cloud", "label": "Cloud", "value": "Stable", "icon": { "category": "connectivity", "key": "cloud" }, "tone": "cyan", "active": true },
+      { "id": "house-sirens", "label": "Sirens", "value": "Ready", "icon": { "category": "devices", "key": "siren" }, "tone": "green", "active": true },
+      { "id": "house-battery", "label": "Batteries", "value": "2 require service", "icon": { "category": "system-states", "key": "battery_low" }, "tone": "amber", "active": true }
+    ]
+  },
+  {
+    "id": "small-house",
+    "name": "Small House",
+    "type": "small_house",
+    "summary": "Detached guest house with its own hub, sensors, and comfort controls.",
+    "heroLabel": "Annex building",
+    "image": "small-house.png",
+    "accent": "#93a4ff",
+    "icon": { "category": "rooms", "key": "small_house" },
+    "statusTone": "violet",
+    "stateChips": [
+      { "id": "small-mode", "label": "Arming", "value": "Disarmed", "icon": { "category": "system-states", "key": "disarmed" }, "tone": "slate", "active": false },
+      { "id": "small-camera", "label": "Camera", "value": "Online", "icon": { "category": "devices", "key": "camera" }, "tone": "cyan", "active": true },
+      { "id": "small-temp", "label": "Climate", "value": "20.8C", "icon": { "category": "devices", "key": "thermostat" }, "tone": "cyan", "active": true },
+      { "id": "small-link", "label": "Backhaul", "value": "Ethernet healthy", "icon": { "category": "connectivity", "key": "ethernet" }, "tone": "green", "active": true }
+    ]
+  }
+]

@@ -25,6 +25,8 @@ go.work.sum
 # Runtime data/logs
 data/
 devices.json
+!ha-cards/src/data/
+!ha-cards/src/data/**
 *.log
 
 # IDE files

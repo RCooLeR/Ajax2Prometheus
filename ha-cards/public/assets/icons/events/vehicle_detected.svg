@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256" role="img" aria-label="vehicle_detected">
+  <defs>
+    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <g filter="url(#glow)" stroke="#60a5fa" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round">
+    <style>
+      .line { stroke: #60a5fa; fill: none; }
+    </style>
+    <path class="line" d="M62 160 H82 L102 122 H164 L186 160 H194 C202 160 208 166 208 174 V184 H190"/>
+    <path class="line" d="M62 160 C54 160 48 166 48 174 V184 H66"/>
+    <path class="line" d="M104 122 H156"/>
+    <circle class="line" cx="82" cy="184" r="16"/>
+    <circle class="line" cx="174" cy="184" r="16"/>
+  </g>
+</svg>

@@ -1,0 +1,60 @@
+{
+  "chips": [
+    {
+      "id": "chip-armed",
+      "label": "System",
+      "value": "Armed",
+      "icon": { "category": "system-states", "key": "armed" },
+      "tone": "green",
+      "active": true
+    },
+    {
+      "id": "chip-alarm",
+      "label": "Alarm",
+      "value": "Normal",
+      "icon": { "category": "system-states", "key": "alarm_active" },
+      "tone": "green",
+      "active": false
+    },
+    {
+      "id": "chip-online",
+      "label": "Connection",
+      "value": "Online",
+      "icon": { "category": "system-states", "key": "online" },
+      "tone": "cyan",
+      "active": true
+    },
+    {
+      "id": "chip-trouble",
+      "label": "Trouble",
+      "value": "1 pending",
+      "icon": { "category": "system-states", "key": "trouble" },
+      "tone": "amber",
+      "active": true
+    },
+    {
+      "id": "chip-night",
+      "label": "Night mode",
+      "value": "Enabled",
+      "icon": { "category": "system-states", "key": "night_mode" },
+      "tone": "violet",
+      "active": true
+    },
+    {
+      "id": "chip-battery",
+      "label": "Battery",
+      "value": "2 low",
+      "icon": { "category": "system-states", "key": "battery_low" },
+      "tone": "amber",
+      "active": true
+    },
+    {
+      "id": "chip-cloud",
+      "label": "Cloud sync",
+      "value": "LAN + LTE",
+      "icon": { "category": "connectivity", "key": "cloud" },
+      "tone": "cyan",
+      "active": true
+    }
+  ]
+}

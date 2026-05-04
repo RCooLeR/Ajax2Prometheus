@@ -1,0 +1,445 @@
+DahuaBridge channel data exposed to Home Assistant
+==================================================
+
+Scope
+-----
+
+This document lists the Home Assistant entities, bridge controls, and event
+fields DahuaBridge creates for an NVR channel/camera device.
+
+Channel devices are created with this device id format:
+
+  <nvr_device_id>_channel_XX
+
+Example:
+
+  west20_nvr_channel_05
+
+The channel record kind is:
+
+  nvr_channel
+
+The channel record has the NVR/root device as its parent.
+
+Home Assistant entity ids normally follow these default patterns:
+
+  camera.<device_id>_camera
+  binary_sensor.<device_id>_<field>
+  sensor.<device_id>_<field>
+  switch.<device_id>_<control>
+  button.<device_id>_<button>
+  number.<device_id>_<number>
+
+HA can rename entity ids in the entity registry, so a card should prefer the
+entity registry when it is available. The default names are still useful as a
+fallback.
+
+
+Camera entity
+-------------
+
+Every channel with a stream creates one camera entity.
+
+Default entity id:
+
+  camera.<device_id>_camera
+
+Example:
+
+  camera.west20_nvr_channel_05_camera
+
+Camera extra attributes can include:
+
+  recommended_profile
+  snapshot_url
+  stream_source
+  bridge_base_url
+  bridge_device_id
+  bridge_root_device_id
+  bridge_device_kind
+  bridge_device_name
+  bridge_integration_language
+  bridge_channel
+  stream_available
+  preferred_video_profile
+  preferred_video_source
+  video_fallbacks_enabled
+  preview_url
+  bridge_onvif_stream_url
+  bridge_onvif_snapshot_url
+  bridge_profiles
+  bridge_controls
+  bridge_features
+
+If capture/recording support is enabled, camera attributes can also include:
+
+  bridge_capture
+  bridge_recording_active
+  bridge_start_recording_url
+  bridge_stop_recording_url
+  bridge_recordings_url
+
+For NVR channels, archive/playback URL attributes can include:
+
+  bridge_archive_smd_ivs_url_template
+  bridge_archive_recording_chunks_url_template
+  bridge_archive_recordings_url_template
+  bridge_archive_export_url
+  bridge_playback_sessions_url
+  bridge_archive_coverage_url
+
+The card can use these camera attributes to discover the root NVR id, channel
+number, bridge base URL, archive URLs, stream availability, and control metadata.
+
+
+Binary sensors
+--------------
+
+Every channel creates an online binary sensor.
+
+Default entity id:
+
+  binary_sensor.<device_id>_online
+
+Example:
+
+  binary_sensor.west20_nvr_channel_05_online
+
+Generic boolean channel fields also create binary sensors when the field is
+present in the catalog/device state. The main channel boolean fields are:
+
+  stream_available
+  motion
+  human
+  vehicle
+  tripwire
+  intrusion
+
+Transient event fields such as motion/human/vehicle/tripwire/intrusion are kept
+visible after the first matching event by using last_event_type prefixes.
+
+Control and capability boolean fields can also create binary sensors:
+
+  control_ptz_supported
+  control_ptz_pan
+  control_ptz_tilt
+  control_ptz_zoom
+  control_ptz_focus
+  control_ptz_move_relatively
+  control_ptz_auto_scan
+  control_ptz_preset
+  control_ptz_pattern
+  control_ptz_tour
+  control_aux_supported
+  control_audio_supported
+  control_audio_mute_supported
+  control_audio_volume_supported
+  control_audio_volume_permission_denied
+  control_audio_muted
+  control_audio_stream_enabled
+  control_audio_playback_supported
+  control_audio_playback_siren
+  control_audio_playback_quick_reply
+  control_recording_supported
+  control_recording_active
+  control_imou_configured
+  onvif_h264_available
+
+Auxiliary output state fields may also appear after controls are used:
+
+  control_aux_active_siren
+  control_aux_active_light
+  control_aux_active_warning_light
+  control_aux_active_wiper
+
+
+Sensors
+-------
+
+Scalar non-boolean channel fields create sensor entities when the value is
+present and not a list/dict.
+
+Common channel sensors include:
+
+  channel
+  name
+  main_resolution
+  main_codec
+  audio_codec
+  sub_resolution
+  sub_codec
+  snapshot_path
+  rtsp_main_path
+  rtsp_sub_path
+  rtsp_main_url
+  rtsp_sub_url
+  direct_ipc_ip
+  direct_ipc_model
+  direct_ipc_configured_ip
+  direct_ipc_http_port
+  direct_ipc_https_port
+  direct_ipc_rtsp_port
+  device_category
+  inventory_source
+  recommended_profile
+  recommended_ha_integration
+  recommended_ha_reason
+  onvif_profile_name
+  onvif_profile_token
+  onvif_h264_profile_count
+  onvif_stream_url
+  onvif_snapshot_url
+  nvr_config_writable
+  nvr_config_reason
+  control_audio_authority
+  control_audio_semantic
+  control_audio_playback_file_count
+  control_recording_mode
+  control_aux_current_text_light
+  control_aux_current_text_warning_light
+  validation_notes_text
+  last_event_type
+  last_event_at
+
+Fields ending in "_at" use timestamp semantics where HA supports it.
+
+List values are kept as attributes/catalog data and do not create normal sensor
+entities. Examples:
+
+  control_ptz_commands
+  control_aux_outputs
+  control_aux_features
+  control_imou_features
+  validation_notes
+
+
+Switches
+--------
+
+NVR channel switches are created from bridge feature metadata.
+
+Currently the integration creates switch entities only for toggle-style NVR
+channel outputs with:
+
+  parameter_key = output
+  actions include start and stop
+  key is one of light, warning_light, siren
+
+Possible switch entity ids:
+
+  switch.<device_id>_light
+  switch.<device_id>_warning_light
+  switch.<device_id>_siren
+
+Example:
+
+  switch.west20_nvr_channel_05_siren
+
+Switch on/off calls send the bridge AUX control with:
+
+  output = <light|warning_light|siren>
+  action = start or stop
+
+The bridge can expose additional AUX outputs such as wiper or aux, but those are
+not currently converted into Home Assistant switch entities by the integration.
+
+
+Buttons and numbers
+-------------------
+
+NVR channel devices do not currently create button entities.
+
+The root NVR device can create buttons such as:
+
+  probe_now
+  refresh_inventory
+
+Those are root-device controls, not per-channel controls.
+
+NVR channel devices do not currently create number entities. Number entities are
+used for VTO/intercom volume, not for NVR channels.
+
+
+Bridge channel controls
+-----------------------
+
+The bridge exposes these per-channel control endpoints:
+
+  GET  /api/v1/nvr/{root_device_id}/channels/{channel}/controls
+  POST /api/v1/nvr/{root_device_id}/channels/{channel}/ptz
+  POST /api/v1/nvr/{root_device_id}/channels/{channel}/aux
+  POST /api/v1/nvr/{root_device_id}/channels/{channel}/audio/mute
+  POST /api/v1/nvr/{root_device_id}/channels/{channel}/recording
+  POST /api/v1/nvr/{root_device_id}/channels/{channel}/diagnostics
+  GET  /api/v1/nvr/{root_device_id}/channels/{channel}/snapshot
+
+PTZ request body:
+
+  {
+    "action": "start|stop|pulse",
+    "command": "up|down|left|right|left_up|right_up|left_down|right_down|zoom_in|zoom_out|focus_near|focus_far",
+    "speed": 1,
+    "duration_ms": 500
+  }
+
+AUX request body:
+
+  {
+    "action": "start|stop|pulse",
+    "output": "aux|siren|light|warning_light|wiper",
+    "duration_ms": 500
+  }
+
+Audio mute request body:
+
+  {
+    "muted": true
+  }
+
+Recording request body:
+
+  {
+    "action": "start|stop|auto"
+  }
+
+Diagnostics request body:
+
+  {
+    "method": "method_name",
+    "action": "action_name",
+    "duration_ms": 500
+  }
+
+The channel camera attribute bridge_features can also describe supported feature
+keys, URLs, actions, command lists, parameter names, and parameter values. A
+card should prefer bridge_features/bridge_controls when present instead of
+hard-coding which controls are supported.
+
+
+Archive and playback endpoints
+------------------------------
+
+Per-channel archive/query endpoints include:
+
+  GET  /api/v1/nvr/{root_device_id}/smd-ivs?channel={channel}&start={iso}&end={iso}&limit={n}&event={event}
+  GET  /api/v1/nvr/{root_device_id}/recording-chunks?channel={channel}&start={iso}&end={iso}&limit={n}
+  GET  /api/v1/nvr/{root_device_id}/recordings/coverage?channel={channel}
+  POST /api/v1/nvr/{root_device_id}/recordings/export
+  POST /api/v1/nvr/{root_device_id}/playback/sessions
+
+Media endpoints include:
+
+  /api/v1/media/snapshot/{stream_id}
+  /api/v1/media/preview/{stream_id}
+  /api/v1/media/mjpeg/{stream_id}/{profile}
+  /api/v1/media/hls/{stream_id}/{profile}/index.m3u8
+  /api/v1/media/dash/{stream_id}/{profile}/manifest.mpd
+  /api/v1/media/webrtc/{stream_id}/{profile}
+
+
+Events
+------
+
+The bridge subscribes to these Dahua/NVR event codes for channels:
+
+  VideoMotion
+  AlarmLocal
+  SmartMotionHuman
+  SmartMotionVehicle
+  CrossLineDetection
+  CrossRegionDetection
+
+These event codes map to channel boolean fields:
+
+  VideoMotion          -> motion
+  SmartMotionHuman     -> human
+  SmartMotionVehicle   -> vehicle
+  CrossLineDetection   -> tripwire
+  CrossRegionDetection -> intrusion
+
+AlarmLocal is observed as an event code, but it is not currently mapped to a
+dedicated per-channel boolean sensor.
+
+Event actions are normalized to:
+
+  start
+  stop
+  pulse
+  state
+
+For mapped events, channel state is updated with:
+
+  <mapped_field> = true or false
+  last_event_type = <lowercase_event_code>_<action>
+  last_event_at = event timestamp
+
+Examples:
+
+  human = true
+  last_event_type = smartmotionhuman_start
+
+  tripwire = false
+  last_event_type = crosslinedetection_stop
+
+The Home Assistant binary sensors use these last_event_type prefixes to keep
+transient event sensors discoverable:
+
+  motion    uses videomotion_
+  human     uses smartmotionhuman_
+  vehicle   uses smartmotionvehicle_
+  tripwire  uses crosslinedetection_
+  intrusion uses crossregiondetection_
+
+
+SMD/IVS archive event names
+---------------------------
+
+The SMD/IVS archive and summary APIs use these normalized event names:
+
+  human
+  vehicle
+  animal
+  tripwire
+  intrusion
+
+The archive endpoint also accepts Dahua/raw aliases such as:
+
+  smdTypeHuman
+  smdTypeVehicle
+  CrossLineDetection
+  CrossRegionDetection
+
+Use the normalized names in cards where possible.
+
+
+Card discovery checklist
+------------------------
+
+For a TypeScript/JavaScript HA card:
+
+1. Find DahuaBridge camera entities by checking camera attributes:
+
+     bridge_device_kind = nvr_channel
+     bridge_device_id
+     bridge_root_device_id
+     bridge_channel
+     bridge_base_url
+
+2. Resolve matching binary sensors/sensors/switches through the HA entity
+   registry when available.
+
+3. Fall back to default ids based on bridge_device_id:
+
+     binary_sensor.<device_id>_human
+     binary_sensor.<device_id>_vehicle
+     binary_sensor.<device_id>_tripwire
+     binary_sensor.<device_id>_intrusion
+     switch.<device_id>_siren
+     switch.<device_id>_light
+     switch.<device_id>_warning_light
+
+4. Prefer camera attributes bridge_features and bridge_controls for available
+   controls. Do not assume every camera supports PTZ, audio, siren, or light.
+
+5. Prefer archive URL templates from the camera entity when querying historical
+   SMD/IVS data. Build URLs manually only when those attributes are missing.

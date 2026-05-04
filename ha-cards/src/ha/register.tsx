@@ -93,6 +93,7 @@ class AjaxLovelaceDetailedCard extends ReactHomeAssistantElement<AjaxLovelaceDet
           initialRoomId={config.default_room}
           hass={this.hassValue}
           account={config.account}
+          dahuaBase={config.dahua_base}
         />
       </div>
     );

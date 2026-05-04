@@ -1,0 +1,2544 @@
+import { useEffect, useMemo, useState } from 'react';
+import type {
+  DashboardChip,
+  DashboardData,
+  Device,
+  DeviceAction,
+  DeviceHeroMedia,
+  EventItem,
+  EventType,
+  GlowTone,
+  IconRef,
+  Room,
+  RoomSmdIvsCounts,
+  SystemState,
+} from '../models/dashboard';
+import { dashboardData as fallbackDashboardData } from './loadDashboardData';
+import type { HomeAssistant, HomeAssistantState } from '../ha/types';
+
+interface HomeAssistantArea {
+  area_id: string;
+  name: string;
+  picture?: unknown;
+  [key: string]: unknown;
+}
+
+interface HomeAssistantDeviceEntry {
+  id: string;
+  area_id?: string | null;
+  via_device_id?: string | null;
+  suggested_area?: string | null;
+  manufacturer?: string | null;
+  model?: string | null;
+  name?: string | null;
+  name_by_user?: string | null;
+  identifiers?: unknown;
+  [key: string]: unknown;
+}
+
+interface HomeAssistantEntityEntry {
+  entity_id: string;
+  area_id?: string | null;
+  device_id?: string | null;
+  platform?: string | null;
+  unique_id?: string | null;
+  hidden_by?: string | null;
+  disabled_by?: string | null;
+  entity_category?: string | null;
+  name?: string | null;
+  original_name?: string | null;
+  icon?: string | null;
+  [key: string]: unknown;
+}
+
+interface RegistrySnapshot {
+  areas: HomeAssistantArea[];
+  devices: HomeAssistantDeviceEntry[];
+  entities: HomeAssistantEntityEntry[];
+}
+
+interface RegistryIndex {
+  areas: HomeAssistantArea[];
+  devices: HomeAssistantDeviceEntry[];
+  entities: HomeAssistantEntityEntry[];
+  areaById: Map<string, HomeAssistantArea>;
+  areaIdByName: Map<string, string>;
+  deviceById: Map<string, HomeAssistantDeviceEntry>;
+  entityById: Map<string, HomeAssistantEntityEntry>;
+  entitiesByDeviceId: Map<string, HomeAssistantEntityEntry[]>;
+  resolvedAreaByDeviceId: Map<string, string>;
+  entitiesByAreaId: Map<string, HomeAssistantEntityEntry[]>;
+}
+
+interface DahuaBridgeChannel {
+  entityId: string;
+  roomId: string;
+  bridgeBaseUrl: string;
+  rootDeviceId: string;
+  channel: number;
+}
+
+interface SmdIvsSummaryItem {
+  code?: unknown;
+  count?: unknown;
+}
+
+interface SmdIvsSummaryChannel {
+  channel?: unknown;
+  total_count?: unknown;
+  items?: SmdIvsSummaryItem[];
+}
+
+interface SmdIvsSummaryResponse {
+  channels?: SmdIvsSummaryChannel[];
+}
+
+type RoomSmdIvsCountsByRoom = Record<string, RoomSmdIvsCounts>;
+
+interface ResolvedDevice extends Device {
+  lastEventAt: string;
+  lastEventType: EventType;
+  lastEventDescription: string;
+  sourceLabel: string;
+  timelineEvents?: EventItem[];
+  integration: 'ajax' | 'dahua';
+  cameraLike: boolean;
+  sensorLike: boolean;
+  severity: number;
+}
+
+interface RoomMetrics {
+  deviceCount: number;
+  onlineCount: number;
+  attentionCount: number;
+  cameraCount: number;
+  dahuaCameraCount: number;
+  sensorCount: number;
+  smdIvs: RoomSmdIvsCounts;
+  latestEventLabel: string;
+}
+
+const DAHUA_HINT = /(dahua|rroller)/i;
+const AJAX_HINT = /(ajax systems|ajaxbridge|ajax)/i;
+const LEGACY_AJAX2PROM_HINT = /ajax2prometheus/i;
+const GO2RTC_HINT = /go2rtc/i;
+const VTO_DEBUG_HINT = /(vto|doorbell|bell|дзвінок|вызывная|calling panel)/i;
+const DAHUA_ENTITY_DOMAINS = new Set(['camera', 'image', 'sensor', 'binary_sensor', 'switch', 'lock']);
+const EMPTY_REGISTRIES: RegistrySnapshot = {
+  areas: [],
+  devices: [],
+  entities: [],
+};
+const loggedDahuaDebug = new Set<string>();
+const ISSUE_SIGNALS = new Set([
+  'alarm',
+  'burglary',
+  'panic',
+  'duress',
+  'emergency',
+  'medical',
+  'hold_up',
+  'fire',
+  'smoke',
+  'co',
+  'gas',
+  'gas_or_co',
+  'water_leak',
+  'leak',
+  'flood',
+  'tamper',
+  'connectivity',
+  'battery',
+  'power',
+  'hardware',
+  'interference',
+  'accelerometer',
+  'fire_detector',
+  'configuration',
+  'firmware',
+  'supervision',
+  'button',
+]);
+
+export function useDashboardData(hass?: HomeAssistant, account?: string, dahuaBase?: string): DashboardData {
+  const [registries, setRegistries] = useState<RegistrySnapshot | null>(null);
+  const [roomSmdIvsCounts, setRoomSmdIvsCounts] = useState<RoomSmdIvsCountsByRoom>({});
+  const normalizedDahuaBase = normalizeDahuaBaseUrl(dahuaBase);
+
+  useEffect(() => {
+    if (!hass?.callWS || registries !== null) {
+      return;
+    }
+
+    let active = true;
+
+    void Promise.all([
+      hass.callWS<HomeAssistantArea[]>({ type: 'config/area_registry/list' }),
+      hass.callWS<HomeAssistantDeviceEntry[]>({ type: 'config/device_registry/list' }),
+      hass.callWS<HomeAssistantEntityEntry[]>({ type: 'config/entity_registry/list' }),
+    ])
+      .then(([areas, devices, entities]) => {
+        if (!active) {
+          return;
+        }
+
+        setRegistries({
+          areas: Array.isArray(areas) ? areas : [],
+          devices: Array.isArray(devices) ? devices : [],
+          entities: Array.isArray(entities) ? entities : [],
+        });
+      })
+      .catch(() => {
+        if (active) {
+          setRegistries(EMPTY_REGISTRIES);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [hass, registries]);
+
+  const registryIndex = useMemo(
+    () => buildRegistryIndex(registries ?? EMPTY_REGISTRIES),
+    [registries],
+  );
+  const smdIvsSignature = useMemo(
+    () => (hass ? dahuaBridgeChannelSignature(hass.states, registryIndex, normalizedDahuaBase) : ''),
+    [hass, registryIndex, normalizedDahuaBase],
+  );
+
+  useEffect(() => {
+    if (!hass || !smdIvsSignature) {
+      setRoomSmdIvsCounts((current) => (Object.keys(current).length > 0 ? {} : current));
+      return;
+    }
+
+    let active = true;
+    let controller = new AbortController();
+
+    const refresh = async () => {
+      controller.abort();
+      controller = new AbortController();
+
+      try {
+        const counts = await loadSmdIvsCountsByRoom(hass.states, registryIndex, normalizedDahuaBase, controller.signal);
+        if (active) {
+          setRoomSmdIvsCounts(counts);
+        }
+      } catch (error) {
+        if (active && !(error instanceof DOMException && error.name === 'AbortError')) {
+          setRoomSmdIvsCounts((current) => current);
+        }
+      }
+    };
+
+    void refresh();
+    const timer = window.setInterval(() => {
+      void refresh();
+    }, 60_000);
+
+    return () => {
+      active = false;
+      controller.abort();
+      window.clearInterval(timer);
+    };
+  }, [registryIndex, smdIvsSignature, normalizedDahuaBase]);
+
+  const dashboardData = useMemo(() => {
+    if (!hass) {
+      return fallbackDashboardData;
+    }
+
+    return buildDashboardDataFromHomeAssistant(hass.states, registryIndex, account, roomSmdIvsCounts);
+  }, [account, hass, registryIndex, roomSmdIvsCounts]);
+
+  return dashboardData;
+}
+
+function buildRegistryIndex(registries: RegistrySnapshot): RegistryIndex {
+  const areaById = new Map(registries.areas.map((area) => [area.area_id, area]));
+  const areaIdByName = new Map(registries.areas.map((area) => [slugPart(area.name), area.area_id]));
+  const deviceById = new Map(registries.devices.map((device) => [device.id, device]));
+  const entityById = new Map(registries.entities.map((entity) => [entity.entity_id, entity]));
+  const entitiesByDeviceId = groupByDeviceId(registries.entities);
+  const resolvedAreaByDeviceId = new Map<string, string>();
+
+  for (const deviceEntry of registries.devices) {
+    const linkedEntities = entitiesByDeviceId.get(deviceEntry.id) ?? [];
+    const areaId = resolveAreaId(deviceEntry, linkedEntities, areaIdByName);
+    if (areaId) {
+      resolvedAreaByDeviceId.set(deviceEntry.id, areaId);
+    }
+  }
+
+  return {
+    areas: registries.areas,
+    devices: registries.devices,
+    entities: registries.entities,
+    areaById,
+    areaIdByName,
+    deviceById,
+    entityById,
+    entitiesByDeviceId,
+    resolvedAreaByDeviceId,
+    entitiesByAreaId: groupByAreaId(registries.entities, resolvedAreaByDeviceId),
+  };
+}
+
+function buildDashboardDataFromHomeAssistant(
+  states: Record<string, HomeAssistantState>,
+  registryIndex: RegistryIndex,
+  accountFilter?: string,
+  roomSmdIvsCounts: RoomSmdIvsCountsByRoom = {},
+): DashboardData {
+  const { areas, areaById, deviceById, devices, entities, entitiesByDeviceId, entitiesByAreaId, resolvedAreaByDeviceId } =
+    registryIndex;
+  const ajaxDevices = buildAjaxDevices(
+    devices,
+    entitiesByDeviceId,
+    resolvedAreaByDeviceId,
+    states,
+    accountFilter,
+  );
+  const ajaxDeviceIds = new Set(ajaxDevices.map((device) => device.id));
+  const dahuaDevices = buildDahuaDevices(
+    devices,
+    entities,
+    deviceById,
+    entitiesByDeviceId,
+    resolvedAreaByDeviceId,
+    entitiesByAreaId,
+    states,
+    ajaxDeviceIds,
+  );
+
+  const resolvedDevices = [...ajaxDevices, ...dahuaDevices]
+    .filter((device) => areaById.has(device.roomId))
+    .sort(sortResolvedDevices);
+  const resolvedEvents = buildEvents(resolvedDevices);
+  const roomMetrics = buildRoomMetrics(resolvedDevices, resolvedEvents, roomSmdIvsCounts);
+  const roomIds = new Set(resolvedDevices.map((device) => device.roomId));
+  const rooms = areas
+    .filter((area) => roomIds.has(area.area_id))
+    .map((area) => buildRoom(area, entitiesByAreaId.get(area.area_id) ?? [], states, roomMetrics.get(area.area_id)))
+    .sort(sortRooms);
+
+  return {
+    systemState: buildSystemState(states, rooms, resolvedDevices, resolvedEvents),
+    rooms,
+    devices: resolvedDevices.map(toPublicDevice),
+    events: resolvedEvents,
+  };
+}
+
+function buildAjaxDevices(
+  devices: HomeAssistantDeviceEntry[],
+  entitiesByDeviceId: Map<string, HomeAssistantEntityEntry[]>,
+  resolvedAreaByDeviceId: Map<string, string>,
+  states: Record<string, HomeAssistantState>,
+  accountFilter?: string,
+): ResolvedDevice[] {
+  const output: ResolvedDevice[] = [];
+
+  for (const deviceEntry of devices) {
+    if (!isAjaxDevice(deviceEntry) || isAjaxAccountDevice(deviceEntry) || isLegacyAjax2PrometheusDevice(deviceEntry)) {
+      continue;
+    }
+
+    const account = extractAjaxAccount(deviceEntry);
+    if (accountFilter && account && account !== accountFilter) {
+      continue;
+    }
+
+    const linkedEntities = (entitiesByDeviceId.get(deviceEntry.id) ?? []).filter(
+      (entry) => !isLegacyAjax2PrometheusEntity(entry),
+    );
+    const roomId = resolvedAreaByDeviceId.get(deviceEntry.id);
+    if (!roomId || linkedEntities.length === 0) {
+      continue;
+    }
+
+    const lastEventName = firstEntityState(linkedEntities, states, '_last_event_name')?.state ?? 'Awaiting event';
+    const lastEventAt = firstEntityState(linkedEntities, states, '_last_event_at')?.state ?? '';
+    const lastSignal = firstEntityState(linkedEntities, states, '_last_signal')?.state ?? 'idle';
+    const alarmSignal = firstEntityState(linkedEntities, states, '_alarm_signal')?.state ?? '';
+    const alarmActive = isOn(firstEntityState(linkedEntities, states, '_alarm_active'));
+    const tamperActive = isOn(firstEntityState(linkedEntities, states, '_tamper_active'));
+    const troubleActive = isOn(firstEntityState(linkedEntities, states, '_trouble_active'));
+    const activeSignals = linkedEntities
+      .filter((entry) => signalNameFromEntityId(entry.entity_id) !== null)
+      .filter((entry) => isOn(states[entry.entity_id]))
+      .map((entry) => signalNameFromEntityId(entry.entity_id))
+      .filter((signal): signal is string => signal !== null);
+
+    const headline = summarizeHeadline({
+      alarmActive,
+      tamperActive,
+      troubleActive,
+      activeSignals,
+    });
+    const severity = severityFromSignals({
+      alarmActive,
+      tamperActive,
+      troubleActive,
+      activeSignals,
+    });
+    const offline = activeSignals.includes('connectivity');
+    const sourceLabel = displayName(deviceEntry, linkedEntities);
+    const type = inferDeviceType({
+      name: sourceLabel,
+      model: safeString(deviceEntry.model),
+      entityIds: linkedEntities.map((entry) => entry.entity_id),
+    });
+    const eventType = mapSignalToEventType(alarmSignal || lastSignal, alarmActive, offline);
+
+    output.push({
+      id: deviceEntry.id,
+      roomId,
+      type,
+      name: sourceLabel,
+      model: safeString(deviceEntry.model) || humanizeSlug(type),
+      icon: iconForDevice(type, sourceLabel, safeString(deviceEntry.model)),
+      tone: toneFromSeverity(severity),
+      status: headline,
+      connectivity: offline ? 'Offline' : 'Online',
+      battery: activeSignals.includes('battery') ? 'Low' : 'Nominal',
+      signal: humanizeSlug(lastSignal || 'idle'),
+      entityId: linkedEntities[0]?.entity_id ?? '',
+      isOnline: !offline,
+      attention: severity >= 2,
+      lastEventAt,
+      lastEventType: eventType,
+      lastEventDescription: `${sourceLabel}: ${lastEventName}`,
+      sourceLabel,
+      integration: 'ajax',
+      cameraLike: false,
+      sensorLike: true,
+      severity,
+    });
+  }
+
+  return output;
+}
+
+function buildDahuaDevices(
+  devices: HomeAssistantDeviceEntry[],
+  entities: HomeAssistantEntityEntry[],
+  deviceById: Map<string, HomeAssistantDeviceEntry>,
+  entitiesByDeviceId: Map<string, HomeAssistantEntityEntry[]>,
+  resolvedAreaByDeviceId: Map<string, string>,
+  entitiesByAreaId: Map<string, HomeAssistantEntityEntry[]>,
+  states: Record<string, HomeAssistantState>,
+  skipDeviceIds: Set<string>,
+): ResolvedDevice[] {
+  const output: ResolvedDevice[] = [];
+  const consumedEntityIds = new Set<string>();
+
+  for (const deviceEntry of devices) {
+    if (skipDeviceIds.has(deviceEntry.id) || !isDahuaDevice(deviceEntry, entitiesByDeviceId.get(deviceEntry.id) ?? [])) {
+      continue;
+    }
+
+    const linkedEntities = entitiesByDeviceId.get(deviceEntry.id) ?? [];
+    const visibleLinkedEntities = linkedEntities.filter(
+      (entry) => !isIgnoredDahuaEntity(deviceEntry, entry, states[entry.entity_id]),
+    );
+    const roomId = resolvedAreaByDeviceId.get(deviceEntry.id);
+    if (!roomId || visibleLinkedEntities.length === 0) {
+      continue;
+    }
+
+    const nonCameraEntries = visibleLinkedEntities.filter((entry) => !isCameraDomain(entry.entity_id));
+    const statusEntries = nonCameraEntries.filter((entry) => entityDomain(entry.entity_id) !== 'button');
+    const preferredEntries = statusEntries.length > 0 ? statusEntries : nonCameraEntries.length > 0 ? nonCameraEntries : visibleLinkedEntities;
+    const mediaEntries = linkedEntities.filter((entry) => isHeroMediaEntity(entry) && !safeString(entry.disabled_by));
+    const actionEntries = visibleLinkedEntities.filter((entry) => isActionableEntity(entry));
+
+    for (const entry of linkedEntities) {
+      consumedEntityIds.add(entry.entity_id);
+    }
+
+    const resolvedDevice = buildGenericIntegrationDevice(
+      `dahua:${deviceEntry.id}`,
+      roomId,
+      displayName(deviceEntry, preferredEntries),
+      safeString(deviceEntry.model) || 'Integration device',
+      preferredEntries,
+      visibleLinkedEntities,
+      mediaEntries,
+      actionEntries,
+      states,
+      'dahua',
+    );
+    if (resolvedDevice) {
+      output.push(resolvedDevice);
+    }
+  }
+
+  for (const entityEntry of entities) {
+    const parentDevice = deviceById.get(entityEntry.device_id ?? '');
+    if (
+      consumedEntityIds.has(entityEntry.entity_id) ||
+      isIgnoredDahuaEntity(parentDevice, entityEntry, states[entityEntry.entity_id]) ||
+      !isRelevantDahuaEntity(entityEntry, parentDevice)
+    ) {
+      continue;
+    }
+
+    const roomId = entityEntry.area_id ?? resolvedAreaByDeviceId.get(entityEntry.device_id ?? '') ?? findAreaForEntity(entityEntry, entitiesByAreaId);
+    if (!roomId) {
+      continue;
+    }
+
+    const resolvedDevice = buildGenericIntegrationDevice(
+      `dahua-entity:${entityEntry.entity_id}`,
+      roomId,
+      entityDisplayName(entityEntry, states[entityEntry.entity_id]),
+      humanizeSlug(entityDomain(entityEntry.entity_id)),
+      [entityEntry],
+      [entityEntry],
+      isHeroMediaEntity(entityEntry) ? [entityEntry] : [],
+      isActionableEntity(entityEntry) ? [entityEntry] : [],
+      states,
+      'dahua',
+    );
+    if (resolvedDevice) {
+      output.push(resolvedDevice);
+    }
+  }
+
+  return output;
+}
+
+function buildGenericIntegrationDevice(
+  id: string,
+  roomId: string,
+  name: string,
+  model: string,
+  entityEntries: HomeAssistantEntityEntry[],
+  classificationEntries: HomeAssistantEntityEntry[],
+  mediaEntries: HomeAssistantEntityEntry[],
+  actionEntries: HomeAssistantEntityEntry[],
+  states: Record<string, HomeAssistantState>,
+  integration: 'dahua',
+): ResolvedDevice | null {
+  const primary = pickPrimaryEntity(entityEntries, states);
+  if (!primary) {
+    return null;
+  }
+
+  const primaryState = states[primary.entity_id];
+  const alertEntry = entityEntries.find((entry) => {
+    const state = states[entry.entity_id];
+    return !isOfflineState(state) && entityIsAlert(entry, state);
+  });
+  const online = entityEntries.some((entry) => hasAvailableState(states[entry.entity_id]));
+  const offlineEntry = online ? undefined : entityEntries.find((entry) => isOfflineState(states[entry.entity_id]));
+  const activeEntry = alertEntry ?? primary ?? offlineEntry;
+  const activeState = states[activeEntry.entity_id];
+  const type = inferDeviceType({
+    name,
+    model,
+    entityIds: classificationEntries.map((entry) => entry.entity_id),
+  });
+  const timelineEntries =
+    integration === 'dahua' && type === 'camera'
+      ? filterDahuaCameraTimelineEntries(entityEntries, states)
+      : entityEntries;
+  const attention = Boolean(alertEntry || !online);
+  const eventType = eventTypeFromEntity(activeEntry, activeState);
+  const description = buildGenericEventDescription(activeEntry, activeState, name);
+  const lastEventAt = activeState?.last_changed ?? activeState?.last_updated ?? '';
+  const severity = !online ? 3 : alertEntry ? severityFromEntity(alertEntry, activeState) : 0;
+  const timelineEvents = integration === 'dahua' ? buildDahuaTimelineEvents(id, roomId, name, timelineEntries, states) : undefined;
+  const latestTimelineEvent = timelineEvents?.[0];
+  const heroMedia = buildHeroMedia(mediaEntries, states);
+  const actions = type === 'camera' ? undefined : buildDeviceActions(actionEntries, states);
+
+  debugDahuaCandidate(name, model, entityEntries, states, activeEntry, activeState);
+
+  return {
+    id,
+    roomId,
+    type,
+    name,
+    model,
+    icon: iconForDevice(type, name, model),
+    tone: toneFromSeverity(severity),
+    status: attention ? description : 'Nominal',
+    connectivity: online ? 'Online' : 'Offline',
+    battery: readBatteryLabel(entityEntries, states),
+    signal: entityDomain(primary.entity_id),
+    entityId: primary.entity_id,
+    isOnline: online,
+    attention,
+    heroMedia,
+    actions,
+    lastEventAt: latestTimelineEvent?.occurredAt ?? lastEventAt,
+    lastEventType: latestTimelineEvent?.type ?? eventType,
+    lastEventDescription: latestTimelineEvent?.description ?? description,
+    sourceLabel: name,
+    timelineEvents,
+    integration,
+    cameraLike: type === 'camera',
+    sensorLike: type !== 'camera',
+    severity,
+  };
+}
+
+function buildEvents(devices: ResolvedDevice[]): EventItem[] {
+  const nominalIcon: IconRef = { category: 'events', key: 'ok' };
+  return devices
+    .flatMap((device) => {
+      if (device.integration === 'dahua' && device.cameraLike && device.timelineEvents) {
+        return device.timelineEvents;
+      }
+
+      if (device.timelineEvents && device.timelineEvents.length > 0) {
+        return device.timelineEvents;
+      }
+
+      if (!device.lastEventAt) {
+        return [];
+      }
+
+      return [{
+        id: `event:${device.id}`,
+        roomId: device.roomId,
+        deviceId: device.id,
+        type: device.lastEventType,
+        title: device.attention ? device.lastEventDescription : `${device.name}: ${device.status}`,
+        description: device.attention
+          ? device.lastEventDescription
+          : `${device.name} reports normal state in this room.`,
+        occurredAt: device.lastEventAt,
+        source: device.sourceLabel,
+        icon: device.attention ? iconForEvent(device.lastEventType) : nominalIcon,
+        tone: device.attention ? device.tone : 'green',
+      }];
+    })
+    .sort((left, right) => toUnix(right.occurredAt) - toUnix(left.occurredAt));
+}
+
+function buildRoomMetrics(
+  devices: ResolvedDevice[],
+  events: EventItem[],
+  roomSmdIvsCounts: RoomSmdIvsCountsByRoom,
+): Map<string, RoomMetrics> {
+  const metrics = new Map<string, RoomMetrics>();
+
+  for (const device of devices) {
+    const current = metrics.get(device.roomId) ?? emptyRoomMetrics();
+
+    current.deviceCount += 1;
+    current.onlineCount += device.isOnline ? 1 : 0;
+    current.attentionCount += device.attention ? 1 : 0;
+    current.cameraCount += device.cameraLike ? 1 : 0;
+    current.dahuaCameraCount += device.integration === 'dahua' && device.cameraLike ? 1 : 0;
+    current.sensorCount += device.sensorLike ? 1 : 0;
+    metrics.set(device.roomId, current);
+  }
+
+  for (const event of events) {
+    const current = metrics.get(event.roomId);
+    if (current && current.latestEventLabel === 'No recent events') {
+      current.latestEventLabel = event.title;
+    }
+  }
+
+  for (const [roomId, counts] of Object.entries(roomSmdIvsCounts)) {
+    const current = metrics.get(roomId);
+    if (!current) {
+      continue;
+    }
+    current.smdIvs = { ...counts };
+    metrics.set(roomId, current);
+  }
+
+  return metrics;
+}
+
+function emptyRoomMetrics(): RoomMetrics {
+  return {
+    deviceCount: 0,
+    onlineCount: 0,
+    attentionCount: 0,
+    cameraCount: 0,
+    dahuaCameraCount: 0,
+    sensorCount: 0,
+    smdIvs: emptySmdIvsCounts(),
+    latestEventLabel: 'No recent events',
+  };
+}
+
+function buildRoom(
+  area: HomeAssistantArea,
+  entityEntries: HomeAssistantEntityEntry[],
+  states: Record<string, HomeAssistantState>,
+  metrics?: RoomMetrics,
+): Room {
+  const accent = accentForRoom(area.name);
+  const image = resolveRoomImage(area, entityEntries, states);
+  const counts = metrics ?? {
+    deviceCount: 0,
+    onlineCount: 0,
+    attentionCount: 0,
+    cameraCount: 0,
+    dahuaCameraCount: 0,
+    sensorCount: 0,
+    smdIvs: emptySmdIvsCounts(),
+    latestEventLabel: 'No recent events',
+  };
+
+  return {
+    id: area.area_id,
+    name: area.name,
+    type: slugPart(area.name),
+    summary: buildRoomSummary(counts),
+    heroLabel: 'Home Assistant area',
+    image,
+    accent,
+    icon: iconForRoom(area.name),
+    statusTone: counts.attentionCount > 0 ? 'amber' : counts.onlineCount === 0 ? 'red' : 'green',
+    smdIvs: counts.smdIvs,
+    dahuaCameraCount: counts.dahuaCameraCount,
+  };
+}
+
+function buildSystemState(
+  states: Record<string, HomeAssistantState>,
+  rooms: Room[],
+  devices: ResolvedDevice[],
+  events: EventItem[],
+): SystemState {
+  const ajaxDevices = devices.filter((device) => device.integration === 'ajax');
+  const videoDevices = devices.filter((device) => device.cameraLike);
+  const alertCount = devices.filter((device) => device.attention).length;
+  const onlineCount = devices.filter((device) => device.isOnline).length;
+  const accountModes = Object.entries(states)
+    .filter(([entityId]) => entityId.startsWith('sensor.account_') && entityId.endsWith('_mode'))
+    .map(([, state]) => safeString(state.state))
+    .filter(Boolean);
+  const alarmActive = Object.entries(states).some(
+    ([entityId, state]) => entityId.startsWith('binary_sensor.account_') && entityId.endsWith('_alarm_active') && state.state === 'on',
+  );
+  const armed = accountModes.some((mode) => mode === 'armed' || mode === 'night');
+  const primaryMode = alarmActive ? 'Alarm' : accountModes[0] ? humanizeSlug(accountModes[0]) : 'Monitoring';
+  const chips: DashboardChip[] = [
+    {
+      id: 'system-mode',
+      label: 'Security mode',
+      value: primaryMode,
+      icon: { category: 'system-states', key: alarmActive ? 'alarm_active' : armed ? 'armed' : 'disarmed' },
+      tone: alarmActive ? 'red' : armed ? 'amber' : 'green',
+      active: true,
+    },
+    {
+      id: 'system-ajax',
+      label: 'Ajax devices',
+      value: String(ajaxDevices.length),
+      icon: { category: 'devices', key: 'hub' },
+      tone: 'green',
+      active: ajaxDevices.length > 0,
+    },
+    {
+      id: 'system-video',
+      label: 'Cameras',
+      value: String(videoDevices.length),
+      icon: { category: 'devices', key: 'camera' },
+      tone: 'cyan',
+      active: videoDevices.length > 0,
+    },
+    {
+      id: 'system-alerts',
+      label: 'Alerts',
+      value: String(alertCount),
+      icon: { category: 'misc', key: 'alert' },
+      tone: alertCount > 0 ? 'amber' : 'green',
+      active: alertCount > 0,
+    },
+    {
+      id: 'system-events',
+      label: 'Recent events',
+      value: String(events.length),
+      icon: { category: 'misc', key: 'history' },
+      tone: 'violet',
+      active: events.length > 0,
+    },
+    {
+      id: 'system-online',
+      label: 'Online',
+      value: `${onlineCount}/${devices.length || 0}`,
+      icon: { category: 'system-states', key: onlineCount === devices.length ? 'online' : 'offline' },
+      tone: onlineCount === devices.length ? 'green' : 'amber',
+      active: devices.length > 0,
+    },
+  ];
+
+  return { chips };
+}
+
+function dahuaBridgeChannelSignature(
+  states: Record<string, HomeAssistantState>,
+  registryIndex: RegistryIndex,
+  dahuaBase: string,
+): string {
+  return discoverDahuaBridgeChannels(states, registryIndex, dahuaBase)
+    .map((camera) => `${camera.roomId}:${camera.bridgeBaseUrl}:${camera.rootDeviceId}:${camera.channel}`)
+    .sort()
+    .join('|');
+}
+
+async function loadSmdIvsCountsByRoom(
+  states: Record<string, HomeAssistantState>,
+  registryIndex: RegistryIndex,
+  dahuaBase: string,
+  signal: AbortSignal,
+): Promise<RoomSmdIvsCountsByRoom> {
+  const channels = discoverDahuaBridgeChannels(states, registryIndex, dahuaBase);
+  if (channels.length === 0) {
+    return {};
+  }
+
+  const end = new Date();
+  const start = new Date(end.getTime() - 24 * 60 * 60 * 1000);
+  const nvrGroups = new Map<string, {
+    bridgeBaseUrl: string;
+    rootDeviceId: string;
+    channels: DahuaBridgeChannel[];
+  }>();
+
+  for (const channel of channels) {
+    const key = `${channel.bridgeBaseUrl}|${channel.rootDeviceId}`;
+    const group = nvrGroups.get(key) ?? {
+      bridgeBaseUrl: channel.bridgeBaseUrl,
+      rootDeviceId: channel.rootDeviceId,
+      channels: [],
+    };
+    group.channels.push(channel);
+    nvrGroups.set(key, group);
+  }
+
+  const roomCounts: RoomSmdIvsCountsByRoom = {};
+
+  await Promise.all([...nvrGroups.values()].map(async (group) => {
+    try {
+      const summary = await fetchSmdIvsSummary(group.bridgeBaseUrl, group.rootDeviceId, start, end, signal);
+      const summaryByChannel = new Map(
+        (summary.channels ?? []).map((entry) => [numberFromUnknown(entry.channel), entry]),
+      );
+
+      for (const channel of group.channels) {
+        const channelSummary = summaryByChannel.get(channel.channel);
+        if (!channelSummary) {
+          continue;
+        }
+
+        const counts = roomCounts[channel.roomId] ?? emptySmdIvsCounts();
+        counts.total += numberFromUnknown(channelSummary.total_count);
+        addSmdIvsSummaryItems(counts, channelSummary.items);
+        roomCounts[channel.roomId] = counts;
+      }
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        throw error;
+      }
+    }
+  }));
+
+  return roomCounts;
+}
+
+function discoverDahuaBridgeChannels(
+  states: Record<string, HomeAssistantState>,
+  registryIndex: RegistryIndex,
+  dahuaBase: string,
+): DahuaBridgeChannel[] {
+  const channels: DahuaBridgeChannel[] = [];
+
+  for (const [entityId, state] of Object.entries(states)) {
+    if (!entityId.startsWith('camera.')) {
+      continue;
+    }
+
+    const attrs = state.attributes ?? {};
+    const kind = safeString(attrs.bridge_device_kind);
+    const bridgeBaseUrl = resolveDahuaBridgeBaseUrl(safeString(attrs.bridge_base_url), dahuaBase);
+    const rootDeviceId = safeString(attrs.bridge_root_device_id);
+    const channel = numberFromUnknown(attrs.bridge_channel);
+    const roomId = resolveRoomIdForEntity(entityId, registryIndex);
+
+    if (kind !== 'nvr_channel' || !bridgeBaseUrl || !rootDeviceId || channel <= 0 || !roomId) {
+      continue;
+    }
+
+    channels.push({
+      entityId,
+      roomId,
+      bridgeBaseUrl,
+      rootDeviceId,
+      channel,
+    });
+  }
+
+  return channels;
+}
+
+function resolveRoomIdForEntity(entityId: string, registryIndex: RegistryIndex): string | null {
+  const entityEntry = registryIndex.entityById.get(entityId);
+  if (entityEntry?.area_id && registryIndex.areaById.has(entityEntry.area_id)) {
+    return entityEntry.area_id;
+  }
+
+  let deviceId = safeString(entityEntry?.device_id);
+  const seen = new Set<string>();
+
+  while (deviceId && !seen.has(deviceId)) {
+    seen.add(deviceId);
+    const directAreaId = registryIndex.resolvedAreaByDeviceId.get(deviceId);
+    if (directAreaId && registryIndex.areaById.has(directAreaId)) {
+      return directAreaId;
+    }
+
+    const device = registryIndex.deviceById.get(deviceId);
+    if (!device) {
+      break;
+    }
+    if (device.area_id && registryIndex.areaById.has(device.area_id)) {
+      return device.area_id;
+    }
+
+    deviceId = safeString(device.via_device_id);
+  }
+
+  return null;
+}
+
+async function fetchSmdIvsSummary(
+  bridgeBaseUrl: string,
+  rootDeviceId: string,
+  start: Date,
+  end: Date,
+  signal: AbortSignal,
+): Promise<SmdIvsSummaryResponse> {
+  const url = new URL(
+    `${bridgeBaseUrl}/api/v1/nvr/${encodeURIComponent(rootDeviceId)}/events/summary`,
+    window.location.origin,
+  );
+  url.searchParams.set('start', start.toISOString());
+  url.searchParams.set('end', end.toISOString());
+  url.searchParams.set('event', 'all');
+
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: { Accept: 'application/json' },
+    signal,
+  });
+  if (!response.ok) {
+    throw new Error(`DahuaBridge summary failed: HTTP ${response.status}`);
+  }
+
+  return response.json() as Promise<SmdIvsSummaryResponse>;
+}
+
+function normalizeDahuaBaseUrl(value: unknown): string {
+  return safeString(value).replace(/\/+$/, '');
+}
+
+function resolveDahuaBridgeBaseUrl(attributeBaseUrl: string, dahuaBase: string): string {
+  return normalizeDahuaBaseUrl(dahuaBase || attributeBaseUrl);
+}
+
+function emptySmdIvsCounts(): RoomSmdIvsCounts {
+  return { total: 0, human: 0, vehicle: 0, animal: 0, ivs: 0 };
+}
+
+function addSmdIvsSummaryItems(target: RoomSmdIvsCounts, items: SmdIvsSummaryItem[] = []): void {
+  for (const item of items) {
+    const code = safeString(item.code).toLowerCase();
+    const count = numberFromUnknown(item.count);
+
+    if (code === 'human') {
+      target.human += count;
+    } else if (code === 'vehicle') {
+      target.vehicle += count;
+    } else if (code === 'animal') {
+      target.animal += count;
+    } else if (code === 'tripwire' || code === 'intrusion') {
+      target.ivs += count;
+    }
+  }
+}
+
+function numberFromUnknown(value: unknown): number {
+  const numberValue = Number(value);
+  return Number.isFinite(numberValue) && numberValue > 0 ? numberValue : 0;
+}
+
+function toPublicDevice(device: ResolvedDevice): Device {
+  return {
+    id: device.id,
+    roomId: device.roomId,
+    type: device.type,
+    name: device.name,
+    model: device.model,
+    icon: device.icon,
+    tone: device.tone,
+    status: device.status,
+    connectivity: device.connectivity,
+    battery: device.battery,
+    signal: device.signal,
+    entityId: device.entityId,
+    isOnline: device.isOnline,
+    attention: device.attention,
+    heroMedia: device.heroMedia,
+    actions: device.actions,
+  };
+}
+
+function groupByDeviceId(entities: HomeAssistantEntityEntry[]): Map<string, HomeAssistantEntityEntry[]> {
+  const grouped = new Map<string, HomeAssistantEntityEntry[]>();
+  for (const entry of entities) {
+    if (!entry.device_id) {
+      continue;
+    }
+    const current = grouped.get(entry.device_id) ?? [];
+    current.push(entry);
+    grouped.set(entry.device_id, current);
+  }
+  return grouped;
+}
+
+function groupByAreaId(
+  entities: HomeAssistantEntityEntry[],
+  resolvedAreaByDeviceId: Map<string, string>,
+): Map<string, HomeAssistantEntityEntry[]> {
+  const grouped = new Map<string, HomeAssistantEntityEntry[]>();
+  for (const entry of entities) {
+    const areaId = entry.area_id ?? resolvedAreaByDeviceId.get(entry.device_id ?? '');
+    if (!areaId) {
+      continue;
+    }
+    const current = grouped.get(areaId) ?? [];
+    current.push(entry);
+    grouped.set(areaId, current);
+  }
+  return grouped;
+}
+
+function resolveAreaId(
+  deviceEntry: HomeAssistantDeviceEntry,
+  linkedEntities: HomeAssistantEntityEntry[],
+  areaIdByName: Map<string, string>,
+): string | null {
+  if (deviceEntry.area_id) {
+    return deviceEntry.area_id;
+  }
+  const entityAreaId = linkedEntities.find((entry) => entry.area_id)?.area_id;
+  if (entityAreaId) {
+    return entityAreaId;
+  }
+  const suggestedArea = safeString(deviceEntry.suggested_area);
+  if (suggestedArea) {
+    return areaIdByName.get(slugPart(suggestedArea)) ?? null;
+  }
+  return null;
+}
+
+function firstEntityState(
+  entries: HomeAssistantEntityEntry[],
+  states: Record<string, HomeAssistantState>,
+  suffix: string,
+): HomeAssistantState | undefined {
+  const match = entries.find((entry) => entry.entity_id.endsWith(suffix));
+  return match ? states[match.entity_id] : undefined;
+}
+
+function displayName(deviceEntry: HomeAssistantDeviceEntry, linkedEntities: HomeAssistantEntityEntry[]): string {
+  return (
+    safeString(deviceEntry.name_by_user) ||
+    safeString(deviceEntry.name) ||
+    linkedEntities.map((entry) => safeString(entry.name) || safeString(entry.original_name)).find(Boolean) ||
+    'Unknown device'
+  );
+}
+
+function entityDisplayName(entry: HomeAssistantEntityEntry, state?: HomeAssistantState): string {
+  return (
+    safeString(state?.attributes.friendly_name) ||
+    safeString(entry.name) ||
+    safeString(entry.original_name) ||
+    humanizeSlug(entityIdLeaf(entry.entity_id))
+  );
+}
+
+function isAjaxDevice(deviceEntry: HomeAssistantDeviceEntry): boolean {
+  return AJAX_HINT.test(
+    [deviceEntry.manufacturer, deviceEntry.model, deviceEntry.name, deviceEntry.name_by_user, ...extractIdentifiers(deviceEntry)]
+      .map(safeString)
+      .join(' '),
+  );
+}
+
+function isLegacyAjax2PrometheusDevice(deviceEntry: HomeAssistantDeviceEntry): boolean {
+  return LEGACY_AJAX2PROM_HINT.test(
+    [deviceEntry.manufacturer, deviceEntry.model, deviceEntry.name, deviceEntry.name_by_user, ...extractIdentifiers(deviceEntry)]
+      .map(safeString)
+      .join(' '),
+  );
+}
+
+function isLegacyAjax2PrometheusEntity(entityEntry: HomeAssistantEntityEntry): boolean {
+  return LEGACY_AJAX2PROM_HINT.test(
+    [
+      entityEntry.entity_id,
+      entityEntry.platform,
+      entityEntry.unique_id,
+      entityEntry.name,
+      entityEntry.original_name,
+      entityEntry['unique_id'],
+    ]
+      .map(safeString)
+      .join(' '),
+  );
+}
+
+function isAjaxAccountDevice(deviceEntry: HomeAssistantDeviceEntry): boolean {
+  return safeString(deviceEntry.model).toLowerCase().includes('account') || extractIdentifiers(deviceEntry).some((value) => value.startsWith('ajaxbridge_account_'));
+}
+
+function extractAjaxAccount(deviceEntry: HomeAssistantDeviceEntry): string | null {
+  for (const identifier of extractIdentifiers(deviceEntry)) {
+    if (identifier.startsWith('ajaxbridge_account_')) {
+      return identifier.slice('ajaxbridge_account_'.length);
+    }
+    const zoneIndex = identifier.indexOf('_zone_');
+    if (identifier.startsWith('ajaxbridge_') && zoneIndex > 'ajaxbridge_'.length) {
+      return identifier.slice('ajaxbridge_'.length, zoneIndex);
+    }
+  }
+  return null;
+}
+
+function extractIdentifiers(deviceEntry: HomeAssistantDeviceEntry): string[] {
+  const raw = deviceEntry.identifiers;
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+
+  const output: string[] = [];
+  for (const entry of raw) {
+    if (Array.isArray(entry)) {
+      output.push(entry.map((value) => safeString(value)).filter(Boolean).join(':'));
+      output.push(entry.map((value) => safeString(value)).filter(Boolean).join('_'));
+      continue;
+    }
+    output.push(safeString(entry));
+  }
+  return output.filter(Boolean);
+}
+
+function isDahuaDevice(deviceEntry: HomeAssistantDeviceEntry, linkedEntities: HomeAssistantEntityEntry[]): boolean {
+  if (isIgnoredDahuaDevice(deviceEntry, linkedEntities)) {
+    return false;
+  }
+
+  if (DAHUA_HINT.test(
+    [deviceEntry.manufacturer, deviceEntry.model, deviceEntry.name, deviceEntry.name_by_user, ...extractIdentifiers(deviceEntry)]
+      .map(safeString)
+      .join(' '),
+  )) {
+    return true;
+  }
+
+  return linkedEntities.some((entry) => isRelevantDahuaEntity(entry, deviceEntry));
+}
+
+function isRelevantDahuaEntity(
+  entityEntry: HomeAssistantEntityEntry,
+  deviceEntry?: HomeAssistantDeviceEntry,
+): boolean {
+  if (isIgnoredDahuaDevice(deviceEntry, [entityEntry]) || isEntityHiddenOrDisabled(entityEntry)) {
+    return false;
+  }
+
+  const text = [
+    entityEntry.entity_id,
+    entityEntry.platform,
+    entityEntry.name,
+    entityEntry.original_name,
+    deviceEntry?.manufacturer,
+    deviceEntry?.model,
+    deviceEntry?.name,
+    deviceEntry?.name_by_user,
+    ...extractIdentifiers(deviceEntry ?? { id: '' }),
+  ]
+    .map(safeString)
+    .join(' ');
+
+  if (!DAHUA_HINT.test(text)) {
+    return false;
+  }
+
+  const domain = entityDomain(entityEntry.entity_id);
+  return DAHUA_ENTITY_DOMAINS.has(domain);
+}
+
+function pickPrimaryEntity(
+  entries: HomeAssistantEntityEntry[],
+  states: Record<string, HomeAssistantState>,
+): HomeAssistantEntityEntry | null {
+  return (
+    entries.find((entry) => isCameraDomain(entry.entity_id) && hasAvailableState(states[entry.entity_id]) && Boolean(readEntityPicture(states[entry.entity_id]))) ??
+    entries.find((entry) => isCameraDomain(entry.entity_id) && hasAvailableState(states[entry.entity_id])) ??
+    entries.find((entry) => hasAvailableState(states[entry.entity_id])) ??
+    entries.find((entry) => isCameraDomain(entry.entity_id) && Boolean(readEntityPicture(states[entry.entity_id]))) ??
+    entries.find((entry) => isCameraDomain(entry.entity_id)) ??
+    entries.find((entry) => Boolean(states[entry.entity_id])) ??
+    entries[0] ??
+    null
+  );
+}
+
+function isIgnoredDahuaEntity(
+  deviceEntry: HomeAssistantDeviceEntry | undefined,
+  entityEntry: HomeAssistantEntityEntry,
+  state?: HomeAssistantState,
+): boolean {
+  if (isEntityHiddenOrDisabled(entityEntry)) {
+    return true;
+  }
+
+  return isVtoLikeDevice(deviceEntry, [entityEntry], state ? { [entityEntry.entity_id]: state } : undefined)
+    && looksLikeVtoStreamEntity(entityEntry, state);
+}
+
+function isEntityHiddenOrDisabled(entityEntry: HomeAssistantEntityEntry): boolean {
+  return Boolean(safeString(entityEntry.hidden_by) || safeString(entityEntry.disabled_by));
+}
+
+function isVtoLikeDevice(
+  deviceEntry?: HomeAssistantDeviceEntry,
+  linkedEntities: HomeAssistantEntityEntry[] = [],
+  states?: Record<string, HomeAssistantState>,
+): boolean {
+  const text = [
+    deviceEntry?.manufacturer,
+    deviceEntry?.model,
+    deviceEntry?.name,
+    deviceEntry?.name_by_user,
+    ...extractIdentifiers(deviceEntry ?? { id: '' }),
+    ...linkedEntities.flatMap((entry) => [
+      entry.entity_id,
+      entry.name,
+      entry.original_name,
+      states?.[entry.entity_id]?.attributes.friendly_name,
+    ]),
+  ]
+    .map(safeString)
+    .join(' ');
+
+  return VTO_DEBUG_HINT.test(text);
+}
+
+function looksLikeVtoStreamEntity(entry: HomeAssistantEntityEntry, state?: HomeAssistantState): boolean {
+  if (isCameraDomain(entry.entity_id)) {
+    return true;
+  }
+
+  const text = [
+    entry.entity_id,
+    entry.name,
+    entry.original_name,
+    state?.attributes.friendly_name,
+  ]
+    .map(safeString)
+    .join(' ')
+    .toLowerCase();
+
+  return /(^|[\s._-])(main|sub)([\s._-]|$)|cam channel|sub channel/.test(text);
+}
+
+function isHeroMediaEntity(entry: HomeAssistantEntityEntry): boolean {
+  return isCameraDomain(entry.entity_id);
+}
+
+function isActionableEntity(entry: HomeAssistantEntityEntry): boolean {
+  const domain = entityDomain(entry.entity_id);
+  return domain === 'button' || domain === 'switch' || domain === 'lock';
+}
+
+function buildHeroMedia(
+  entries: HomeAssistantEntityEntry[],
+  states: Record<string, HomeAssistantState>,
+): DeviceHeroMedia | undefined {
+  const entry = pickPrimaryEntity(entries, states);
+  if (!entry) {
+    return undefined;
+  }
+
+  const state = states[entry.entity_id];
+  const picture = readEntityPicture(state);
+  const title = entityDisplayName(entry, state);
+  if (entityDomain(entry.entity_id) === 'camera') {
+    const streamEntityId = resolvePreferredStreamEntity(entry, states);
+    const streamPicture = streamEntityId ? readEntityPicture(states[streamEntityId]) : '';
+    const posterSrc = picture || streamPicture || `/api/camera_proxy/${streamEntityId ?? entry.entity_id}`;
+
+    if (streamEntityId) {
+      return {
+        entityId: streamEntityId,
+        title,
+        kind: 'stream',
+        src: `/api/camera_proxy_stream/${streamEntityId}`,
+        posterSrc,
+      };
+    }
+
+    return {
+      entityId: entry.entity_id,
+      title,
+      kind: 'image',
+      src: picture || `/api/camera_proxy/${entry.entity_id}`,
+      posterSrc,
+    };
+  }
+
+  if (!picture) {
+    return undefined;
+  }
+
+  return {
+    entityId: entry.entity_id,
+    title,
+    kind: 'image',
+    src: picture,
+    posterSrc: picture,
+  };
+}
+
+function buildDeviceActions(
+  entries: HomeAssistantEntityEntry[],
+  states: Record<string, HomeAssistantState>,
+): DeviceAction[] | undefined {
+  const actions = entries
+    .map((entry) => buildDeviceAction(entry, states[entry.entity_id]))
+    .filter((action): action is DeviceAction => action !== null)
+    .sort(sortDeviceActions);
+
+  return actions.length > 0 ? actions : undefined;
+}
+
+function buildDeviceAction(
+  entry: HomeAssistantEntityEntry,
+  state?: HomeAssistantState,
+): DeviceAction | null {
+  const domain = entityDomain(entry.entity_id);
+  if (domain !== 'button' && domain !== 'switch' && domain !== 'lock') {
+    return null;
+  }
+
+  const semantic = actionSemantic(entry, state);
+  const label = actionLabel(entry, state, semantic);
+  const service = actionService(domain, state, semantic);
+  if (!label || !service) {
+    return null;
+  }
+
+  return {
+    id: `action:${entry.entity_id}:${service}`,
+    entityId: entry.entity_id,
+    label,
+    domain,
+    service,
+    stateLabel: state ? humanizeHomeAssistantState(state) : undefined,
+  };
+}
+
+function actionSemantic(
+  entry: HomeAssistantEntityEntry,
+  state?: HomeAssistantState,
+): 'open_door' | 'hang_up' | 'answer' | 'mute' | 'generic' {
+  const text = dahuaEntityText(entry, state);
+  if (/open door|unlock|door release|door relay|gate|strike|vto lock|_lock_\d+/.test(text)) {
+    return 'open_door';
+  }
+  if (/hang ?up|end call|reject|decline|cancel call/.test(text)) {
+    return 'hang_up';
+  }
+  if (/answer|accept/.test(text)) {
+    return 'answer';
+  }
+  if (/mute/.test(text)) {
+    return 'mute';
+  }
+  return 'generic';
+}
+
+function actionLabel(
+  entry: HomeAssistantEntityEntry,
+  state: HomeAssistantState | undefined,
+  semantic: 'open_door' | 'hang_up' | 'answer' | 'mute' | 'generic',
+): string {
+  switch (semantic) {
+    case 'open_door':
+      return 'Open door';
+    case 'hang_up':
+      return 'Hang up';
+    case 'answer':
+      return 'Answer';
+    case 'mute':
+      return 'Mute';
+    default: {
+      if (entityDomain(entry.entity_id) === 'lock') {
+        return safeString(state?.state).toLowerCase() === 'unlocked' ? 'Lock door' : 'Unlock';
+      }
+      return entityDisplayName(entry, state);
+    }
+  }
+}
+
+function actionService(
+  domain: 'button' | 'switch' | 'lock',
+  state: HomeAssistantState | undefined,
+  semantic: 'open_door' | 'hang_up' | 'answer' | 'mute' | 'generic',
+): string {
+  if (domain === 'button') {
+    return 'press';
+  }
+  if (domain === 'lock') {
+    return safeString(state?.state).toLowerCase() === 'unlocked' && semantic === 'generic' ? 'lock' : 'unlock';
+  }
+  if (semantic !== 'generic') {
+    return 'turn_on';
+  }
+  return safeString(state?.state).toLowerCase() === 'on' ? 'turn_off' : 'turn_on';
+}
+
+function sortDeviceActions(left: DeviceAction, right: DeviceAction): number {
+  return actionPriority(left.label) - actionPriority(right.label) || left.label.localeCompare(right.label);
+}
+
+function actionPriority(label: string): number {
+  const text = label.toLowerCase();
+  if (text.includes('open door')) {
+    return 0;
+  }
+  if (text.includes('answer')) {
+    return 1;
+  }
+  if (text.includes('hang up')) {
+    return 2;
+  }
+  if (text.includes('mute')) {
+    return 3;
+  }
+  return 10;
+}
+
+function resolvePreferredStreamEntity(
+  entry: HomeAssistantEntityEntry,
+  states: Record<string, HomeAssistantState>,
+): string | null {
+  const entityId = entry.entity_id;
+  if (hasAvailableState(states[entityId])) {
+    return entityId;
+  }
+
+  if (entityId.startsWith('camera.dahua_nvr_camera_dahua_nvr_')) {
+    return hasAvailableState(states[entityId]) ? entityId : null;
+  }
+
+  const leaf = entityIdLeaf(entityId);
+  const base = leaf.replace(/_(main|sub)$/i, '');
+  const candidates = Object.keys(states).filter((stateEntityId) => stateEntityId.startsWith('camera.dahua_nvr_camera_dahua_nvr_'));
+
+  const ranked = candidates
+    .map((candidate) => ({
+      entityId: candidate,
+      score: streamCandidateScore(candidate, base, states[candidate]),
+    }))
+    .filter((candidate) => candidate.score > 0)
+    .sort((left, right) => right.score - left.score);
+
+  return ranked[0]?.entityId ?? null;
+}
+
+function streamCandidateScore(entityId: string, base: string, state?: HomeAssistantState): number {
+  const leaf = entityIdLeaf(entityId);
+  if (!hasAvailableState(state)) {
+    return 0;
+  }
+  if (leaf === `dahua_nvr_camera_dahua_nvr_${base}`) {
+    return 100;
+  }
+  if (leaf.endsWith(`_${base}`)) {
+    return 90;
+  }
+  if (leaf.includes(base)) {
+    return 70;
+  }
+  return 0;
+}
+
+function isNamedDahuaAlertEntity(entry: HomeAssistantEntityEntry, state?: HomeAssistantState): boolean {
+  const text = dahuaEntityText(entry, state);
+  return /alarm local|audio mutation|button pressed|call no answered|cross line alarm|cross region detection|door status|invite|motion alarm|smart motion human|smart motion vehicle|video blind|video loss/.test(text);
+}
+
+function isActiveDahuaState(state?: HomeAssistantState): boolean {
+  const value = safeString(state?.state).toLowerCase();
+  return ['on', 'open', 'opening', 'unlocked', 'detected', 'active', 'alarm', 'triggered', 'true'].includes(value);
+}
+
+function dahuaEntityText(entry: HomeAssistantEntityEntry, state?: HomeAssistantState): string {
+  return [
+    entry.entity_id,
+    entry.name,
+    entry.original_name,
+    state?.attributes.friendly_name,
+    state?.attributes.device_class,
+  ]
+    .map(safeString)
+    .join(' ')
+    .toLowerCase();
+}
+
+function filterDahuaCameraTimelineEntries(
+  entityEntries: HomeAssistantEntityEntry[],
+  states: Record<string, HomeAssistantState>,
+): HomeAssistantEntityEntry[] {
+  const filtered = entityEntries.filter((entry) => isRelevantDahuaCameraTimelineEntity(entry, states[entry.entity_id]));
+  return filtered;
+}
+
+function isRelevantDahuaCameraTimelineEntity(entry: HomeAssistantEntityEntry, state?: HomeAssistantState): boolean {
+  if (!state) {
+    return false;
+  }
+
+  return isDahuaCameraOnlineEntity(entry, state)
+    || isDahuaCameraSmdIvsEntity(entry, state);
+}
+
+function isDahuaCameraOnlineEntity(entry: HomeAssistantEntityEntry, state?: HomeAssistantState): boolean {
+  if (!state) {
+    return false;
+  }
+
+  return looksLikePositiveConnectivityEntity(entry, state);
+}
+
+function isDahuaCameraSmdIvsEntity(entry: HomeAssistantEntityEntry, state?: HomeAssistantState): boolean {
+  if (!state) {
+    return false;
+  }
+  if (isOfflineState(state)) {
+    return false;
+  }
+
+  const text = dahuaEntityText(entry, state);
+  if (looksLikeDahuaCapabilityStatusEntity(entry, state)) {
+    return false;
+  }
+
+  return /smart\s*motion\s*human|smartmotionhuman|smd.*human|\bhuman\b|smart\s*motion\s*vehicle|smartmotionvehicle|smd.*vehicle|\bvehicle\b|\banimal\b|cross\s*line\s*(alarm|detection)?|crosslinedetection|tripwire|cross\s*region\s*detection|crossregiondetection|intrusion/.test(text);
+}
+
+function dahuaTimelinePresentation(
+  entry: HomeAssistantEntityEntry,
+  state: HomeAssistantState,
+): { type: EventType; icon: IconRef; tone: GlowTone } {
+  if (isDahuaCameraOnlineEntity(entry, state)) {
+    return isPositiveConnectivityState(state)
+      ? {
+          type: 'device_online',
+          icon: { category: 'system-states', key: 'online' },
+          tone: 'green',
+        }
+      : {
+          type: 'device_offline',
+          icon: { category: 'system-states', key: 'offline' },
+          tone: 'red',
+        };
+  }
+
+  const type = eventTypeFromEntity(entry, state);
+  const active = isActiveDahuaState(state);
+
+  return {
+    type,
+    icon: iconForEvent(type),
+    tone: active ? toneFromSeverity(severityFromEntity(entry, state)) : 'green',
+  };
+}
+
+function buildDahuaTimelineEvents(
+  deviceId: string,
+  roomId: string,
+  deviceName: string,
+  entityEntries: HomeAssistantEntityEntry[],
+  states: Record<string, HomeAssistantState>,
+): EventItem[] {
+  const events = entityEntries
+    .map((entry) => buildDahuaTimelineEvent(deviceId, roomId, deviceName, entry, states[entry.entity_id]))
+    .filter((event): event is EventItem => event !== null);
+
+  if (events.length === 0) {
+    return [];
+  }
+
+  return events.sort((left, right) => toUnix(right.occurredAt) - toUnix(left.occurredAt));
+}
+
+function buildDahuaTimelineEvent(
+  deviceId: string,
+  roomId: string,
+  deviceName: string,
+  entry: HomeAssistantEntityEntry,
+  state?: HomeAssistantState,
+): EventItem | null {
+  if (!state) {
+    return null;
+  }
+
+  const label = entityDisplayName(entry, state);
+  const presentation = dahuaTimelinePresentation(entry, state);
+  const occurredAt = state.last_changed ?? state.last_updated ?? '';
+  const copy = buildDahuaTimelineCopy(deviceName, entry, state, label, presentation.type);
+
+  return {
+    id: `event:${deviceId}:${entry.entity_id}`,
+    roomId,
+    deviceId,
+    type: presentation.type,
+    title: copy.title,
+    description: copy.description,
+    occurredAt,
+    source: deviceName,
+    icon: presentation.icon,
+    tone: presentation.tone,
+  };
+}
+
+function buildDahuaTimelineCopy(
+  deviceName: string,
+  entry: HomeAssistantEntityEntry,
+  state: HomeAssistantState,
+  fallbackLabel: string,
+  eventType: EventType,
+): { title: string; description: string } {
+  if (isDahuaCameraOnlineEntity(entry, state)) {
+    const online = isPositiveConnectivityState(state);
+    return {
+      title: online ? 'Camera online' : 'Camera offline',
+      description: online
+        ? `${deviceName} is reachable.`
+        : `${deviceName} is not reachable.`,
+    };
+  }
+
+  const active = isActiveDahuaState(state);
+  const detection = dahuaDetectionCopy(eventType);
+  if (detection) {
+    return {
+      title: active ? detection.activeTitle : detection.clearTitle,
+      description: active
+        ? `${deviceName} ${detection.activeDescription}`
+        : `${deviceName} ${detection.clearDescription}`,
+    };
+  }
+
+  return {
+    title: fallbackLabel,
+    description: `${deviceName}: ${humanizeHomeAssistantState(state)}`,
+  };
+}
+
+function dahuaDetectionCopy(eventType: EventType): {
+  activeTitle: string;
+  clearTitle: string;
+  activeDescription: string;
+  clearDescription: string;
+} | null {
+  switch (eventType) {
+    case 'human_detected':
+      return {
+        activeTitle: 'Person detected',
+        clearTitle: 'Person detection cleared',
+        activeDescription: 'detected a person.',
+        clearDescription: 'no longer reports a person.',
+      };
+    case 'vehicle_detected':
+      return {
+        activeTitle: 'Vehicle detected',
+        clearTitle: 'Vehicle detection cleared',
+        activeDescription: 'detected a vehicle.',
+        clearDescription: 'no longer reports a vehicle.',
+      };
+    case 'tripwire_detected':
+      return {
+        activeTitle: 'Tripwire crossed',
+        clearTitle: 'Tripwire clear',
+        activeDescription: 'reported a line-crossing event.',
+        clearDescription: 'line-crossing detection is clear.',
+      };
+    case 'intrusion_detected':
+      return {
+        activeTitle: 'Intrusion detected',
+        clearTitle: 'Intrusion area clear',
+        activeDescription: 'reported an intrusion event.',
+        clearDescription: 'intrusion detection is clear.',
+      };
+    case 'motion_detected':
+      return {
+        activeTitle: 'Animal detected',
+        clearTitle: 'Animal detection cleared',
+        activeDescription: 'detected an animal.',
+        clearDescription: 'no longer reports an animal.',
+      };
+    default:
+      return null;
+  }
+}
+
+function findAreaForEntity(
+  entityEntry: HomeAssistantEntityEntry,
+  entitiesByAreaId: Map<string, HomeAssistantEntityEntry[]>,
+): string | null {
+  for (const [areaId, entries] of entitiesByAreaId.entries()) {
+    if (entries.some((entry) => entry.entity_id === entityEntry.entity_id)) {
+      return areaId;
+    }
+  }
+  return null;
+}
+
+function signalNameFromEntityId(entityId: string): string | null {
+  const match = entityId.match(/_signal_([a-z0-9_]+)$/);
+  return match?.[1] ?? null;
+}
+
+function summarizeHeadline(input: {
+  alarmActive: boolean;
+  tamperActive: boolean;
+  troubleActive: boolean;
+  activeSignals: string[];
+}): string {
+  if (input.activeSignals.some((signal) => ['fire', 'smoke', 'co', 'gas', 'gas_or_co'].includes(signal))) {
+    return 'Fire response';
+  }
+  if (input.activeSignals.some((signal) => ['water_leak', 'leak', 'flood'].includes(signal))) {
+    return 'Flood response';
+  }
+  if (input.alarmActive || input.activeSignals.some((signal) => ['alarm', 'burglary', 'panic', 'duress', 'emergency', 'medical', 'hold_up'].includes(signal))) {
+    return 'Alarm active';
+  }
+  if (input.tamperActive) {
+    return 'Tamper active';
+  }
+  if (input.troubleActive) {
+    return 'Trouble active';
+  }
+  if (input.activeSignals.includes('connectivity')) {
+    return 'Connectivity issue';
+  }
+  if (input.activeSignals.includes('battery')) {
+    return 'Battery attention';
+  }
+  if (input.activeSignals[0]) {
+    return humanizeSlug(input.activeSignals[0]);
+  }
+  return 'Nominal';
+}
+
+function severityFromSignals(input: {
+  alarmActive: boolean;
+  tamperActive: boolean;
+  troubleActive: boolean;
+  activeSignals: string[];
+}): number {
+  const fireLike = input.activeSignals.some((signal) => ['fire', 'smoke', 'co', 'gas', 'gas_or_co'].includes(signal));
+  const waterLike = input.activeSignals.some((signal) => ['water_leak', 'leak', 'flood'].includes(signal));
+  const intrusionLike = input.activeSignals.some((signal) => ['alarm', 'burglary', 'panic', 'duress', 'emergency', 'medical', 'hold_up'].includes(signal));
+  const offline = input.activeSignals.includes('connectivity');
+  const batteryIssue = input.activeSignals.includes('battery');
+
+  if (fireLike || waterLike || input.alarmActive || intrusionLike) {
+    return 4;
+  }
+  if (input.tamperActive || input.troubleActive || offline) {
+    return 3;
+  }
+  if (batteryIssue || input.activeSignals.some((signal) => ISSUE_SIGNALS.has(signal))) {
+    return 2;
+  }
+  return 0;
+}
+
+function toneFromSeverity(severity: number): GlowTone {
+  if (severity >= 4) {
+    return 'red';
+  }
+  if (severity >= 2) {
+    return 'amber';
+  }
+  return 'green';
+}
+
+function mapSignalToEventType(signal: string, alarmActive: boolean, offline: boolean): EventType {
+  const normalized = slugPart(signal);
+  if (offline || normalized === 'connectivity') {
+    return 'device_offline';
+  }
+  if (alarmActive || normalized === 'alarm' || normalized === 'burglary' || normalized === 'panic') {
+    return 'alarm';
+  }
+  switch (normalized) {
+    case 'smoke':
+      return 'smoke_detected';
+    case 'fire':
+    case 'temperature':
+      return 'fire_detected';
+    case 'water_leak':
+    case 'leak':
+    case 'flood':
+      return 'leak_detected';
+    case 'gas':
+    case 'co':
+    case 'gas_or_co':
+      return 'gas_detected';
+    case 'tamper':
+      return 'tamper_detected';
+    case 'battery':
+      return 'battery_low';
+    case 'power':
+      return 'power_lost';
+    case 'night_mode':
+      return 'night_mode';
+    default:
+      return 'restored';
+  }
+}
+
+function eventTypeFromEntity(entry: HomeAssistantEntityEntry, state?: HomeAssistantState): EventType {
+  const text = dahuaEntityText(entry, state);
+  const deviceClass = safeString(state?.attributes.device_class).toLowerCase();
+  const domain = entityDomain(entry.entity_id);
+  if (isOfflineState(state)) {
+    return 'device_offline';
+  }
+  if (state && looksLikePositiveConnectivityEntity(entry, state) && !isPositiveConnectivityState(state)) {
+    return 'device_offline';
+  }
+  if (/door status|door\b/.test(text) && isActiveDahuaState(state)) {
+    return 'door_opened';
+  }
+  if (/window|opening/.test(text) && isActiveDahuaState(state)) {
+    return 'window_opened';
+  }
+  if (/video loss|connectivity|offline/.test(text)) {
+    return 'device_offline';
+  }
+  if (/smart\s*motion\s*human|smartmotionhuman|smd.*human|\bhuman\b/.test(text)) {
+    return 'human_detected';
+  }
+  if (/smart\s*motion\s*vehicle|smartmotionvehicle|smd.*vehicle|\bvehicle\b/.test(text)) {
+    return 'vehicle_detected';
+  }
+  if (/cross\s*line\s*(alarm|detection)?|crosslinedetection|tripwire/.test(text)) {
+    return 'tripwire_detected';
+  }
+  if (/cross\s*region\s*detection|crossregiondetection|intrusion/.test(text)) {
+    return 'intrusion_detected';
+  }
+  if (/\banimal\b/.test(text)) {
+    return 'motion_detected';
+  }
+  if (/tamper|video blind|audio mutation/.test(text)) {
+    return 'tamper_detected';
+  }
+  if (/motion/.test(text)) {
+    return 'motion_detected';
+  }
+  if (/button pressed|invite|call no answered|alarm local/.test(text)) {
+    return 'alarm';
+  }
+  if (deviceClass === 'motion' || domain === 'camera') {
+    return 'motion_detected';
+  }
+  if (deviceClass === 'door') {
+    return 'door_opened';
+  }
+  if (deviceClass === 'window' || deviceClass === 'opening') {
+    return 'window_opened';
+  }
+  if (deviceClass === 'moisture') {
+    return 'leak_detected';
+  }
+  if (deviceClass === 'smoke') {
+    return 'smoke_detected';
+  }
+  if (deviceClass === 'gas') {
+    return 'gas_detected';
+  }
+  return 'alarm';
+}
+
+function buildGenericEventDescription(
+  entry: HomeAssistantEntityEntry,
+  state: HomeAssistantState | undefined,
+  deviceName: string,
+): string {
+  if (isOfflineState(state)) {
+    return `${deviceName} is offline`;
+  }
+  if (state && looksLikePositiveConnectivityEntity(entry, state)) {
+    return isPositiveConnectivityState(state) ? `${deviceName} is online` : `${deviceName} is offline`;
+  }
+  const deviceClass = safeString(state?.attributes.device_class).toLowerCase();
+  if (isOn(state)) {
+    return `${deviceName}: ${humanizeSlug(deviceClass || entityIdLeaf(entry.entity_id))} active`;
+  }
+  return `${deviceName}: ${state?.state ?? 'updated'}`;
+}
+
+function severityFromEntity(entry: HomeAssistantEntityEntry, state: HomeAssistantState | undefined): number {
+  const text = dahuaEntityText(entry, state);
+  const eventType = eventTypeFromEntity(entry, state);
+  if (eventType === 'smoke_detected' || eventType === 'fire_detected' || eventType === 'leak_detected' || eventType === 'gas_detected') {
+    return 4;
+  }
+  if (eventType === 'device_offline') {
+    return 3;
+  }
+  if (/video blind|audio mutation|alarm local|button pressed|invite|call no answered/.test(text)) {
+    return 3;
+  }
+  return 2;
+}
+
+function readBatteryLabel(entries: HomeAssistantEntityEntry[], states: Record<string, HomeAssistantState>): string {
+  const batteryState = entries
+    .map((entry) => states[entry.entity_id])
+    .find((state) => typeof state?.attributes.battery_level === 'number');
+
+  if (batteryState && typeof batteryState.attributes.battery_level === 'number') {
+    return `${batteryState.attributes.battery_level}%`;
+  }
+
+  return 'Nominal';
+}
+
+function resolveRoomImage(
+  area: HomeAssistantArea,
+  entityEntries: HomeAssistantEntityEntry[],
+  states: Record<string, HomeAssistantState>,
+): string {
+  const areaPicture = normalizeHomeAssistantImageUrl(
+    safeString(area.picture) || safeString(area['picture_path']) || safeString(area['entity_picture']),
+  );
+  if (areaPicture) {
+    return areaPicture;
+  }
+
+  const candidates = entityEntries
+    .slice()
+    .sort((left, right) => Number(isRelevantDahuaEntity(right)) - Number(isRelevantDahuaEntity(left)));
+
+  for (const entry of candidates) {
+    const picture = readEntityPicture(states[entry.entity_id]);
+    if (picture) {
+      return picture;
+    }
+    if (isCameraDomain(entry.entity_id)) {
+      return `/api/camera_proxy/${entry.entity_id}`;
+    }
+  }
+
+  return '';
+}
+
+function buildRoomSummary(metrics: RoomMetrics): string {
+  const parts = [
+    `${metrics.deviceCount} devices`,
+    metrics.cameraCount > 0 ? `${metrics.cameraCount} cameras` : '',
+    metrics.sensorCount > 0 ? `${metrics.sensorCount} sensors` : '',
+  ].filter(Boolean);
+
+  return parts.join(' · ') || 'No linked devices';
+}
+
+function sortResolvedDevices(left: ResolvedDevice, right: ResolvedDevice): number {
+  if (right.attention !== left.attention) {
+    return Number(right.attention) - Number(left.attention);
+  }
+  if (right.isOnline !== left.isOnline) {
+    return Number(right.isOnline) - Number(left.isOnline);
+  }
+  return left.name.localeCompare(right.name);
+}
+
+function sortRooms(left: Room, right: Room): number {
+  return left.name.localeCompare(right.name);
+}
+
+function inferDeviceType(input: { name: string; model: string; entityIds: string[] }): string {
+  const haystack = `${input.name} ${input.model} ${input.entityIds.join(' ')}`.toLowerCase();
+  if (haystack.includes('vto') || haystack.includes('doorbell')) {
+    return 'camera';
+  }
+  if (haystack.includes('camera') || haystack.includes('cam.') || input.entityIds.some((entityId) => isCameraDomain(entityId))) {
+    return 'camera';
+  }
+  if (haystack.includes('hub')) {
+    return 'hub';
+  }
+  if (haystack.includes('rex') || haystack.includes('repeater')) {
+    return 'repeater';
+  }
+  if (haystack.includes('keypad')) {
+    return 'keypad';
+  }
+  if (haystack.includes('siren')) {
+    return 'siren';
+  }
+  if (haystack.includes('socket') || haystack.includes('plug')) {
+    return 'smart_plug';
+  }
+  if (haystack.includes('thermostat')) {
+    return 'thermostat';
+  }
+  if (haystack.includes('relay')) {
+    return 'relay';
+  }
+  if (haystack.includes('glass')) {
+    return 'glass_break_sensor';
+  }
+  if (haystack.includes('curtain')) {
+    return 'curtain_motion_sensor';
+  }
+  if (haystack.includes('outdoor')) {
+    return 'outdoor_motion_sensor';
+  }
+  if (haystack.includes('window')) {
+    return 'window_sensor';
+  }
+  if (haystack.includes('door') || haystack.includes('opening')) {
+    return 'door_sensor';
+  }
+  if (haystack.includes('smoke')) {
+    return 'smoke_detector';
+  }
+  if (haystack.includes('fire') || haystack.includes('heat')) {
+    return 'fire_detector';
+  }
+  if (haystack.includes('leak') || haystack.includes('moisture') || haystack.includes('water')) {
+    return 'leak_detector';
+  }
+  return 'motion_sensor';
+}
+
+function iconForDevice(type: string, name: string, model: string): IconRef {
+  const lowered = `${type} ${name} ${model}`.toLowerCase();
+  if (lowered.includes('camera') || lowered.includes('vto') || lowered.includes('doorbell')) {
+    return { category: 'devices', key: 'camera' };
+  }
+  if (lowered.includes('hub')) {
+    return { category: 'devices', key: 'hub' };
+  }
+  if (lowered.includes('repeater') || lowered.includes('rex')) {
+    return { category: 'devices', key: 'repeater' };
+  }
+  if (lowered.includes('keypad')) {
+    return { category: 'devices', key: 'keypad' };
+  }
+  if (lowered.includes('siren')) {
+    return { category: 'devices', key: 'siren' };
+  }
+  if (lowered.includes('plug') || lowered.includes('socket')) {
+    return { category: 'devices', key: 'smart_plug' };
+  }
+  if (lowered.includes('relay')) {
+    return { category: 'devices', key: 'relay' };
+  }
+  if (lowered.includes('thermostat')) {
+    return { category: 'devices', key: 'thermostat' };
+  }
+  if (lowered.includes('glass')) {
+    return { category: 'devices', key: 'glass_break' };
+  }
+  if (lowered.includes('curtain')) {
+    return { category: 'devices', key: 'curtain_motion' };
+  }
+  if (lowered.includes('outdoor')) {
+    return { category: 'devices', key: 'outdoor_motion' };
+  }
+  if (lowered.includes('window')) {
+    return { category: 'devices', key: 'window_sensor' };
+  }
+  if (lowered.includes('door') || lowered.includes('opening')) {
+    return { category: 'devices', key: 'door_sensor' };
+  }
+  if (lowered.includes('smoke')) {
+    return { category: 'devices', key: 'smoke_detector' };
+  }
+  if (lowered.includes('fire') || lowered.includes('heat')) {
+    return { category: 'devices', key: 'fire_detector' };
+  }
+  if (lowered.includes('leak') || lowered.includes('water') || lowered.includes('moisture')) {
+    return { category: 'devices', key: 'leak_detector' };
+  }
+  return { category: 'devices', key: 'motion_sensor' };
+}
+
+function iconForEvent(eventType: EventType): IconRef {
+  switch (eventType) {
+    case 'motion_detected':
+      return { category: 'events', key: 'motion_detected' };
+    case 'human_detected':
+      return { category: 'events', key: 'human_detected' };
+    case 'vehicle_detected':
+      return { category: 'events', key: 'vehicle_detected' };
+    case 'tripwire_detected':
+      return { category: 'events', key: 'tripwire_detected' };
+    case 'intrusion_detected':
+      return { category: 'events', key: 'intrusion_detected' };
+    case 'door_opened':
+      return { category: 'events', key: 'door_opened' };
+    case 'window_opened':
+      return { category: 'events', key: 'window_opened' };
+    case 'fire_detected':
+      return { category: 'events', key: 'fire_detected' };
+    case 'smoke_detected':
+      return { category: 'events', key: 'smoke_detected' };
+    case 'leak_detected':
+      return { category: 'events', key: 'leak_detected' };
+    case 'gas_detected':
+      return { category: 'events', key: 'gas_detected' };
+    case 'tamper_detected':
+      return { category: 'events', key: 'tamper_detected' };
+    case 'night_mode':
+      return { category: 'events', key: 'night_mode_event' };
+    case 'device_offline':
+      return { category: 'events', key: 'device_offline' };
+    case 'battery_low':
+      return { category: 'events', key: 'battery_low_event' };
+    case 'power_lost':
+      return { category: 'events', key: 'power_lost' };
+    case 'alarm':
+      return { category: 'events', key: 'alarm' };
+    default:
+      return { category: 'events', key: 'ok' };
+  }
+}
+
+function iconForRoom(name: string): IconRef {
+  const text = safeString(name).toLowerCase();
+  if (includesAny(text, ['garage', 'гараж'])) {
+    return { category: 'rooms', key: 'garage' };
+  }
+  if (includesAny(text, ['kitchen', 'кухня'])) {
+    return { category: 'rooms', key: 'kitchen' };
+  }
+  if (includesAny(text, ['bed', 'спальн'])) {
+    return { category: 'rooms', key: 'bedroom' };
+  }
+  if (includesAny(text, ['bath', 'ванн', 'санвуз', 'туалет'])) {
+    return { category: 'rooms', key: 'bathroom' };
+  }
+  if (includesAny(text, ['office', 'кабінет', 'кабинет', 'офіс', 'офис'])) {
+    return { category: 'rooms', key: 'office' };
+  }
+  if (includesAny(text, ['living', 'вітальн', 'гостин'])) {
+    return { category: 'rooms', key: 'living_room' };
+  }
+  if (includesAny(text, ['kids', 'child', 'дитяч'])) {
+    return { category: 'rooms', key: 'kids_room' };
+  }
+  if (includesAny(text, ['guest', 'гость', 'гостьов'])) {
+    return { category: 'rooms', key: 'guests_room' };
+  }
+  if (includesAny(text, ['attic', 'горищ', 'чердак'])) {
+    return { category: 'rooms', key: 'attic' };
+  }
+  if (includesAny(text, ['server', 'котельн', 'бойлер', 'техніч', 'техничес', 'utility'])) {
+    return { category: 'rooms', key: 'server_room' };
+  }
+  if (includesAny(text, ['yard', 'garden', 'подвір', 'двор', 'терас', 'терасса'])) {
+    return { category: 'rooms', key: 'yard' };
+  }
+  if (includesAny(text, ['house', 'будинок', 'дом'])) {
+    return { category: 'rooms', key: 'house' };
+  }
+  if (includesAny(text, ['хатин', 'гостьовий будинок', 'small house'])) {
+    return { category: 'rooms', key: 'small_house' };
+  }
+  return { category: 'rooms', key: 'house' };
+}
+
+function accentForRoom(name: string): string {
+  const text = safeString(name).toLowerCase();
+  if (includesAny(text, ['garage', 'гараж'])) {
+    return '#f59e0b';
+  }
+  if (includesAny(text, ['kitchen', 'кухня'])) {
+    return '#5cff8d';
+  }
+  if (includesAny(text, ['bed', 'спальн'])) {
+    return '#7dd3fc';
+  }
+  if (includesAny(text, ['bath', 'ванн', 'санвуз', 'туалет', 'yard', 'garden', 'подвір', 'двор', 'терас'])) {
+    return '#2de2e6';
+  }
+  if (includesAny(text, ['office', 'кабінет', 'кабинет', 'офіс', 'офис', 'server', 'котельн', 'бойлер', 'техніч', 'техничес'])) {
+    return '#b582ff';
+  }
+  return '#7dd3fc';
+}
+
+function readEntityPicture(state?: HomeAssistantState): string {
+  const picture = safeString(state?.attributes.entity_picture) || safeString(state?.attributes.picture);
+  return normalizeHomeAssistantImageUrl(picture);
+}
+
+function normalizeHomeAssistantImageUrl(url: string): string {
+  if (!url) {
+    return '';
+  }
+
+  return url.replace(/(\/api\/image\/serve\/[^/?]+)\/\d+x\d+(\?.*)?$/i, '$1/original$2');
+}
+
+function entityIsAlert(entry: HomeAssistantEntityEntry, state?: HomeAssistantState): boolean {
+  if (!state) {
+    return false;
+  }
+  if (isOfflineState(state)) {
+    return true;
+  }
+  if (looksLikeNeutralVtoStatusEntity(entry, state)) {
+    return false;
+  }
+  if (looksLikeDahuaCapabilityStatusEntity(entry, state)) {
+    return false;
+  }
+  if (isNamedDahuaAlertEntity(entry, state)) {
+    return isActiveDahuaState(state);
+  }
+  const domain = entityDomain(entry.entity_id);
+  if (domain === 'binary_sensor') {
+    const deviceClass = safeString(state.attributes.device_class).toLowerCase();
+    if (deviceClass === 'connectivity' || looksLikePositiveConnectivityEntity(entry, state)) {
+      return !isPositiveConnectivityState(state);
+    }
+    if (looksLikeNeutralDahuaBinarySensor(entry, state)) {
+      return false;
+    }
+    if (deviceClass === 'safety') {
+      return looksLikeRealSafetyAlert(entry, state);
+    }
+    if (isIssueBinarySensorDeviceClass(deviceClass) || looksLikeAlertingDahuaBinarySensor(entry, state)) {
+      return isActiveDahuaState(state);
+    }
+    return false;
+  }
+  if (domain === 'lock') {
+    if (looksLikeVtoDoorControlEntity(entry, state)) {
+      return false;
+    }
+    return safeString(state.state).toLowerCase() === 'unlocked';
+  }
+  const deviceClass = safeString(state.attributes.device_class).toLowerCase();
+  return ['problem', 'smoke', 'gas', 'moisture', 'safety'].includes(deviceClass) && state.state !== 'off';
+}
+
+function isOfflineState(state?: HomeAssistantState): boolean {
+  return state?.state === 'unavailable' || state?.state === 'unknown' || state?.state === 'offline';
+}
+
+function hasAvailableState(state?: HomeAssistantState): boolean {
+  return Boolean(state) && !isOfflineState(state);
+}
+
+function isCameraDomain(entityId: string): boolean {
+  const domain = entityDomain(entityId);
+  return domain === 'camera' || domain === 'image';
+}
+
+function entityDomain(entityId: string): string {
+  return entityId.split('.', 1)[0] ?? '';
+}
+
+function entityIdLeaf(entityId: string): string {
+  return entityId.split('.', 2)[1] ?? entityId;
+}
+
+function isOn(state?: HomeAssistantState): boolean {
+  return state?.state === 'on';
+}
+
+function toUnix(value: string): number {
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function safeString(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function includesAny(text: string, needles: string[]): boolean {
+  return needles.some((needle) => text.includes(needle));
+}
+
+function slugPart(value: unknown): string {
+  return safeString(value)
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, '_')
+    .replace(/^_+|_+$/g, '');
+}
+
+function humanizeSlug(value: string): string {
+  const normalized = safeString(value).replace(/_/g, ' ');
+  return normalized.replace(/\b\w/g, (match) => match.toUpperCase()) || 'Unknown';
+}
+
+function humanizeHomeAssistantState(state: HomeAssistantState): string {
+  const value = safeString(state.state).toLowerCase();
+  const deviceClass = safeString(state.attributes.device_class).toLowerCase();
+  const entityId = safeString(state.entity_id);
+
+  if (value === 'open') {
+    return 'Open';
+  }
+  if (value === 'closed') {
+    return 'Closed';
+  }
+  if (value === 'detected') {
+    return 'Detected';
+  }
+  if (value === 'clear') {
+    return 'Clear';
+  }
+  if (value === 'locked') {
+    return 'Locked';
+  }
+  if (value === 'unlocked') {
+    return 'Unlocked';
+  }
+  if (value === 'waiting') {
+    return 'Waiting';
+  }
+  if (value === 'idle') {
+    return 'Idle';
+  }
+  if (value === 'normal') {
+    return 'Normal';
+  }
+  if (value === 'enabled') {
+    return 'Enabled';
+  }
+  if (value === 'disabled') {
+    return 'Disabled';
+  }
+
+  if (value === 'on') {
+    if (deviceClass === 'connectivity' || looksLikePositiveConnectivityEntity({ entity_id: entityId, attributes: {} }, state)) {
+      return 'Online';
+    }
+    if (['door', 'window', 'opening'].includes(deviceClass)) {
+      return 'Open';
+    }
+    if (deviceClass === 'problem') {
+      return 'Problem';
+    }
+    if (deviceClass === 'safety') {
+      return 'Alert';
+    }
+    if (['motion', 'occupancy', 'presence', 'sound', 'vibration'].includes(deviceClass)) {
+      return 'Detected';
+    }
+    return 'Active';
+  }
+
+  if (value === 'off') {
+    if (deviceClass === 'connectivity' || looksLikePositiveConnectivityEntity({ entity_id: entityId, attributes: {} }, state)) {
+      return 'Offline';
+    }
+    if (['door', 'window', 'opening'].includes(deviceClass)) {
+      return 'Closed';
+    }
+    if (['problem', 'safety'].includes(deviceClass)) {
+      return 'Safe';
+    }
+    if (['motion', 'occupancy', 'presence', 'sound', 'vibration'].includes(deviceClass)) {
+      return 'Not detected';
+    }
+    return 'Inactive';
+  }
+
+  if (value === 'unavailable') {
+    return 'Unavailable';
+  }
+
+  if (value === 'unknown') {
+    return 'Unknown';
+  }
+
+  return safeString(state.state) || 'Unknown';
+}
+
+function isIgnoredDahuaDevice(
+  deviceEntry?: HomeAssistantDeviceEntry,
+  linkedEntities: HomeAssistantEntityEntry[] = [],
+): boolean {
+  const text = [
+    deviceEntry?.manufacturer,
+    deviceEntry?.model,
+    deviceEntry?.name,
+    deviceEntry?.name_by_user,
+    ...extractIdentifiers(deviceEntry ?? { id: '' }),
+    ...linkedEntities.flatMap((entry) => [entry.entity_id, entry.name, entry.original_name, entry.platform]),
+  ]
+    .map(safeString)
+    .join(' ');
+
+  return GO2RTC_HINT.test(text);
+}
+
+function looksLikeRealSafetyAlert(entry: HomeAssistantEntityEntry, state: HomeAssistantState): boolean {
+  if (state.state !== 'on') {
+    return false;
+  }
+
+  const text = [
+    entry.entity_id,
+    entry.name,
+    entry.original_name,
+    state.attributes.friendly_name,
+    state.attributes.device_class,
+  ]
+    .map(safeString)
+    .join(' ')
+    .toLowerCase();
+
+  if (VTO_DEBUG_HINT.test(text)) {
+    return false;
+  }
+
+  return /(alarm|tamper|panic|intrusion|motion|smoke|fire|gas|safety)/i.test(text);
+}
+
+function looksLikePositiveConnectivityEntity(entry: HomeAssistantEntityEntry, state: HomeAssistantState): boolean {
+  if (looksLikeDahuaCapabilityStatusEntity(entry, state)) {
+    return false;
+  }
+
+  const text = [
+    entry.entity_id,
+    entry.name,
+    entry.original_name,
+    state.attributes.friendly_name,
+    state.attributes.device_class,
+  ]
+    .map(safeString)
+    .join(' ')
+    .toLowerCase();
+
+  return /(^|[\s._-])(online|connected|connectivity|reachable|available)([\s._-]|$)/.test(text);
+}
+
+function isPositiveConnectivityState(state?: HomeAssistantState): boolean {
+  const value = safeString(state?.state).toLowerCase();
+  return ['on', 'online', 'connected', 'available', 'true'].includes(value);
+}
+
+function looksLikeNeutralVtoStatusEntity(entry: HomeAssistantEntityEntry, state: HomeAssistantState): boolean {
+  const text = dahuaEntityText(entry, state);
+  return /(call state|bridge session|bridge uplink|external uplink|alarm enable|sensor enabled|sense method|lock mode|unlock hold interval|current profile|audio codec|main codec|sub codec|resolution|lock count|supports? )/.test(text);
+}
+
+function looksLikeNeutralDahuaBinarySensor(entry: HomeAssistantEntityEntry, state: HomeAssistantState): boolean {
+  if (looksLikeDahuaCapabilityStatusEntity(entry, state)) {
+    return true;
+  }
+
+  const text = dahuaEntityText(entry, state);
+  return /(enabled|recording|record|ready|profile|stream|snapshot|supported|support|capability|uplink|output|export)/.test(text)
+    || looksLikeNeutralVtoStatusEntity(entry, state);
+}
+
+function looksLikeDahuaCapabilityStatusEntity(entry: HomeAssistantEntityEntry, state: HomeAssistantState): boolean {
+  const text = dahuaEntityText(entry, state);
+  return /(onvif|h\.?264|h\.?265|codec|profile|resolution|snapshot|rtsp|mjpeg|hls|dash|webrtc|capability|supported|support|stream_url|stream source|preferred video|video fallback|recording|output|export)/.test(text)
+    || /\b(stream|snapshot|onvif|h264|h265|rtsp|mjpeg|hls|dash|webrtc)[\s._-]+available\b/.test(text);
+}
+
+function isIssueBinarySensorDeviceClass(deviceClass: string): boolean {
+  return ['door', 'window', 'opening', 'motion', 'occupancy', 'presence', 'sound', 'vibration', 'problem', 'smoke', 'gas', 'moisture'].includes(deviceClass);
+}
+
+function looksLikeAlertingDahuaBinarySensor(entry: HomeAssistantEntityEntry, state: HomeAssistantState): boolean {
+  if (looksLikePositiveConnectivityEntity(entry, state) || looksLikeNeutralDahuaBinarySensor(entry, state)) {
+    return false;
+  }
+
+  const text = dahuaEntityText(entry, state);
+  return /(alarm|tamper|panic|intrusion|motion|human|vehicle|cross line|cross region|video blind|video loss|audio mutation|button pressed|invite|call no answered|door status|window|opening|smoke|fire|gas|leak|flood)/.test(text);
+}
+
+function looksLikeVtoDoorControlEntity(entry: HomeAssistantEntityEntry, state: HomeAssistantState): boolean {
+  const text = dahuaEntityText(entry, state);
+  return /(open door|unlock|door release|door relay|gate|strike|vto lock|_lock_\d+)/.test(text);
+}
+
+function debugDahuaCandidate(
+  name: string,
+  model: string,
+  entityEntries: HomeAssistantEntityEntry[],
+  states: Record<string, HomeAssistantState>,
+  activeEntry: HomeAssistantEntityEntry,
+  activeState?: HomeAssistantState,
+): void {
+  const debugText = [
+    name,
+    model,
+    activeEntry.entity_id,
+    activeEntry.name,
+    activeEntry.original_name,
+    activeState?.attributes.friendly_name,
+    activeState?.attributes.device_class,
+  ]
+    .map(safeString)
+    .join(' ');
+
+  if (!VTO_DEBUG_HINT.test(debugText) && safeString(activeState?.attributes.device_class).toLowerCase() !== 'safety') {
+    return;
+  }
+
+  const debugKey = `${name}|${activeEntry.entity_id}`;
+  if (loggedDahuaDebug.has(debugKey)) {
+    return;
+  }
+  loggedDahuaDebug.add(debugKey);
+
+  console.log('[ajax-lovelace][dahua-debug]', {
+    name,
+    model,
+    chosenEntity: activeEntry.entity_id,
+    chosenState: activeState?.state,
+    chosenDeviceClass: safeString(activeState?.attributes.device_class),
+    chosenFriendlyName: safeString(activeState?.attributes.friendly_name),
+    candidates: entityEntries.map((entry) => {
+      const state = states[entry.entity_id];
+      return {
+        entity_id: entry.entity_id,
+        registry_name: safeString(entry.name) || safeString(entry.original_name),
+        state: state?.state ?? 'missing',
+        device_class: safeString(state?.attributes.device_class),
+        friendly_name: safeString(state?.attributes.friendly_name),
+      };
+    }),
+  });
+}

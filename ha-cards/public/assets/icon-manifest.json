@@ -425,6 +425,26 @@
       "background": "transparent"
     },
     {
+      "name": "human_detected",
+      "svg": "assets/icons/events/human_detected.svg",
+      "background": "transparent"
+    },
+    {
+      "name": "vehicle_detected",
+      "svg": "assets/icons/events/vehicle_detected.svg",
+      "background": "transparent"
+    },
+    {
+      "name": "tripwire_detected",
+      "svg": "assets/icons/events/tripwire_detected.svg",
+      "background": "transparent"
+    },
+    {
+      "name": "intrusion_detected",
+      "svg": "assets/icons/events/intrusion_detected.svg",
+      "background": "transparent"
+    },
+    {
       "name": "door_opened",
       "svg": "assets/icons/events/door_opened.svg",
       "png": "assets/icons-png/events/door_opened.png",

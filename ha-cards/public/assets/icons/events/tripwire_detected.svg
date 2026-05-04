@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256" role="img" aria-label="tripwire_detected">
+  <defs>
+    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <g filter="url(#glow)" stroke="#f59e0b" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round">
+    <style>
+      .line { stroke: #f59e0b; fill: none; }
+    </style>
+    <path class="line" d="M74 58 V198"/>
+    <path class="line" d="M182 58 V198"/>
+    <path class="line" d="M74 150 L182 102"/>
+    <path class="line" d="M122 92 L136 112"/>
+    <path class="line" d="M122 112 L142 98"/>
+  </g>
+</svg>

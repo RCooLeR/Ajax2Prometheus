@@ -38,6 +38,14 @@ export interface DashboardChip {
   active: boolean;
 }
 
+export interface RoomSmdIvsCounts {
+  total: number;
+  human: number;
+  vehicle: number;
+  animal: number;
+  ivs: number;
+}
+
 export interface Room {
   id: string;
   name: string;
@@ -48,7 +56,25 @@ export interface Room {
   accent: string;
   icon: IconRef;
   statusTone: GlowTone;
-  stateChips: DashboardChip[];
+  smdIvs?: RoomSmdIvsCounts;
+  dahuaCameraCount?: number;
+}
+
+export interface DeviceHeroMedia {
+  entityId: string;
+  title: string;
+  kind: 'stream' | 'image';
+  src: string;
+  posterSrc?: string;
+}
+
+export interface DeviceAction {
+  id: string;
+  entityId: string;
+  label: string;
+  domain: 'button' | 'switch' | 'lock';
+  service: string;
+  stateLabel?: string;
 }
 
 export interface Device {
@@ -66,6 +92,8 @@ export interface Device {
   entityId: string;
   isOnline: boolean;
   attention: boolean;
+  heroMedia?: DeviceHeroMedia;
+  actions?: DeviceAction[];
 }
 
 export interface EventItem {
@@ -90,6 +118,8 @@ export interface RoomSummary {
   deviceCount: number;
   onlineCount: number;
   attentionCount: number;
+  smdIvs: RoomSmdIvsCounts;
+  dahuaCameraCount: number;
   latestEventLabel: string;
   tone: GlowTone;
 }

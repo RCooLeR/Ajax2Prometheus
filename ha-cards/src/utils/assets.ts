@@ -22,7 +22,7 @@ export function getRoomImageAsset(fileName: string): string {
     return '';
   }
   if (/^(https?:)?\/\//.test(fileName) || fileName.startsWith('/')) {
-    return fileName;
+    return normalizeHomeAssistantImageUrl(fileName);
   }
   return `${assetBaseUrl}rooms/${fileName}`;
 }
@@ -59,4 +59,8 @@ function stripAssetPrefix(path: string): string {
 
 function ensureTrailingSlash(path: string): string {
   return path.endsWith('/') ? path : `${path}/`;
+}
+
+function normalizeHomeAssistantImageUrl(url: string): string {
+  return url.replace(/(\/api\/image\/serve\/[^/?]+)\/\d+x\d+(\?.*)?$/i, '$1/original$2');
 }

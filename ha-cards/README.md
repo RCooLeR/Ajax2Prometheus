@@ -64,7 +64,10 @@ path: ajax
 panel: true
 cards:
   - type: custom:ajax-lovelace-detailed-card
+    dahua_base: https://ha.example.test/dahua-bridge
 ```
+
+Use `dahua_base` when browser-side DahuaBridge calls need to go through a Home Assistant proxy path instead of the bridge URL published on camera attributes.
 
 Compact chips card:
 
@@ -78,13 +81,17 @@ Ready-to-paste examples live in [`examples/`](./examples/):
 - [`ajax-lovelace-detailed-card.yaml`](./examples/ajax-lovelace-detailed-card.yaml)
 - [`ajax-lovelace-chips-card.yaml`](./examples/ajax-lovelace-chips-card.yaml)
 
+Reference notes for DahuaBridge camera discovery, live playback, and SMD/IVS room counters live in [`docs/`](./docs/).
+
 ## Card behavior
 
 - Rooms come from Home Assistant areas.
 - Room hero backgrounds prefer area pictures and fall back to linked image or camera entities.
 - Ajax devices come from the Home Assistant device/entity registries plus MQTT entities published by AjaxBridge.
 - Dahua and Roller devices are grouped by Home Assistant device and rendered inside their assigned room.
-- Event rows are synthesized from current or latest Home Assistant entity state. The UI does not query AjaxBridge `/events` history directly yet.
+- Dahua camera event rows are limited to SMD/IVS detection state and camera online/offline state. Unavailable SMD/IVS sensors, stream, codec, ONVIF/H.264, profile, capability, and other diagnostic entities are ignored for camera events and alerts.
+- Dahua SMD/IVS 24 hour counters are shown only for rooms that contain a Dahua camera device. They are loaded from the DahuaBridge NVR `/events/summary` endpoint and can use `dahua_base` for browser-reachable proxy URLs.
+- Event rows are synthesized from current or latest Home Assistant entity state. The UI does not query AjaxBridge `/events` history directly.
 
 ## Project structure
 
