@@ -366,12 +366,21 @@ func (s *Store) ApplyDiscovery(discovery Discovery) ApplyDiscoveryResult {
 			Visible:        info.Visible,
 			LastUpdate:     now,
 		}
-		if existing, ok := device.RawCommands[info.CommandID]; ok {
+		existing, hasExisting := device.RawCommands[info.CommandID]
+		if hasExisting {
 			command.Value = existing.Value
 			command.LastValueAt = existing.LastValueAt
 			command.EmptyValue = existing.EmptyValue
 			if existing.LastUpdate.After(command.LastUpdate) {
 				command.LastUpdate = existing.LastUpdate
+			}
+		}
+		if !EmptyRawValue(info.Value) && (!hasExisting || existing.LastValueAt.IsZero()) {
+			if value, ok := mappedValue(Event{Value: info.Value}, mapping); ok {
+				device.Values[mapping.Metric] = value
+				command.Value = value
+				command.LastValueAt = now
+				command.EmptyValue = false
 			}
 		}
 		device.RawCommands[info.CommandID] = command

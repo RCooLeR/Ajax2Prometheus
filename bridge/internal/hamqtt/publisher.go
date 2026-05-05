@@ -392,7 +392,19 @@ func (p *Publisher) cleanupSubscriptions(cfg CleanupConfig) []cleanupSubscriptio
 		{
 			Topic: strings.Join([]string{discoveryPrefix, "+", discoveryNode, "+", "config"}, "/"),
 			Match: func(topic string) bool {
-				return matchJeedomDiscoveryTopic(discoveryPrefix, discoveryNode, topic)
+				return matchAjaxBridgeDiscoveryTopic(discoveryPrefix, discoveryNode, topic)
+			},
+		},
+		{
+			Topic: topicPrefix + "/accounts/+/state",
+			Match: func(topic string) bool {
+				return matchSIAStateTopic(topicPrefix, topic)
+			},
+		},
+		{
+			Topic: topicPrefix + "/accounts/+/zones/+/state",
+			Match: func(topic string) bool {
+				return matchSIAStateTopic(topicPrefix, topic)
 			},
 		},
 		{
@@ -425,7 +437,7 @@ func cleanupTopicMatches(patterns []cleanupSubscription, topic string) bool {
 	return false
 }
 
-func matchJeedomDiscoveryTopic(discoveryPrefix, discoveryNode, topic string) bool {
+func matchAjaxBridgeDiscoveryTopic(discoveryPrefix, discoveryNode, topic string) bool {
 	parts := strings.Split(trimTopic(topic), "/")
 	if len(parts) != 5 {
 		return false
@@ -433,7 +445,36 @@ func matchJeedomDiscoveryTopic(discoveryPrefix, discoveryNode, topic string) boo
 	if parts[0] != discoveryPrefix || parts[2] != discoveryNode || parts[4] != "config" {
 		return false
 	}
-	return strings.HasPrefix(parts[3], "jeedom_cmd_") || strings.HasPrefix(parts[3], "jeedom_control_")
+	return strings.HasPrefix(parts[3], "account_") ||
+		strings.HasPrefix(parts[3], "zone_") ||
+		strings.HasPrefix(parts[3], "jeedom_cmd_") ||
+		strings.HasPrefix(parts[3], "jeedom_control_")
+}
+
+func matchSIAStateTopic(prefix, topic string) bool {
+	prefix = trimTopic(prefix)
+	topic = trimTopic(topic)
+	if prefix == "" || topic == "" {
+		return false
+	}
+	prefixParts := strings.Split(prefix, "/")
+	topicParts := strings.Split(topic, "/")
+	if len(topicParts) < len(prefixParts) {
+		return false
+	}
+	for i, part := range prefixParts {
+		if topicParts[i] != part {
+			return false
+		}
+	}
+	rest := topicParts[len(prefixParts):]
+	if len(rest) == 3 {
+		return rest[0] == "accounts" && rest[1] != "" && rest[2] == "state"
+	}
+	if len(rest) == 5 {
+		return rest[0] == "accounts" && rest[1] != "" && rest[2] == "zones" && rest[3] != "" && rest[4] == "state"
+	}
+	return false
 }
 
 func matchJeedomStateTopic(prefix, topic string) bool {
@@ -680,8 +721,9 @@ func (p *Publisher) zonePlanFor(zone state.Zone) (zonePlan, error) {
 		return plan, nil
 	}
 
+	entities := zoneEntities(zone)
 	discovery, err := p.buildDiscoveryMessages(
-		zoneEntities(zone),
+		entities,
 		p.zoneStateTopic(zone.Account, zone.Zone),
 		zoneDevice(zone),
 		p.discoveryNode(),
@@ -692,7 +734,7 @@ func (p *Publisher) zonePlanFor(zone state.Zone) (zonePlan, error) {
 	plan = zonePlan{
 		signature:  signature,
 		stateTopic: p.zoneStateTopic(zone.Account, zone.Zone),
-		cleanup:    p.legacyCleanupMessages(zoneEntities(zone)),
+		cleanup:    append(p.legacyCleanupMessages(entities), p.renamedSignalCleanupMessages(zone)...),
 		discovery:  discovery,
 	}
 
@@ -753,6 +795,23 @@ func (p *Publisher) legacyCleanupMessages(entities []entity) []discoveryMessage 
 			messages = append(messages, discoveryMessage{
 				key:     "cleanup:" + slug(legacyNode) + ":" + ent.Component + "/" + ent.ObjectID,
 				topic:   p.discoveryTopic(ent.Component, legacyNode, ent.ObjectID),
+				payload: []byte{},
+			})
+		}
+	}
+	return messages
+}
+
+func (p *Publisher) renamedSignalCleanupMessages(zone state.Zone) []discoveryMessage {
+	base := "zone_" + zone.Account + "_" + zone.Zone + "_"
+	signals := sortedSignals(zone.DeviceEvents, zone.SignalActive)
+	messages := make([]discoveryMessage, 0, len(signals))
+	for _, signal := range signals {
+		for _, suffix := range legacySignalObjectSuffixes(signal) {
+			objectID := base + suffix
+			messages = append(messages, discoveryMessage{
+				key:     "cleanup:renamed_signal:" + p.discoveryNode() + ":binary_sensor/" + objectID,
+				topic:   p.discoveryTopic("binary_sensor", p.discoveryNode(), objectID),
 				payload: []byte{},
 			})
 		}
@@ -860,12 +919,34 @@ func signalEntity(base, signal string) entity {
 	deviceClass, icon := signalPresentation(signal)
 	name := signalName(signal)
 	return binaryEntity(
-		base+"signal_"+signal,
+		base+signalObjectSuffix(signal),
 		name,
 		deviceClass,
 		icon,
 		"{{ '"+payloadOn+"' if value_json.signal_active.get('"+signal+"', false) else '"+payloadOff+"' }}",
 	)
+}
+
+func signalObjectSuffix(signal string) string {
+	switch signal {
+	case "power":
+		return "signal_power_failure"
+	case "temperature":
+		return "signal_temperature_alarm"
+	default:
+		return "signal_" + signal
+	}
+}
+
+func legacySignalObjectSuffixes(signal string) []string {
+	switch signal {
+	case "power":
+		return []string{"signal_power"}
+	case "temperature":
+		return []string{"signal_temperature"}
+	default:
+		return nil
+	}
 }
 
 func binaryEntity(objectID, name, deviceClass, icon, template string) entity {
@@ -1027,6 +1108,8 @@ func signalName(signal string) string {
 		return "Night mode"
 	case "power":
 		return "Power failure"
+	case "temperature":
+		return "Temperature alarm"
 	case "tamper_bypass":
 		return "Tamper bypassed"
 	case "water_leak":

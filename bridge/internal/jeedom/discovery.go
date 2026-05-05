@@ -69,6 +69,8 @@ type discoveryCommandPayload struct {
 	IsVisible    json.RawMessage `json:"isVisible"`
 	IsHistorized json.RawMessage `json:"isHistorized"`
 	Value        json.RawMessage `json:"value"`
+	CurrentValue json.RawMessage `json:"currentValue"`
+	State        json.RawMessage `json:"state"`
 }
 
 func ParseDiscoveryMessage(topic string, body []byte, receivedAt time.Time) (Discovery, error) {
@@ -153,8 +155,24 @@ func discoveryCommand(mapKey, eqLogicID string, raw discoveryCommandPayload) Dis
 		Visible:        rawBool(raw.IsVisible, false),
 		Historized:     rawBool(raw.IsHistorized, false),
 		StateCommandID: rawString(raw.Value),
-		Value:          append(json.RawMessage(nil), raw.Value...),
+		Value:          copyRawMessage(firstNonEmptyRaw(raw.CurrentValue, raw.Value, raw.State)),
 	}
+}
+
+func firstNonEmptyRaw(values ...json.RawMessage) json.RawMessage {
+	for _, value := range values {
+		if !EmptyRawValue(value) {
+			return value
+		}
+	}
+	return nil
+}
+
+func copyRawMessage(value json.RawMessage) json.RawMessage {
+	if len(value) == 0 {
+		return nil
+	}
+	return append(json.RawMessage(nil), value...)
 }
 
 func configString(values map[string]any, key string) string {

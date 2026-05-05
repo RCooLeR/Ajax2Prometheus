@@ -384,6 +384,13 @@ Signal entities are created for every signal in `device_events` and every observ
 zone_<account>_<zone>_signal_<signal>
 ```
 
+The SIA `power` and `temperature` signals use explicit alarm ids to stay separate from Jeedom measurement sensors:
+
+```text
+zone_<account>_<zone>_signal_power_failure
+zone_<account>_<zone>_signal_temperature_alarm
+```
+
 Template:
 
 ```jinja
@@ -413,13 +420,15 @@ Signal presentation:
 | `emergency` | `Emergency` | `safety` |
 | `medical` | `Medical` | `safety` |
 | `panic` | `Panic` | `safety` |
-| `temperature` | `Temperature` | `safety` |
+| `temperature` | `Temperature alarm` | `safety` |
 | `arming` | `Arming` | `mdi:shield-lock` |
 | `night_mode` | `Night mode` | `mdi:weather-night` |
 
 All zone entities include the full zone state payload as JSON attributes.
 
 ## Jeedom Entities
+
+Numeric temperature, power, current, voltage, energy, and similar actual values come from Jeedom, not from SIA. SIA `temperature` and `power` entries are binary alarm/trouble signals and are discovered as separate `signal_temperature_alarm` and `signal_power_failure` binary sensors.
 
 Jeedom discovery topic:
 
@@ -627,6 +636,7 @@ Duplicate devices:
 - Devices shown as manufacturer `Ajax via Jeedom` and model `Jeedom MQTT Bridge` are unlinked Jeedom discovery entries. If the same physical device also exists as `Ajax Systems`, clear old retained discovery and delete the orphan HA device.
 - Restart AjaxBridge, then force Jeedom MQTT Manager to republish eqLogic discovery or wait for Jeedom events so linked discovery is republished with the SIA device identifier.
 - Reload or restart Home Assistant MQTT after stale retained topics are cleared.
+- If the duplicate is the same SIA entity with a Home Assistant suffix such as `_2`, clear retained AjaxBridge discovery/state and then delete any remaining unavailable orphan entity from the Home Assistant entity registry.
 
 If you do not have Mosquitto clients installed, run the bridge once with temporary cleanup enabled:
 
@@ -635,7 +645,7 @@ AJAXBRIDGE_MQTT_CLEANUP_RETAINED: "true"
 AJAXBRIDGE_MQTT_CLEANUP_RETAINED_WAIT: "8s"
 ```
 
-Restart AjaxBridge, wait for the log line `MQTT retained cleanup completed`, then remove the flag or set it back to `false` and restart again. The cleaner clears retained Jeedom discovery topics under `homeassistant/+/ajaxbridge/jeedom_*`, retained Jeedom state under `ajaxbridge/jeedom/devices/+/state`, and legacy `ajax2prometheus` topics.
+Restart AjaxBridge, wait for the log line `MQTT retained cleanup completed`, then remove the flag or set it back to `false` and restart again. The cleaner clears retained AjaxBridge discovery topics for `account_*`, `zone_*`, `jeedom_cmd_*`, and `jeedom_control_*`, retained SIA state under `ajaxbridge/accounts/...`, retained Jeedom state under `ajaxbridge/jeedom/devices/+/state`, and legacy `ajax2prometheus` topics. Startup snapshot publishing recreates the current SIA discovery/state after the cleanup pass.
 
 Alternative shell cleanup with Mosquitto clients:
 
@@ -672,3 +682,10 @@ Jeedom control switch missing:
 - Confirm `/jeedom/actions` has both `on` and `off` with `allowed: true`.
 - Confirm the device type is `Relay`, `Socket`, `WallSwitch`, `LightSwitch`, or `Outlet`.
 - Confirm eqLogic discovery was received from Jeedom MQTT Manager.
+
+Numeric Jeedom values missing:
+
+- Confirm `/jeedom/devices` contains `values.temperature_c`, `values.power_w`, `values.current_a`, or `values.voltage_v` for the expected device.
+- Confirm `/jeedom/commands` contains the matching Jeedom command ids and that those ids are listed in `data/devices.json` under `jeedom_command_ids`.
+- Keep `AJAXBRIDGE_MQTT_CLEANUP_RETAINED=false` after the one-time cleanup run. Leaving cleanup enabled on every restart can remove retained HA discovery before Jeedom has replayed all discovery/events.
+- Force Jeedom MQTT Manager to republish eqLogic discovery and command events after changing mappings.

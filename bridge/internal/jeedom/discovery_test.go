@@ -64,6 +64,35 @@ func TestStoreApplyDiscoveryRegistersSafeActions(t *testing.T) {
 	}
 }
 
+func TestStoreApplyDiscoverySeedsCurrentInfoValues(t *testing.T) {
+	payload := []byte(`{
+	  "id":8,
+	  "name":"Server power",
+	  "configuration":{"device":"WallSwitch"},
+	  "isVisible":1,
+	  "isEnable":1,
+	  "cmds":{
+	    "56":{"id":56,"name":"Puissance","type":"info","subType":"numeric","unite":"W","isVisible":1,"currentValue":"123,4"},
+	    "57":{"id":57,"name":"Temp\u00e9rature","type":"info","subType":"numeric","unite":"\u00b0C","isVisible":1,"value":18.6}
+	  }
+	}`)
+	discovery, err := ParseDiscoveryMessage("jeedom/discovery/eqLogic/8", payload, time.Unix(100, 0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	result := NewStore("keep_last").ApplyDiscovery(discovery)
+
+	if got := result.Device.Values["power_w"]; got != 123.4 {
+		t.Fatalf("power_w = %#v, want 123.4", got)
+	}
+	if got := result.Device.Values["temperature_c"]; got != 18.6 {
+		t.Fatalf("temperature_c = %#v, want 18.6", got)
+	}
+	if result.Device.RawCommands["56"].LastValueAt.IsZero() {
+		t.Fatalf("power command LastValueAt was not seeded")
+	}
+}
+
 func TestStoreApplyDiscoveryBlocksWaterStop(t *testing.T) {
 	payload := []byte(`{
 	  "id":3,
