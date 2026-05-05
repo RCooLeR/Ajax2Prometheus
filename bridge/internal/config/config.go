@@ -9,46 +9,76 @@ import (
 )
 
 type Config struct {
-	SIAListenAddr   string
-	HTTPAddr        string
+	// SIAListenAddr is the TCP address where Ajax sends SIA DC-09 events.
+	SIAListenAddr string
+	// HTTPAddr exposes health, JSON state, Prometheus metrics, admin UI, and debug APIs.
+	HTTPAddr string
+	// SIAForwardAddr/SIAForwardAddrs optionally forward valid raw SIA frames to another receiver.
 	SIAForwardAddr  string
 	SIAForwardAddrs []string
-	DevicesPath     string
+	// DevicesPath stores the editable SIA/Jeedom device catalog used for names, rooms, and matching.
+	DevicesPath string
 
-	Account       string
+	// Account limits accepted SIA messages to one Ajax account/object. Empty accepts all accounts.
+	Account string
+	// EncryptionKey is the optional AES key configured in Ajax SIA monitoring settings.
 	EncryptionKey string
-	StrictCRC     bool
+	// StrictCRC rejects malformed SIA frames before state is updated.
+	StrictCRC bool
 
-	PingInterval      time.Duration
-	OfflineGrace      time.Duration
-	ReadTimeout       time.Duration
-	ForwardTimeout    time.Duration
+	// PingInterval is the expected Ajax monitoring ping cadence.
+	PingInterval time.Duration
+	// OfflineGrace marks an account offline after no SIA activity for this duration.
+	OfflineGrace time.Duration
+	// ReadTimeout bounds each inbound SIA TCP connection.
+	ReadTimeout time.Duration
+	// ForwardTimeout bounds optional raw SIA forwarding attempts.
+	ForwardTimeout time.Duration
+	// ForwardRequireACK makes forwarding failures reject the original SIA frame.
 	ForwardRequireACK bool
 
-	MQTTBroker          string
-	MQTTUsername        string
-	MQTTPassword        string
-	MQTTClientID        string
-	MQTTTopicPrefix     string
-	MQTTDiscovery       bool
+	// MQTTBroker enables MQTT publishing and Home Assistant discovery when set.
+	MQTTBroker   string
+	MQTTUsername string
+	MQTTPassword string
+	// MQTTClientID should be stable so broker retained-session behavior is predictable.
+	MQTTClientID string
+	// MQTTTopicPrefix is the root for AjaxBridge state topics.
+	MQTTTopicPrefix string
+	// MQTTDiscovery publishes retained Home Assistant discovery configs.
+	MQTTDiscovery bool
+	// MQTTDiscoveryPrefix is usually "homeassistant".
 	MQTTDiscoveryPrefix string
 	MQTTTimeout         time.Duration
-	MQTTRetain          bool
+	// MQTTRetain keeps the latest state visible after Home Assistant or the bridge restarts.
+	MQTTRetain bool
 
-	JeedomEnabled          bool
-	JeedomEventTopic       string
-	JeedomDiscoveryTopic   string
+	// JeedomEnabled adds the optional Jeedom MQTT mirror as a secondary data source.
+	JeedomEnabled bool
+	// JeedomEventTopic receives Jeedom info command events. Keep it narrow to avoid non-JSON status topics.
+	JeedomEventTopic string
+	// JeedomDiscoveryTopic receives eqLogic discovery used for device types and action command ids.
+	JeedomDiscoveryTopic string
+	// JeedomStateTopicPrefix is where normalized Jeedom device state is published.
 	JeedomStateTopicPrefix string
-	JeedomDiscovery        bool
+	// JeedomDiscovery controls HA discovery for Jeedom-derived metrics.
+	JeedomDiscovery bool
+	// JeedomEmptyValuePolicy is "keep_last" or "unknown" for empty Jeedom values.
 	JeedomEmptyValuePolicy string
 	JeedomRetainState      bool
 	JeedomRetainDiscovery  bool
-	JeedomSampleDir        string
+	// JeedomSampleDir captures raw MQTT samples for debugging. Empty disables capture for production.
+	JeedomSampleDir string
+	// JeedomDiscoverUnlinked should stay false to avoid duplicate Home Assistant devices.
 	JeedomDiscoverUnlinked bool
-	JeedomAccountNames     []string
-	JeedomControlsEnabled  bool
-	JeedomSetTopicPrefix   string
+	// JeedomAccountNames maps Jeedom hub/root equipment onto the SIA account device.
+	JeedomAccountNames []string
+	// JeedomControlsEnabled exposes only allowlisted on/off controls for safe device types.
+	JeedomControlsEnabled bool
+	// JeedomSetTopicPrefix is the Jeedom MQTT Manager command topic root.
+	JeedomSetTopicPrefix string
 
+	// NotificationsPath stores configurable threshold, state-change, and control notification rules.
 	NotificationsPath string
 
 	LogLevel  string
@@ -92,7 +122,7 @@ func FromEnv() Config {
 		JeedomEmptyValuePolicy: envString("keep_last", "AJAXBRIDGE_JEEDOM_EMPTY_VALUE_POLICY"),
 		JeedomRetainState:      envBool(true, "AJAXBRIDGE_JEEDOM_RETAIN_STATE"),
 		JeedomRetainDiscovery:  envBool(true, "AJAXBRIDGE_JEEDOM_RETAIN_DISCOVERY"),
-		JeedomSampleDir:        envString("tmp-jeedom", "AJAXBRIDGE_JEEDOM_SAMPLE_DIR"),
+		JeedomSampleDir:        envString("", "AJAXBRIDGE_JEEDOM_SAMPLE_DIR"),
 		JeedomDiscoverUnlinked: envBool(false, "AJAXBRIDGE_JEEDOM_DISCOVER_UNLINKED"),
 		JeedomAccountNames:     envCSV("AJAXBRIDGE_JEEDOM_ACCOUNT_NAMES"),
 		JeedomControlsEnabled:  envBool(false, "AJAXBRIDGE_JEEDOM_CONTROLS_ENABLED"),

@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"testing"
 	"time"
+
+	"github.com/RCooLeR/AjaxBridge/internal/devicecatalog"
 )
 
 func TestStoreEmptyValueKeepsLastNumericValue(t *testing.T) {
@@ -83,5 +85,35 @@ func TestStoreDisambiguatesDuplicateDeviceNamesByCommandGroup(t *testing.T) {
 	}
 	if _, ok := store.Device("dym_96"); !ok {
 		t.Fatal("missing second duplicate group slug dym_96")
+	}
+}
+
+func TestStoreTracksLegacyUnlinkedSlugWhenCatalogLinksDevice(t *testing.T) {
+	catalog := testCatalog(t, devicecatalog.Device{
+		Account:          "A0F80D",
+		Zone:             "8",
+		Name:             "Server power",
+		Kind:             "WallSwitch",
+		JeedomNames:      []string{"Serverna"},
+		JeedomCommandIDs: []string{"56"},
+	})
+	store := NewStoreWithResolver("keep_last", NewCatalogResolver(catalog, CatalogResolverConfig{}))
+
+	result := store.Apply(Event{
+		Topic:       "jeedom/cmd/event/56",
+		CommandID:   "56",
+		DeviceName:  "Serverna",
+		CommandName: "Puissance",
+		Type:        "info",
+		Subtype:     "numeric",
+		Value:       json.RawMessage(`100`),
+		ReceivedAt:  time.Unix(100, 0),
+	})
+
+	if result.Device.DeviceSlug != "sia_a0f80d_zone_8" {
+		t.Fatalf("DeviceSlug = %q, want linked SIA slug", result.Device.DeviceSlug)
+	}
+	if !containsString(result.Device.LegacyDeviceSlugs, "serverna") {
+		t.Fatalf("LegacyDeviceSlugs = %#v, want serverna", result.Device.LegacyDeviceSlugs)
 	}
 }

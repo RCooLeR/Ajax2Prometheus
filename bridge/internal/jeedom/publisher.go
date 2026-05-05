@@ -75,6 +75,9 @@ func (p *Publisher) PublishDevice(ctx context.Context, device Device) error {
 
 	stateTopic := p.StateTopic(device.DeviceSlug)
 	if p.cfg.Discovery {
+		if err := p.publishLegacyCleanup(ctx, device); err != nil {
+			return err
+		}
 		commands := sortedCommands(device.RawCommands)
 		if device.DiscoveryDisabled {
 			for _, command := range commands {
@@ -121,6 +124,29 @@ func (p *Publisher) PublishDevice(ctx context.Context, device Device) error {
 		return err
 	}
 	return p.mqtt.PublishStateMessage(ctx, stateTopic, payload, p.cfg.RetainState)
+}
+
+func (p *Publisher) publishLegacyCleanup(ctx context.Context, device Device) error {
+	if len(device.LegacyDeviceSlugs) == 0 {
+		return nil
+	}
+	for _, legacySlug := range device.LegacyDeviceSlugs {
+		legacySlug = Slug(legacySlug)
+		if legacySlug == "" || legacySlug == device.DeviceSlug {
+			continue
+		}
+		if p.cfg.Controls {
+			key := "jeedom_legacy_switch_cleanup:" + legacySlug
+			topic := strings.Join([]string{p.cfg.DiscoveryPrefix, ComponentSwitch, p.cfg.DiscoveryNode, "jeedom_control_" + legacySlug, "config"}, "/")
+			if err := p.mqtt.PublishDiscoveryMessage(ctx, key, topic, []byte{}, true); err != nil {
+				return err
+			}
+		}
+		if err := p.mqtt.PublishStateMessage(ctx, p.StateTopic(legacySlug), []byte{}, true); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (p *Publisher) StateTopic(deviceSlug string) string {

@@ -13,6 +13,8 @@ The bridge is built around two inputs:
 
 No database is required. Runtime state is kept in memory, and the optional device catalog lives in `data/devices.json`.
 
+For your current production setup, use [docker-compose.production.yml](./docker-compose.production.yml). It uses account `A0F80D`, MQTT broker `tcp://192.168.100.100:1883`, the local `./data` catalog, Jeedom MQTT input, and allowlisted Jeedom controls.
+
 ## Disclaimer
 
 AjaxBridge is an unofficial DIY open-source project for compatibility and integration. It is not affiliated with, endorsed by, or sponsored by Ajax Systems.

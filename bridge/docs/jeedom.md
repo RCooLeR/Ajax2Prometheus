@@ -107,7 +107,8 @@ environment:
   AJAXBRIDGE_JEEDOM_STATE_TOPIC_PREFIX: "ajaxbridge/jeedom"
   AJAXBRIDGE_JEEDOM_DISCOVERY: "true"
   AJAXBRIDGE_JEEDOM_EMPTY_VALUE_POLICY: "keep_last"
-  AJAXBRIDGE_JEEDOM_SAMPLE_DIR: "/data/tmp-jeedom"
+  # Optional debugging only. Leave unset in production.
+  # AJAXBRIDGE_JEEDOM_SAMPLE_DIR: "/data/tmp-jeedom"
   AJAXBRIDGE_JEEDOM_DISCOVER_UNLINKED: "false"
   AJAXBRIDGE_JEEDOM_ACCOUNT_NAMES: "House"
   AJAXBRIDGE_JEEDOM_CONTROLS_ENABLED: "false"
@@ -126,7 +127,7 @@ Variables:
 | `AJAXBRIDGE_JEEDOM_EMPTY_VALUE_POLICY` | `keep_last` | `keep_last` or `unknown`. |
 | `AJAXBRIDGE_JEEDOM_RETAIN_STATE` | `true` | Retain normalized Jeedom state messages. |
 | `AJAXBRIDGE_JEEDOM_RETAIN_DISCOVERY` | `true` | Retain Jeedom HA discovery configs. |
-| `AJAXBRIDGE_JEEDOM_SAMPLE_DIR` | `tmp-jeedom` | Raw Jeedom MQTT sample capture directory. Empty disables capture. |
+| `AJAXBRIDGE_JEEDOM_SAMPLE_DIR` | empty | Raw Jeedom MQTT sample capture directory. Empty disables capture. Leave empty in production. |
 | `AJAXBRIDGE_JEEDOM_DISCOVER_UNLINKED` | `false` | Publish HA discovery for Jeedom devices not linked to SIA catalog devices. |
 | `AJAXBRIDGE_JEEDOM_ACCOUNT_NAMES` | empty | Jeedom names that represent the SIA account/hub device. |
 | `AJAXBRIDGE_JEEDOM_CONTROLS_ENABLED` | `false` | Enable allowlisted on/off controls. |
@@ -289,7 +290,7 @@ Linking rules:
 
 ## Raw Sample Capture
 
-Every received Jeedom MQTT message is written as a JSON envelope to `AJAXBRIDGE_JEEDOM_SAMPLE_DIR` unless the setting is empty.
+When `AJAXBRIDGE_JEEDOM_SAMPLE_DIR` is set, every received Jeedom MQTT message is written as a JSON envelope. Leave it unset in production so the bridge does not write an unbounded stream of sample files.
 
 Example file shape:
 

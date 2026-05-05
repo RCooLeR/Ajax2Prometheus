@@ -624,7 +624,32 @@ Duplicate devices:
 - Add `jeedom_names` and `jeedom_command_ids` to `data/devices.json`.
 - Keep `AJAXBRIDGE_JEEDOM_DISCOVER_UNLINKED=false`.
 - Set `AJAXBRIDGE_JEEDOM_ACCOUNT_NAMES` for hub/system Jeedom equipment.
+- Devices shown as manufacturer `Ajax via Jeedom` and model `Jeedom MQTT Bridge` are unlinked Jeedom discovery entries. If the same physical device also exists as `Ajax Systems`, clear old retained discovery and delete the orphan HA device.
+- Restart AjaxBridge, then force Jeedom MQTT Manager to republish eqLogic discovery or wait for Jeedom events so linked discovery is republished with the SIA device identifier.
 - Reload or restart Home Assistant MQTT after stale retained topics are cleared.
+
+Clear retained discovery/state topics from a shell with Mosquitto clients:
+
+```bash
+BROKER=192.168.100.100
+
+mosquitto_sub -h "$BROKER" -t 'homeassistant/+/ajaxbridge/+/config' -C 100000 -W 3 -F '%t' \
+  | grep -E '/jeedom_(cmd|control)_' \
+  | sort -u \
+  | while read -r t; do
+      [ -n "$t" ] && mosquitto_pub -h "$BROKER" -t "$t" -r -n
+    done
+
+for topic in 'ajaxbridge/jeedom/devices/+/state' 'homeassistant/+/ajax2prometheus/#' 'ajax2prometheus/#'; do
+  mosquitto_sub -h "$BROKER" -t "$topic" -C 100000 -W 3 -F '%t' \
+    | sort -u \
+    | while read -r t; do
+        [ -n "$t" ] && mosquitto_pub -h "$BROKER" -t "$t" -r -n
+      done
+done
+```
+
+If the broker requires credentials, add `-u mqtt-user -P mqtt-password` to both `mosquitto_sub` and `mosquitto_pub`.
 
 Wrong names or rooms:
 

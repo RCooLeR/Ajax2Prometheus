@@ -35,6 +35,12 @@ From `bridge/`:
 docker compose up -d
 ```
 
+For the current production setup with the collected `data/devices.json`, Jeedom enabled, and MQTT broker `tcp://192.168.100.100:1883`:
+
+```bash
+docker compose -f docker-compose.production.yml up -d
+```
+
 Check the service:
 
 ```bash
@@ -97,7 +103,7 @@ Legacy `AJAX2PROM_*` variables are still accepted as compatibility aliases.
 | --- | --- |
 | `data/devices.json` | Optional catalog with stable names, rooms, kinds, SIA zones, Jeedom aliases, and Jeedom command ids. |
 | `data/notifications.json` | Notification channels and rules. |
-| `tmp-jeedom/*.json` | Raw Jeedom MQTT sample envelopes when sample capture is enabled. |
+| `tmp-jeedom/*.json` | Optional raw Jeedom MQTT sample envelopes when `AJAXBRIDGE_JEEDOM_SAMPLE_DIR` is set. Disabled by default for production. |
 
 ## Recommended Setup Order
 

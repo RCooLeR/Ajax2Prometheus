@@ -40,6 +40,7 @@ type Device struct {
 	HAManufacturer    string             `json:"ha_manufacturer,omitempty"`
 	HAModel           string             `json:"ha_model,omitempty"`
 	SuggestedArea     string             `json:"suggested_area,omitempty"`
+	LegacyDeviceSlugs []string           `json:"legacy_device_slugs,omitempty"`
 	LinkedSource      string             `json:"linked_source,omitempty"`
 	LinkedAccount     string             `json:"linked_account,omitempty"`
 	LinkedZone        string             `json:"linked_zone,omitempty"`
@@ -138,6 +139,7 @@ type DeviceIdentity struct {
 	HAManufacturer    string
 	HAModel           string
 	SuggestedArea     string
+	LegacyDeviceSlugs []string
 	LinkedSource      string
 	LinkedAccount     string
 	LinkedZone        string
@@ -204,6 +206,7 @@ func (s *Store) Apply(evt Event) ApplyResult {
 	device.HAManufacturer = identity.HAManufacturer
 	device.HAModel = identity.HAModel
 	device.SuggestedArea = identity.SuggestedArea
+	device.LegacyDeviceSlugs = mergeStringLists(device.LegacyDeviceSlugs, identity.LegacyDeviceSlugs)
 	device.LinkedSource = identity.LinkedSource
 	device.LinkedAccount = identity.LinkedAccount
 	device.LinkedZone = identity.LinkedZone
@@ -315,6 +318,7 @@ func (s *Store) ApplyDiscovery(discovery Discovery) ApplyDiscoveryResult {
 	device.HAManufacturer = identity.HAManufacturer
 	device.HAModel = identity.HAModel
 	device.SuggestedArea = identity.SuggestedArea
+	device.LegacyDeviceSlugs = mergeStringLists(device.LegacyDeviceSlugs, identity.LegacyDeviceSlugs)
 	device.LinkedSource = identity.LinkedSource
 	device.LinkedAccount = identity.LinkedAccount
 	device.LinkedZone = identity.LinkedZone
@@ -424,6 +428,9 @@ func (s *Store) identityFor(evt Event, mapping Mapping) DeviceIdentity {
 	resolved := s.resolver.Resolve(evt, mapping)
 	if resolved.DeviceSlug == "" {
 		resolved.DeviceSlug = identity.DeviceSlug
+	}
+	if resolved.DeviceSlug != identity.DeviceSlug {
+		resolved.LegacyDeviceSlugs = mergeStringLists(resolved.LegacyDeviceSlugs, []string{identity.DeviceSlug})
 	}
 	if resolved.DeviceName == "" {
 		resolved.DeviceName = identity.DeviceName
@@ -729,6 +736,7 @@ func copyDevice(device Device) Device {
 	device.Values = copyAnyMap(device.Values)
 	device.RawCommands = copyCommands(device.RawCommands)
 	device.HAIdentifiers = append([]string(nil), device.HAIdentifiers...)
+	device.LegacyDeviceSlugs = append([]string(nil), device.LegacyDeviceSlugs...)
 	device.Actions = copyActions(device.Actions)
 	return device
 }
@@ -783,6 +791,7 @@ func containsString(values []string, value string) bool {
 }
 
 func mergeIdentity(fallback, resolved DeviceIdentity) DeviceIdentity {
+	linkedToDifferentSlug := resolved.DeviceSlug != "" && resolved.DeviceSlug != fallback.DeviceSlug
 	if resolved.DeviceSlug == "" {
 		resolved.DeviceSlug = fallback.DeviceSlug
 	}
@@ -804,7 +813,29 @@ func mergeIdentity(fallback, resolved DeviceIdentity) DeviceIdentity {
 	if resolved.SuggestedArea == "" {
 		resolved.SuggestedArea = fallback.SuggestedArea
 	}
+	if linkedToDifferentSlug {
+		resolved.LegacyDeviceSlugs = mergeStringLists(resolved.LegacyDeviceSlugs, []string{fallback.DeviceSlug})
+	}
 	return resolved
+}
+
+func mergeStringLists(current, extra []string) []string {
+	out := make([]string, 0, len(current)+len(extra))
+	seen := make(map[string]struct{}, len(current)+len(extra))
+	for _, values := range [][]string{current, extra} {
+		for _, value := range values {
+			value = Slug(value)
+			if value == "" || value == "unknown" {
+				continue
+			}
+			if _, ok := seen[value]; ok {
+				continue
+			}
+			seen[value] = struct{}{}
+			out = append(out, value)
+		}
+	}
+	return out
 }
 
 func (s *Store) localDiscoveryDeviceSlug(discovery Discovery, baseSlug string) string {

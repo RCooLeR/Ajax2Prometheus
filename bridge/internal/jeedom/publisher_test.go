@@ -97,6 +97,39 @@ func TestSwitchDiscoveryUsesBridgeCommandTopic(t *testing.T) {
 	}
 }
 
+func TestPublishDeviceClearsLegacyUnlinkedSwitchAndState(t *testing.T) {
+	mqtt := &recordingMQTT{}
+	publisher := NewPublisher(PublisherConfig{
+		StateTopicPrefix: "ajaxbridge/jeedom",
+		Discovery:        true,
+		DiscoveryPrefix:  "homeassistant",
+		DiscoveryNode:    "ajaxbridge",
+		RetainState:      true,
+		RetainDiscovery:  true,
+		Controls:         true,
+	}, mqtt)
+
+	device := Device{
+		Source:            Source,
+		Device:            "Server power",
+		DeviceSlug:        "sia_a0f80d_zone_8",
+		LegacyDeviceSlugs: []string{"serverna"},
+		Values:            map[string]any{},
+		RawCommands:       map[string]Command{},
+		Actions:           map[string]Action{},
+	}
+	if err := publisher.PublishDevice(context.Background(), device); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := mqtt.discovery["homeassistant/switch/ajaxbridge/jeedom_control_serverna/config"]; got != "" {
+		t.Fatalf("legacy switch cleanup payload = %q, want empty", got)
+	}
+	if got := mqtt.state["ajaxbridge/jeedom/devices/serverna/state"]; got != "" {
+		t.Fatalf("legacy state cleanup payload = %q, want empty", got)
+	}
+}
+
 type fakeMQTT struct{}
 
 func (fakeMQTT) PublishStateMessage(context.Context, string, []byte, bool) error {
@@ -108,5 +141,30 @@ func (fakeMQTT) PublishDiscoveryMessage(context.Context, string, string, []byte,
 }
 
 func (fakeMQTT) AvailabilityTopic() string {
+	return "ajaxbridge/status"
+}
+
+type recordingMQTT struct {
+	state     map[string]string
+	discovery map[string]string
+}
+
+func (m *recordingMQTT) PublishStateMessage(_ context.Context, topic string, payload []byte, _ bool) error {
+	if m.state == nil {
+		m.state = make(map[string]string)
+	}
+	m.state[topic] = string(payload)
+	return nil
+}
+
+func (m *recordingMQTT) PublishDiscoveryMessage(_ context.Context, _ string, topic string, payload []byte, _ bool) error {
+	if m.discovery == nil {
+		m.discovery = make(map[string]string)
+	}
+	m.discovery[topic] = string(payload)
+	return nil
+}
+
+func (m *recordingMQTT) AvailabilityTopic() string {
 	return "ajaxbridge/status"
 }
