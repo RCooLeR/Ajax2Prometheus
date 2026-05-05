@@ -2,7 +2,7 @@
 
 AjaxBridge integrates with Home Assistant through MQTT Discovery. Home Assistant creates devices and entities from retained discovery topics, while AjaxBridge publishes retained JSON state topics for each account, SIA zone, and optional Jeedom device.
 
-Official references:
+External references:
 
 - Home Assistant installation: https://www.home-assistant.io/installation/
 - Home Assistant MQTT integration and discovery: https://www.home-assistant.io/integrations/mqtt
@@ -535,6 +535,8 @@ Every HTTP or MQTT control attempt is visible at:
 ```text
 GET /jeedom/control-audit?limit=100
 ```
+
+The same Jeedom state and control data can drive AjaxBridge notifications. A `state` metric change can notify when a WallSwitch or Outlet turns on/off, and `control_on` or `control_off` can notify when Home Assistant sends a switch command through AjaxBridge.
 
 ## Dashboard And Card Guide
 

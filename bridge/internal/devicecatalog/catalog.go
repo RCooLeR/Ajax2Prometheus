@@ -107,6 +107,30 @@ func (c *Catalog) Devices() []Device {
 	return out
 }
 
+func (c *Catalog) Replace(ctx context.Context, devices []Device) ([]Device, error) {
+	if c == nil {
+		return nil, nil
+	}
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.devices = make([]Device, len(devices))
+	copy(c.devices, devices)
+	c.rebuildIndexes()
+	if c.path != "" {
+		if err := c.saveLocked(); err != nil {
+			return nil, err
+		}
+	}
+	out := make([]Device, len(c.devices))
+	copy(out, c.devices)
+	return out, nil
+}
+
 func (c *Catalog) Lookup(account, zone, device string) (Device, bool) {
 	if c == nil {
 		return Device{}, false

@@ -119,7 +119,7 @@ interface RoomMetrics {
 }
 
 const DAHUA_HINT = /(dahua|rroller)/i;
-const AJAX_HINT = /(ajax systems|ajaxbridge|ajax)/i;
+const AJAX_HINT = /(ajaxbridge|ajax)/i;
 const LEGACY_AJAX2PROM_HINT = /ajax2prometheus/i;
 const GO2RTC_HINT = /go2rtc/i;
 const VTO_DEBUG_HINT = /(vto|doorbell|bell|дзвінок|вызывная|calling panel)/i;
@@ -2523,7 +2523,7 @@ function debugDahuaCandidate(
   }
   loggedDahuaDebug.add(debugKey);
 
-  console.log('[ajax-lovelace][dahua-debug]', {
+  console.log('[ajaxbridge][dahua-debug]', {
     name,
     model,
     chosenEntity: activeEntry.entity_id,

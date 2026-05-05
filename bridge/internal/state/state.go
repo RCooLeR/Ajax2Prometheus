@@ -172,6 +172,13 @@ func (e *Engine) RefreshOnline(now time.Time) Snapshot {
 	return e.snapshotLocked()
 }
 
+func (e *Engine) ReloadCatalog() Snapshot {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.seedCatalogDevices()
+	return e.snapshotLocked()
+}
+
 func (e *Engine) Snapshot() Snapshot {
 	e.mu.RLock()
 	defer e.mu.RUnlock()

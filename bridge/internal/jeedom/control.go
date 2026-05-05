@@ -19,6 +19,10 @@ type CommandPublisher interface {
 	PublishCommandMessage(ctx context.Context, topic string, payload []byte) error
 }
 
+type ControlObserver interface {
+	ObserveJeedomControl(ctx context.Context, result ControlResult, err error)
+}
+
 type ControllerConfig struct {
 	Enabled              bool
 	StateTopicPrefix     string
@@ -31,11 +35,15 @@ type Controller struct {
 	store *Store
 	mqtt  CommandPublisher
 	log   zerolog.Logger
+	obs   ControlObserver
 }
 
 type ControlResult struct {
 	DeviceSlug string `json:"device_slug"`
 	Device     string `json:"device"`
+	DeviceType string `json:"device_type,omitempty"`
+	Account    string `json:"account,omitempty"`
+	Zone       string `json:"zone,omitempty"`
 	Action     string `json:"action"`
 	CommandID  string `json:"command_id"`
 	Topic      string `json:"topic"`
@@ -50,6 +58,12 @@ func NewController(cfg ControllerConfig, store *Store, mqtt CommandPublisher, lo
 
 func (c *Controller) Enabled() bool {
 	return c != nil && c.cfg.Enabled
+}
+
+func (c *Controller) SetObserver(observer ControlObserver) {
+	if c != nil {
+		c.obs = observer
+	}
 }
 
 func (c *Controller) CommandTopicPattern() string {
@@ -83,23 +97,32 @@ func (c *Controller) Execute(ctx context.Context, deviceSlug, actionName, source
 		CommandID:  action.CommandID,
 		Topic:      c.cfg.JeedomSetTopicPrefix + "/" + Slug(action.CommandID),
 	}
+	if device, ok := c.store.Device(action.DeviceSlug); ok {
+		result.DeviceType = firstNonEmpty(device.JeedomDeviceType, device.HAModel)
+		result.Account = device.LinkedAccount
+		result.Zone = device.LinkedZone
+	}
 	if !action.Allowed {
 		err := fmt.Errorf("%w: %s", ErrActionDenied, action.DenyReason)
 		c.store.RecordControl(action, source, result.Topic, err)
+		c.observe(ctx, result, err)
 		return result, err
 	}
 	if c.mqtt == nil {
 		err := errors.New("MQTT command publisher is not configured")
 		c.store.RecordControl(action, source, result.Topic, err)
+		c.observe(ctx, result, err)
 		return result, err
 	}
 
 	err := c.mqtt.PublishCommandMessage(ctx, result.Topic, []byte(c.cfg.CommandPayload))
 	c.store.RecordControl(action, source, result.Topic, err)
 	if err != nil {
+		c.observe(ctx, result, err)
 		return result, err
 	}
 	result.Published = true
+	c.observe(ctx, result, nil)
 	c.log.Info().
 		Str("device", result.DeviceSlug).
 		Str("action", result.Action).
@@ -108,6 +131,12 @@ func (c *Controller) Execute(ctx context.Context, deviceSlug, actionName, source
 		Str("source", source).
 		Msg("Jeedom control command published")
 	return result, nil
+}
+
+func (c *Controller) observe(ctx context.Context, result ControlResult, err error) {
+	if c != nil && c.obs != nil {
+		c.obs.ObserveJeedomControl(ctx, result, err)
+	}
 }
 
 func (c *Controller) HandleMQTTCommand(ctx context.Context, topic string, payload []byte) (ControlResult, error) {

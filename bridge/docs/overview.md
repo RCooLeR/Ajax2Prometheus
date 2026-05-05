@@ -66,6 +66,7 @@ go build ./cmd/ajaxbridge
 | `AJAXBRIDGE_MQTT_DISCOVERY` | `true` | Publish Home Assistant discovery when MQTT is enabled. |
 | `AJAXBRIDGE_JEEDOM_ENABLED` | `false` | Enable Jeedom MQTT input. |
 | `AJAXBRIDGE_FORWARD_ADDR` | empty | Optional comma-separated raw SIA forward targets. |
+| `AJAXBRIDGE_NOTIFICATIONS_PATH` | `data/notifications.json` | Notification channel/rule config path. |
 
 Legacy `AJAX2PROM_*` variables are still accepted as compatibility aliases.
 
@@ -79,6 +80,10 @@ Legacy `AJAX2PROM_*` variables are still accepted as compatibility aliases.
 | `GET /events?limit=100` | Latest in-memory SIA events. |
 | `GET /devices` | Device catalog. |
 | `GET /metrics` | Prometheus metrics. |
+| `GET /admin` | Bootstrap admin panel. |
+| `GET /api/admin/bootstrap` | Admin data for catalog, Jeedom, notifications, and current state. |
+| `PUT /api/admin/devices` | Replace and persist the device catalog. |
+| `PUT /api/admin/notifications` | Replace and persist notification rules/channels. |
 | `GET /jeedom/devices` | Jeedom mirror devices, when Jeedom is enabled. |
 | `GET /jeedom/devices/{slug}` | One Jeedom mirror device. |
 | `GET /jeedom/commands` | Jeedom command metadata. |
@@ -91,6 +96,7 @@ Legacy `AJAX2PROM_*` variables are still accepted as compatibility aliases.
 | Path | Purpose |
 | --- | --- |
 | `data/devices.json` | Optional catalog with stable names, rooms, kinds, SIA zones, Jeedom aliases, and Jeedom command ids. |
+| `data/notifications.json` | Notification channels and rules. |
 | `tmp-jeedom/*.json` | Raw Jeedom MQTT sample envelopes when sample capture is enabled. |
 
 ## Recommended Setup Order
@@ -101,8 +107,9 @@ Legacy `AJAX2PROM_*` variables are still accepted as compatibility aliases.
 4. Enable Jeedom only after SIA devices are stable.
 5. Add `jeedom_names`, `jeedom_command_ids`, and `AJAXBRIDGE_JEEDOM_ACCOUNT_NAMES` to prevent duplicate HA devices.
 6. Enable Jeedom controls only after `/jeedom/actions` shows the expected allowlisted actions.
+7. Open `/admin` to edit catalog links and configure notifications.
 
-## Official References
+## External References
 
 - Ajax direct SIA DC-09 setup: https://support.ajax.systems/en/how-to-use-sia-for-cms-connection/
 - Jeedom installation: https://doc.jeedom.com/en_US/installation/index.html

@@ -1,0 +1,64 @@
+{
+  "enabled": true,
+  "channels": [
+    {
+      "id": "log",
+      "type": "log"
+    },
+    {
+      "id": "phone",
+      "type": "ntfy",
+      "url": "https://ntfy.sh/replace-with-private-topic",
+      "headers": {
+        "Priority": "high"
+      }
+    }
+  ],
+  "rules": [
+    {
+      "id": "server_power_high",
+      "name": "Server power high",
+      "enabled": true,
+      "device_slug": "sia_a0f80d_zone_8",
+      "metric": "power_w",
+      "condition": "above",
+      "threshold": 2000,
+      "arm_modes": ["any"],
+      "channels": ["phone"],
+      "cooldown": "30m"
+    },
+    {
+      "id": "server_voltage_low",
+      "name": "Server voltage low",
+      "enabled": true,
+      "device_slug": "sia_a0f80d_zone_8",
+      "metric": "voltage_v",
+      "condition": "below",
+      "threshold": 200,
+      "arm_modes": ["any"],
+      "channels": ["phone"],
+      "cooldown": "30m"
+    },
+    {
+      "id": "server_switch_on",
+      "name": "Server switch turned on",
+      "enabled": true,
+      "device_slug": "sia_a0f80d_zone_8",
+      "metric": "state",
+      "condition": "changed_to_on",
+      "arm_modes": ["disarmed", "armed", "night"],
+      "channels": ["phone"],
+      "cooldown": "0s"
+    },
+    {
+      "id": "server_control",
+      "name": "Server switch control requested",
+      "enabled": true,
+      "device_slug": "sia_a0f80d_zone_8",
+      "condition": "control",
+      "arm_modes": ["any"],
+      "channels": ["phone"],
+      "cooldown": "0s"
+    }
+  ]
+}

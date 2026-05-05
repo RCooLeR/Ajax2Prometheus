@@ -2,7 +2,7 @@
 
 SIA DC-09 is the primary AjaxBridge input. Ajax sends monitoring-station events directly to AjaxBridge over TCP. AjaxBridge parses those events into account and zone state and treats that state as authoritative.
 
-Official Ajax reference: https://support.ajax.systems/en/how-to-use-sia-for-cms-connection/
+Ajax Systems SIA setup reference: https://support.ajax.systems/en/how-to-use-sia-for-cms-connection/
 
 ## Details And How It Works
 

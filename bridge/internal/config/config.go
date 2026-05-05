@@ -49,6 +49,8 @@ type Config struct {
 	JeedomControlsEnabled  bool
 	JeedomSetTopicPrefix   string
 
+	NotificationsPath string
+
 	LogLevel  string
 	LogPretty bool
 }
@@ -95,6 +97,7 @@ func FromEnv() Config {
 		JeedomAccountNames:     envCSV("AJAXBRIDGE_JEEDOM_ACCOUNT_NAMES"),
 		JeedomControlsEnabled:  envBool(false, "AJAXBRIDGE_JEEDOM_CONTROLS_ENABLED"),
 		JeedomSetTopicPrefix:   envString("jeedom/cmd/set", "AJAXBRIDGE_JEEDOM_SET_TOPIC_PREFIX"),
+		NotificationsPath:      envString("data/notifications.json", "AJAXBRIDGE_NOTIFICATIONS_PATH"),
 		LogLevel:               envString("info", "AJAXBRIDGE_LOG_LEVEL", "AJAX2PROM_LOG_LEVEL"),
 		LogPretty:              envBool(false, "AJAXBRIDGE_LOG_PRETTY", "AJAX2PROM_LOG_PRETTY"),
 	}

@@ -1,6 +1,6 @@
 @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Sora:wght@500;600;700&display=swap');
 
-.ajax-lovelace-theme {
+.ajaxbridge-theme {
   color: #f4f8ff;
   font-family: 'Space Grotesk', 'Segoe UI Variable Display', 'Trebuchet MS', sans-serif;
   font-synthesis: none;
@@ -36,31 +36,31 @@
   --tone-slate-rgb: 140, 161, 197;
 }
 
-.ajax-lovelace-theme,
-.ajax-lovelace-theme *,
-.ajax-lovelace-theme *::before,
-.ajax-lovelace-theme *::after {
+.ajaxbridge-theme,
+.ajaxbridge-theme *,
+.ajaxbridge-theme *::before,
+.ajaxbridge-theme *::after {
   box-sizing: border-box;
 }
 
-.ajax-lovelace-theme {
+.ajaxbridge-theme {
   color: var(--text-main);
 }
 
-.ajax-lovelace-theme button,
-.ajax-lovelace-theme input,
-.ajax-lovelace-theme textarea,
-.ajax-lovelace-theme select {
+.ajaxbridge-theme button,
+.ajaxbridge-theme input,
+.ajaxbridge-theme textarea,
+.ajaxbridge-theme select {
   font: inherit;
   color: inherit;
 }
 
-.ajax-lovelace-theme img {
+.ajaxbridge-theme img {
   display: block;
   max-width: 100%;
 }
 
-.ajax-lovelace-theme a {
+.ajaxbridge-theme a {
   color: inherit;
 }
 

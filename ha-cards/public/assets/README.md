@@ -1,13 +1,13 @@
-# Ajax Neon Icon System
+# AjaxBridge Icon System
 
-Material/Phosphor-inspired semantic icons restyled for the dark neon Ajax Lovelace dashboard.
+Material/Phosphor-inspired semantic icons restyled for the AjaxBridge Lovelace dashboard.
 
 ## Folders
 
-- `assets/icons/<category>/*.svg` — individual editable SVGs
-- `assets/icons-png/<category>/*.png` — 512px PNG exports
-- `assets/sprites/ajax-icons.svg` — SVG symbol sprite
-- `icon-manifest.json` — category/name/path mapping
+- `assets/icons/<category>/*.svg` - individual editable SVGs
+- `assets/icons-png/<category>/*.png` - 512px PNG exports
+- `assets/sprites/ajaxbridge-icons.svg` - SVG symbol sprite
+- `icon-manifest.json` - category/name/path mapping
 
 ## Categories
 
@@ -22,5 +22,5 @@ rooms, devices, system-states, security-states, sensors, events, automation, nav
 ## Sprite usage
 
 ```html
-<svg class="icon"><use href="/assets/sprites/ajax-icons.svg#devices-motion-sensor" /></svg>
+<svg class="icon"><use href="/assets/sprites/ajaxbridge-icons.svg#devices-motion-sensor" /></svg>
 ```

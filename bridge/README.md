@@ -13,6 +13,10 @@ The bridge is built around two inputs:
 
 No database is required. Runtime state is kept in memory, and the optional device catalog lives in `data/devices.json`.
 
+## Disclaimer
+
+AjaxBridge is an unofficial DIY open-source project for compatibility and integration. It is not affiliated with, endorsed by, or sponsored by Ajax Systems.
+
 ## Documentation
 
 - [Documentation index](./docs/index.md)
@@ -20,5 +24,12 @@ No database is required. Runtime state is kept in memory, and the optional devic
 - [SIA integration](./docs/sia.md)
 - [Jeedom integration](./docs/jeedom.md)
 - [Prometheus metrics](./docs/prometheus.md)
+- [Notifications](./docs/notifications.md)
+- [Admin panel](./docs/admin.md)
 - [Home Assistant integration and technical guide](./docs/home-assistant.md)
 - [Home Assistant card package](../ha-cards/README.md)
+- [Disclaimer and trademark notice](../NOTICE)
+
+## License
+
+MIT License. See [../LICENSE](../LICENSE). See [../NOTICE](../NOTICE) for trademark and affiliation notice.

@@ -4,8 +4,8 @@ import { DetailedDashboardView } from '../views/DetailedDashboardView';
 import { ChipsOverviewView } from '../views/ChipsOverviewView';
 import { setAssetBaseUrl } from '../utils/assets';
 import type {
-  AjaxLovelaceChipsCardConfig,
-  AjaxLovelaceDetailedCardConfig,
+  AjaxBridgeChipsCardConfig,
+  AjaxBridgeDetailedCardConfig,
   HomeAssistant,
 } from './types';
 import themeCss from '../styles/theme.css?raw';
@@ -32,7 +32,7 @@ abstract class ReactHomeAssistantElement<TConfig> extends HTMLElement {
       shadowRoot.appendChild(style);
 
       const mountNode = document.createElement('div');
-      mountNode.className = 'ajax-lovelace-shadow-root';
+      mountNode.className = 'ajaxbridge-shadow-root';
       shadowRoot.appendChild(mountNode);
 
       this.mountNode = mountNode;
@@ -64,8 +64,8 @@ abstract class ReactHomeAssistantElement<TConfig> extends HTMLElement {
   protected abstract renderNode(): ReactNode;
 }
 
-class AjaxLovelaceDetailedCard extends ReactHomeAssistantElement<AjaxLovelaceDetailedCardConfig> {
-  setConfig(config: AjaxLovelaceDetailedCardConfig) {
+class AjaxBridgeDetailedCard extends ReactHomeAssistantElement<AjaxBridgeDetailedCardConfig> {
+  setConfig(config: AjaxBridgeDetailedCardConfig) {
     this.configValue = config;
     this.style.height = '100%';
     this.renderReact();
@@ -84,10 +84,10 @@ class AjaxLovelaceDetailedCard extends ReactHomeAssistantElement<AjaxLovelaceDet
   }
 
   protected renderNode() {
-    const config = this.configValue ?? { type: 'custom:ajax-lovelace-detailed-card' };
+    const config = this.configValue ?? { type: 'custom:ajaxbridge-detailed-card' };
 
     return (
-      <div className="ajax-ha-card ajax-ha-card--detailed">
+      <div className="ajaxbridge-ha-card ajaxbridge-ha-card--detailed">
         <DetailedDashboardView
           mode="embedded"
           initialRoomId={config.default_room}
@@ -99,15 +99,15 @@ class AjaxLovelaceDetailedCard extends ReactHomeAssistantElement<AjaxLovelaceDet
     );
   }
 
-  static getStubConfig(): Omit<AjaxLovelaceDetailedCardConfig, 'type'> {
+  static getStubConfig(): Omit<AjaxBridgeDetailedCardConfig, 'type'> {
     return {
       default_room: 'living-room',
     };
   }
 }
 
-class AjaxLovelaceChipsCard extends ReactHomeAssistantElement<AjaxLovelaceChipsCardConfig> {
-  setConfig(config: AjaxLovelaceChipsCardConfig) {
+class AjaxBridgeChipsCard extends ReactHomeAssistantElement<AjaxBridgeChipsCardConfig> {
+  setConfig(config: AjaxBridgeChipsCardConfig) {
     if (config.max_chips !== undefined && config.max_chips < 1) {
       throw new Error('max_chips must be greater than 0');
     }
@@ -130,42 +130,42 @@ class AjaxLovelaceChipsCard extends ReactHomeAssistantElement<AjaxLovelaceChipsC
   }
 
   protected renderNode() {
-    const config = this.configValue ?? { type: 'custom:ajax-lovelace-chips-card' };
+    const config = this.configValue ?? { type: 'custom:ajaxbridge-chips-card' };
 
     return (
-      <div className="ajax-ha-card ajax-ha-card--chips">
+      <div className="ajaxbridge-ha-card ajaxbridge-ha-card--chips">
         <ChipsOverviewView maxChips={config.max_chips} hass={this.hassValue} account={config.account} />
       </div>
     );
   }
 
-  static getStubConfig(): Omit<AjaxLovelaceChipsCardConfig, 'type'> {
+  static getStubConfig(): Omit<AjaxBridgeChipsCardConfig, 'type'> {
     return {
       max_chips: 7,
     };
   }
 }
 
-if (!customElements.get('ajax-lovelace-detailed-card')) {
-  customElements.define('ajax-lovelace-detailed-card', AjaxLovelaceDetailedCard);
+if (!customElements.get('ajaxbridge-detailed-card')) {
+  customElements.define('ajaxbridge-detailed-card', AjaxBridgeDetailedCard);
 }
 
-if (!customElements.get('ajax-lovelace-chips-card')) {
-  customElements.define('ajax-lovelace-chips-card', AjaxLovelaceChipsCard);
+if (!customElements.get('ajaxbridge-chips-card')) {
+  customElements.define('ajaxbridge-chips-card', AjaxBridgeChipsCard);
 }
 
 window.customCards = window.customCards || [];
 window.customCards.push(
   {
-    type: 'ajax-lovelace-detailed-card',
-    name: 'Ajax Lovelace Detailed',
-    description: 'Fullscreen Ajax security dashboard card for panel views.',
+    type: 'ajaxbridge-detailed-card',
+    name: 'AjaxBridge Detailed',
+    description: 'Fullscreen AjaxBridge security dashboard card for panel views.',
     preview: false,
   },
   {
-    type: 'ajax-lovelace-chips-card',
-    name: 'Ajax Lovelace Chips',
-    description: 'Compact Ajax overview card with global state chips.',
+    type: 'ajaxbridge-chips-card',
+    name: 'AjaxBridge Chips',
+    description: 'Compact AjaxBridge overview card with global state chips.',
     preview: false,
   },
 );

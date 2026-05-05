@@ -2,7 +2,7 @@
 
 Jeedom support is optional. It adds a second input source through Jeedom MQTT Manager so AjaxBridge can capture richer Ajax device data and safe device controls that are not available through SIA.
 
-Official references:
+External references:
 
 - Jeedom installation: https://doc.jeedom.com/en_US/installation/index.html
 - Jeedom command-line install: https://doc.jeedom.com/en_US/installation/cli
@@ -356,6 +356,8 @@ jeedom/cmd/set/<command_id>
 
 The Jeedom command payload is empty by default.
 
+AjaxBridge also subscribes to this same `jeedom/cmd/set/#` prefix. That gives best-effort visibility into commands issued by other MQTT clients when the command id is known from eqLogic discovery. Commands issued directly inside Jeedom may not be visible as command topics, so state-change detection still depends on Jeedom publishing the related `state` info command.
+
 HTTP control:
 
 ```bash
@@ -369,6 +371,21 @@ Every attempt is stored in:
 ```text
 GET /jeedom/control-audit?limit=100
 ```
+
+## State And Trigger Notifications
+
+AjaxBridge can notify about Jeedom metrics and controls through [Notifications](./notifications.md).
+
+For WallSwitch/Outlet on/off:
+
+- AjaxBridge can always notify when the command is issued through AjaxBridge or Home Assistant using `control`, `control_on`, or `control_off` rules.
+- AjaxBridge can notify about real physical/external on/off changes only when Jeedom publishes a binary `state` info command for that equipment.
+- Use `state` plus `changed_to_on` or `changed_to_off` rules for those state changes.
+
+For relay trigger notifications:
+
+- Use `control` rules for bridge-issued relay commands.
+- Use `state` change rules for physical or Jeedom-originated relay changes, if Jeedom publishes the state.
 
 ## Debug Endpoints
 

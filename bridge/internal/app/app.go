@@ -20,6 +20,7 @@ import (
 	"github.com/RCooLeR/AjaxBridge/internal/httpapi"
 	"github.com/RCooLeR/AjaxBridge/internal/jeedom"
 	"github.com/RCooLeR/AjaxBridge/internal/metrics"
+	"github.com/RCooLeR/AjaxBridge/internal/notifications"
 	"github.com/RCooLeR/AjaxBridge/internal/sia"
 	"github.com/RCooLeR/AjaxBridge/internal/state"
 	"github.com/RCooLeR/AjaxBridge/internal/store"
@@ -39,6 +40,7 @@ type App struct {
 	forwarder *forward.Group
 	mqtt      *hamqtt.Publisher
 	mqttQueue chan hamqtt.Update
+	notifier  *notifications.Manager
 }
 
 func Run(parent context.Context, cfg config.Config, log zerolog.Logger) error {
@@ -73,6 +75,14 @@ func Run(parent context.Context, cfg config.Config, log zerolog.Logger) error {
 	metricSet := metrics.New(registry)
 	stateEngine := state.NewEngine(cfg.OfflineGrace, devices)
 	metricSet.SetSnapshot(stateEngine.Snapshot())
+	notificationStore, err := notifications.Load(ctx, cfg.NotificationsPath)
+	if err != nil {
+		return err
+	}
+	notifier := notifications.NewManager(notificationStore, log.With().Str("component", "notifications").Logger())
+	if cfg.NotificationsPath != "" {
+		log.Info().Str("path", cfg.NotificationsPath).Msg("notification config loaded")
+	}
 	var mqttPublisher *hamqtt.Publisher
 	var mqttQueue chan hamqtt.Update
 	if cfg.MQTTEnabled() {
@@ -133,9 +143,25 @@ func Run(parent context.Context, cfg config.Config, log zerolog.Logger) error {
 		forwarder: siaForwarder,
 		mqtt:      mqttPublisher,
 		mqttQueue: mqttQueue,
+		notifier:  notifier,
+	}
+	notificationObserver := notificationObserver{app: application}
+	if jeedomController != nil {
+		jeedomController.SetObserver(notificationObserver)
 	}
 
-	httpServer := httpapi.New(cfg.HTTPAddr, stateEngine, eventStore, devices, jeedomStore, jeedomController, registry, log.With().Str("component", "http").Logger())
+	httpServer := httpapi.New(
+		cfg.HTTPAddr,
+		stateEngine,
+		eventStore,
+		devices,
+		jeedomStore,
+		jeedomController,
+		notifier,
+		registry,
+		log.With().Str("component", "http").Logger(),
+		application.handleCatalogChanged,
+	)
 	siaServer := sia.NewServer(cfg.SIAListenAddr, cfg.ReadTimeout, application.handleSIAFrame, log.With().Str("component", "sia").Logger())
 
 	if cfg.JeedomEnabled && mqttPublisher != nil {
@@ -149,7 +175,7 @@ func Run(parent context.Context, cfg config.Config, log zerolog.Logger) error {
 			Controls:         cfg.JeedomControlsEnabled,
 		}, mqttPublisher)
 		jeedomService := jeedom.NewService(
-			jeedom.ServiceConfig{EventTopic: cfg.JeedomEventTopic, DiscoveryTopic: cfg.JeedomDiscoveryTopic},
+			jeedom.ServiceConfig{EventTopic: cfg.JeedomEventTopic, DiscoveryTopic: cfg.JeedomDiscoveryTopic, SetTopicPrefix: cfg.JeedomSetTopicPrefix},
 			jeedomStore,
 			mqttPublisher,
 			jeedomPublisher,
@@ -158,6 +184,7 @@ func Run(parent context.Context, cfg config.Config, log zerolog.Logger) error {
 			log.With().Str("component", "jeedom").Logger(),
 		)
 		jeedomService.SetController(jeedomController)
+		jeedomService.SetObserver(notificationObserver)
 		if err := jeedomService.Start(ctx); err != nil {
 			log.Warn().Err(err).Str("topic", cfg.JeedomEventTopic).Msg("Jeedom MQTT input not started")
 		} else {
@@ -206,6 +233,29 @@ func Run(parent context.Context, cfg config.Config, log zerolog.Logger) error {
 		}
 	}
 	return nil
+}
+
+type notificationObserver struct {
+	app *App
+}
+
+func (o notificationObserver) ObserveJeedomUpdate(ctx context.Context, result jeedom.ApplyResult) {
+	if o.app == nil || o.app.notifier == nil {
+		return
+	}
+	o.app.notifier.ObserveJeedomUpdate(ctx, result, o.app.state.Snapshot())
+}
+
+func (o notificationObserver) ObserveJeedomControl(ctx context.Context, result jeedom.ControlResult, err error) {
+	if o.app == nil || o.app.notifier == nil {
+		return
+	}
+	o.app.notifier.ObserveJeedomControl(ctx, result, err, o.app.state.Snapshot())
+}
+
+func (a *App) handleCatalogChanged(snapshot state.Snapshot) {
+	a.metrics.SetSnapshot(snapshot)
+	a.enqueueMQTTUpdate(hamqtt.Update{Accounts: snapshot.Accounts, Zones: snapshot.Zones})
 }
 
 func (a *App) handleSIAFrame(ctx context.Context, raw []byte, remoteAddr string) ([]byte, error) {

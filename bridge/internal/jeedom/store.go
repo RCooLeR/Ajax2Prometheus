@@ -598,6 +598,27 @@ func (s *Store) Action(deviceSlug, actionName string) (Action, bool) {
 	return action, ok
 }
 
+func (s *Store) ActionByCommandID(commandID string) (Action, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	commandID = strings.TrimSpace(commandID)
+	if commandID == "" {
+		return Action{}, false
+	}
+	for _, device := range s.devices {
+		if device == nil {
+			continue
+		}
+		for _, action := range device.Actions {
+			if action.CommandID == commandID {
+				return action, true
+			}
+		}
+	}
+	return Action{}, false
+}
+
 func (s *Store) RecordControl(action Action, source, topic string, err error) {
 	if s == nil {
 		return
@@ -634,6 +655,33 @@ func (s *Store) RecordControl(action Action, source, topic string, err error) {
 	if len(s.audits) > 200 {
 		s.audits = append([]ControlAudit(nil), s.audits[len(s.audits)-200:]...)
 	}
+}
+
+func (s *Store) HasRecentBridgeControl(commandID string, window time.Duration) bool {
+	if s == nil {
+		return false
+	}
+	commandID = strings.TrimSpace(commandID)
+	if commandID == "" || window <= 0 {
+		return false
+	}
+	cutoff := time.Now().UTC().Add(-window)
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for i := len(s.audits) - 1; i >= 0; i-- {
+		audit := s.audits[i]
+		if audit.Time.Before(cutoff) {
+			return false
+		}
+		if audit.CommandID != commandID {
+			continue
+		}
+		if strings.HasPrefix(audit.Source, "http:") || strings.HasPrefix(audit.Source, "mqtt:") {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *Store) ControlAudit(limit int) []ControlAudit {

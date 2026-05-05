@@ -1,7 +1,7 @@
-title: Ajax
-path: ajax
+title: AjaxBridge
+path: ajaxbridge
 panel: true
 cards:
-  - type: custom:ajax-lovelace-detailed-card
+  - type: custom:ajaxbridge-detailed-card
     default_room: living-room
     dahua_base: https://ha.example.test/dahua-bridge

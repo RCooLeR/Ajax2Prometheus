@@ -8,7 +8,7 @@ interface DashboardShellProps {
 
 export function DashboardShell({ topBar, detail, mode = 'standalone' }: DashboardShellProps) {
   return (
-    <div className={`ajax-lovelace-theme app-shell ${mode === 'embedded' ? 'app-shell--embedded' : ''}`}>
+    <div className={`ajaxbridge-theme app-shell ${mode === 'embedded' ? 'app-shell--embedded' : ''}`}>
       <div className="app-shell__halo app-shell__halo--cyan" />
       <div className="app-shell__halo app-shell__halo--red" />
       <div className={`dashboard-frame ${mode === 'embedded' ? 'dashboard-frame--embedded' : ''}`}>

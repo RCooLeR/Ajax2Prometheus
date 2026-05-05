@@ -30,6 +30,7 @@ USER ajaxbridge
 WORKDIR /app
 
 COPY --from=builder /out/ajaxbridge /app/ajaxbridge
+COPY --chown=ajaxbridge:ajaxbridge logo.png /app/logo.png
 
 EXPOSE 8080 8099
 
@@ -37,6 +38,7 @@ ENV AJAXBRIDGE_HTTP_ADDR=:8080
 ENV AJAXBRIDGE_SIA_ADDR=:8099
 ENV AJAXBRIDGE_LOG_PRETTY=false
 ENV AJAXBRIDGE_DEVICES_PATH=/data/devices.json
+ENV AJAXBRIDGE_NOTIFICATIONS_PATH=/data/notifications.json
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 CMD ["/app/ajaxbridge", "healthcheck"]
 

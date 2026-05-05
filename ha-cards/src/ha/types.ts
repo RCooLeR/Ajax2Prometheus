@@ -23,14 +23,14 @@ export interface HomeAssistant {
   locale?: unknown;
 }
 
-export interface AjaxLovelaceDetailedCardConfig {
+export interface AjaxBridgeDetailedCardConfig {
   type: string;
   default_room?: string;
   account?: string;
   dahua_base?: string;
 }
 
-export interface AjaxLovelaceChipsCardConfig {
+export interface AjaxBridgeChipsCardConfig {
   type: string;
   max_chips?: number;
   account?: string;

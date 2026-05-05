@@ -10,7 +10,7 @@ interface TopSystemBarProps {
 
 export function TopSystemBar({ systemState, maxChips, compact = false }: TopSystemBarProps) {
   const chips = typeof maxChips === 'number' ? systemState.chips.slice(0, maxChips) : systemState.chips;
-  const logoSrc = getStaticAsset('ajax-systems-logo.svg');
+  const logoSrc = getStaticAsset('text-logo.png');
 
   return (
     <header
@@ -22,8 +22,8 @@ export function TopSystemBar({ systemState, maxChips, compact = false }: TopSyst
         .filter(Boolean)
         .join(' ')}
     >
-      <div className="brand-logo" aria-label="Ajax Systems">
-        <img className="brand-logo__image" src={logoSrc} alt="Ajax Systems" />
+      <div className="brand-logo" aria-label="AjaxBridge">
+        <img className="brand-logo__image" src={logoSrc} alt="AjaxBridge" />
       </div>
 
       <div className="top-system-bar__chips">

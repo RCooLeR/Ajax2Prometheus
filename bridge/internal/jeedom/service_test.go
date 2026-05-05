@@ -1,6 +1,7 @@
 package jeedom
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -89,6 +90,66 @@ func TestServiceNumericValueUpdatesMetrics(t *testing.T) {
 	}
 }
 
+func TestServiceObservesExternalJeedomSetCommand(t *testing.T) {
+	store := NewStore("keep_last")
+	discovery, err := ParseDiscoveryMessage("jeedom/discovery/eqLogic/10", []byte(relayDiscoveryPayload), time.Unix(100, 0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	store.ApplyDiscovery(discovery)
+	observer := &fakeObserver{}
+	service := NewService(
+		ServiceConfig{EventTopic: "jeedom/cmd/event/#", SetTopicPrefix: "jeedom/cmd/set"},
+		store,
+		nil,
+		nil,
+		nil,
+		nil,
+		zerolog.Nop(),
+	)
+	service.SetObserver(observer)
+
+	service.HandleMessage(t.Context(), "jeedom/cmd/set/85", nil)
+
+	if observer.controls != 1 {
+		t.Fatalf("controls = %d, want 1", observer.controls)
+	}
+	if observer.last.Action != "on" || observer.last.DeviceSlug != "garage_gate" {
+		t.Fatalf("last control = %#v", observer.last)
+	}
+}
+
+func TestServiceSkipsJeedomSetCommandRecentlyIssuedByBridge(t *testing.T) {
+	store := NewStore("keep_last")
+	discovery, err := ParseDiscoveryMessage("jeedom/discovery/eqLogic/10", []byte(relayDiscoveryPayload), time.Unix(100, 0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	store.ApplyDiscovery(discovery)
+	action, ok := store.ActionByCommandID("85")
+	if !ok {
+		t.Fatal("missing action")
+	}
+	store.RecordControl(action, "http:127.0.0.1", "jeedom/cmd/set/85", nil)
+	observer := &fakeObserver{}
+	service := NewService(
+		ServiceConfig{EventTopic: "jeedom/cmd/event/#", SetTopicPrefix: "jeedom/cmd/set"},
+		store,
+		nil,
+		nil,
+		nil,
+		nil,
+		zerolog.Nop(),
+	)
+	service.SetObserver(observer)
+
+	service.HandleMessage(t.Context(), "jeedom/cmd/set/85", nil)
+
+	if observer.controls != 0 {
+		t.Fatalf("controls = %d, want 0", observer.controls)
+	}
+}
+
 type fakeMetrics struct {
 	messages    int
 	parseErrors int
@@ -110,4 +171,19 @@ func (m *fakeMetrics) ObserveJeedomEmptyValue() {
 
 func (m *fakeMetrics) ObserveJeedomCommand(string, string, string, string, float64, time.Time) {
 	m.commands++
+}
+
+type fakeObserver struct {
+	updates  int
+	controls int
+	last     ControlResult
+}
+
+func (o *fakeObserver) ObserveJeedomUpdate(context.Context, ApplyResult) {
+	o.updates++
+}
+
+func (o *fakeObserver) ObserveJeedomControl(_ context.Context, result ControlResult, _ error) {
+	o.controls++
+	o.last = result
 }

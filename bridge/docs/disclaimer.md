@@ -1,0 +1,5 @@
+# Disclaimer
+
+AjaxBridge is an unofficial DIY open-source project for compatibility and integration. It is not affiliated with, endorsed by, or sponsored by Ajax Systems.
+
+Ajax, Ajax Systems, and related product names are trademarks or registered trademarks of their respective owners. They are referenced only to describe compatibility and integration.

@@ -19,6 +19,7 @@ services:
       AJAXBRIDGE_FORWARD_TIMEOUT: "5s"
       AJAXBRIDGE_FORWARD_REQUIRE_ACK: "false"
       AJAXBRIDGE_DEVICES_PATH: "/data/devices.json"
+      AJAXBRIDGE_NOTIFICATIONS_PATH: "/data/notifications.json"
 
       # Optional: AES key configured in Ajax SIA monitoring settings.
       # AJAXBRIDGE_ENCRYPTION_KEY: "REPLACE_WITH_32_HEX_AES_KEY"

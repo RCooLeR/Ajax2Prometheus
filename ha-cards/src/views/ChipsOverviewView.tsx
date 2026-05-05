@@ -16,7 +16,7 @@ export function ChipsOverviewView({ maxChips, hass, account }: ChipsOverviewView
   const compactSystemState = filterCompactSystemState(data.systemState);
 
   return (
-    <div className="ajax-lovelace-theme ajax-lovelace-compact-card">
+    <div className="ajaxbridge-theme ajaxbridge-compact-card">
       <TopSystemBar systemState={compactSystemState} maxChips={maxChips} compact />
     </div>
   );

@@ -2,6 +2,7 @@ package jeedom
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -18,9 +19,15 @@ type MetricsRecorder interface {
 	ObserveJeedomCommand(device, command, commandID, metric string, value float64, lastUpdate time.Time)
 }
 
+type UpdateObserver interface {
+	ObserveJeedomUpdate(ctx context.Context, result ApplyResult)
+	ObserveJeedomControl(ctx context.Context, result ControlResult, err error)
+}
+
 type ServiceConfig struct {
 	EventTopic     string
 	DiscoveryTopic string
+	SetTopicPrefix string
 }
 
 type Service struct {
@@ -32,11 +39,13 @@ type Service struct {
 	metrics    MetricsRecorder
 	samples    *SampleWriter
 	log        zerolog.Logger
+	observer   UpdateObserver
 }
 
 func NewService(cfg ServiceConfig, store *Store, subscriber Subscriber, publisher *Publisher, metrics MetricsRecorder, samples *SampleWriter, log zerolog.Logger) *Service {
 	cfg.EventTopic = firstNonEmpty(cfg.EventTopic, "jeedom/cmd/event/#")
 	cfg.DiscoveryTopic = firstNonEmpty(cfg.DiscoveryTopic, "jeedom/discovery/eqLogic/#")
+	cfg.SetTopicPrefix = trimTopic(firstNonEmpty(cfg.SetTopicPrefix, "jeedom/cmd/set"))
 	return &Service{
 		cfg:        cfg,
 		store:      store,
@@ -54,6 +63,12 @@ func (s *Service) SetController(controller *Controller) {
 	}
 }
 
+func (s *Service) SetObserver(observer UpdateObserver) {
+	if s != nil {
+		s.observer = observer
+	}
+}
+
 func (s *Service) Start(ctx context.Context) error {
 	if s == nil || s.subscriber == nil {
 		return nil
@@ -61,6 +76,9 @@ func (s *Service) Start(ctx context.Context) error {
 	var topics []string
 	topics = appendUniqueTopic(topics, s.cfg.EventTopic)
 	topics = appendUniqueTopic(topics, s.cfg.DiscoveryTopic)
+	if s.cfg.SetTopicPrefix != "" {
+		topics = appendUniqueTopic(topics, s.cfg.SetTopicPrefix+"/#")
+	}
 	if s.controller != nil && s.controller.Enabled() {
 		topics = appendUniqueTopic(topics, s.controller.CommandTopicPattern())
 	}
@@ -94,6 +112,10 @@ func (s *Service) HandleMessage(ctx context.Context, topic string, payload []byt
 		if _, err := s.controller.HandleMQTTCommand(ctx, topic, payload); err != nil {
 			s.log.Warn().Err(err).Str("topic", topic).Msg("execute Jeedom MQTT control command")
 		}
+		return
+	}
+	if s.isSetTopic(topic) {
+		s.handleSetTopic(ctx, topic)
 		return
 	}
 	if IsDiscoveryEqLogicTopic(topic) {
@@ -134,11 +156,61 @@ func (s *Service) HandleMessage(ctx context.Context, topic string, payload []byt
 	if result.HasNumeric && s.metrics != nil {
 		s.metrics.ObserveJeedomCommand(result.Device.DeviceSlug, result.Command.Name, result.Command.CommandID, result.Mapping.Metric, result.NumericValue, evt.ReceivedAt)
 	}
+	if s.observer != nil {
+		s.observer.ObserveJeedomUpdate(ctx, result)
+	}
 
 	if s.publisher != nil {
 		if err := s.publisher.PublishDevice(ctx, result.Device); err != nil {
 			s.log.Debug().Err(err).Str("device", result.Device.DeviceSlug).Msg("publish Jeedom MQTT state")
 		}
+	}
+}
+
+func (s *Service) isSetTopic(topic string) bool {
+	prefix := trimTopic(s.cfg.SetTopicPrefix)
+	topic = trimTopic(topic)
+	if prefix == "" || topic == "" {
+		return false
+	}
+	if topic == prefix {
+		return false
+	}
+	return strings.HasPrefix(topic, prefix+"/")
+}
+
+func (s *Service) handleSetTopic(ctx context.Context, topic string) {
+	commandID, err := CommandIDFromTopic(topic)
+	if err != nil {
+		s.log.Debug().Err(err).Str("topic", topic).Msg("ignore Jeedom set topic without command id")
+		return
+	}
+	action, ok := s.store.ActionByCommandID(commandID)
+	if !ok {
+		s.log.Debug().Str("topic", topic).Str("command_id", commandID).Msg("ignore Jeedom set topic for unknown action")
+		return
+	}
+	if s.store.HasRecentBridgeControl(commandID, 2*time.Second) {
+		s.log.Debug().Str("topic", topic).Str("command_id", commandID).Msg("ignore Jeedom set topic already observed through bridge control")
+		return
+	}
+	result := ControlResult{
+		DeviceSlug: action.DeviceSlug,
+		Device:     action.Device,
+		DeviceType: action.DeviceType,
+		Action:     action.Action,
+		CommandID:  action.CommandID,
+		Topic:      topic,
+		Published:  true,
+	}
+	if device, ok := s.store.Device(action.DeviceSlug); ok {
+		result.DeviceType = firstNonEmpty(result.DeviceType, device.JeedomDeviceType, device.HAModel)
+		result.Account = device.LinkedAccount
+		result.Zone = device.LinkedZone
+	}
+	s.store.RecordControl(action, "jeedom_mqtt_set:"+topic, topic, nil)
+	if s.observer != nil {
+		s.observer.ObserveJeedomControl(ctx, result, nil)
 	}
 }
 

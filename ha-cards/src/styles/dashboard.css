@@ -840,11 +840,11 @@
   line-height: 1.45;
 }
 
-.ajax-lovelace-compact-card {
+.ajaxbridge-compact-card {
   padding: 14px;
 }
 
-.ajax-ha-card {
+.ajaxbridge-ha-card {
   display: block;
   width: 100%;
   overflow: hidden;
@@ -854,7 +854,7 @@
   box-shadow: none;
 }
 
-.ajax-ha-card--detailed {
+.ajaxbridge-ha-card--detailed {
   min-height: calc(100dvh - 132px);
   display: flex;
   align-items: center;
@@ -862,7 +862,7 @@
   overflow: hidden;
 }
 
-.ajax-ha-card--chips {
+.ajaxbridge-ha-card--chips {
   min-height: 0;
 }
 
@@ -950,22 +950,22 @@
     border-radius: 0;
   }
 
-  .ajax-ha-card {
+  .ajaxbridge-ha-card {
     overflow: visible;
     border-radius: 0;
   }
 
-  .ajax-ha-card--detailed {
+  .ajaxbridge-ha-card--detailed {
     display: block;
     min-height: 100dvh;
     overflow: visible;
   }
 
-  .ajax-ha-card--chips {
+  .ajaxbridge-ha-card--chips {
     overflow: visible;
   }
 
-  .ajax-lovelace-compact-card {
+  .ajaxbridge-compact-card {
     padding: 10px;
   }
 
