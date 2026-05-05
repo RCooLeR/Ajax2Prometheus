@@ -143,3 +143,24 @@ ajax_zone_trouble_active{account="0001",device="ri1",device_events="burglary,tam
 		t.Fatal(err)
 	}
 }
+
+func TestJeedomNumericMetrics(t *testing.T) {
+	registry := prometheus.NewRegistry()
+	m := New(registry)
+	m.ObserveJeedomCommand("serverna", "Puissance", "56", "power_w", 123.4, time.Unix(500, 0))
+
+	expected := `
+# HELP ajax_jeedom_command_value Last numeric value reported by a Jeedom command.
+# TYPE ajax_jeedom_command_value gauge
+ajax_jeedom_command_value{command="Puissance",command_id="56",device="serverna",metric="power_w"} 123.4
+# HELP ajax_jeedom_device_power_watts Last Jeedom power value per device.
+# TYPE ajax_jeedom_device_power_watts gauge
+ajax_jeedom_device_power_watts{device="serverna"} 123.4
+# HELP ajax_jeedom_last_update_timestamp_seconds Unix timestamp for the last Jeedom command update.
+# TYPE ajax_jeedom_last_update_timestamp_seconds gauge
+ajax_jeedom_last_update_timestamp_seconds{command="Puissance",command_id="56",device="serverna",metric="power_w"} 500
+`
+	if err := testutil.GatherAndCompare(registry, strings.NewReader(expected), "ajax_jeedom_command_value", "ajax_jeedom_device_power_watts", "ajax_jeedom_last_update_timestamp_seconds"); err != nil {
+		t.Fatal(err)
+	}
+}

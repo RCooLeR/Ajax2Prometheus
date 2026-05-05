@@ -35,11 +35,26 @@ type Config struct {
 	MQTTTimeout         time.Duration
 	MQTTRetain          bool
 
+	JeedomEnabled          bool
+	JeedomEventTopic       string
+	JeedomDiscoveryTopic   string
+	JeedomStateTopicPrefix string
+	JeedomDiscovery        bool
+	JeedomEmptyValuePolicy string
+	JeedomRetainState      bool
+	JeedomRetainDiscovery  bool
+	JeedomSampleDir        string
+	JeedomDiscoverUnlinked bool
+	JeedomAccountNames     []string
+	JeedomControlsEnabled  bool
+	JeedomSetTopicPrefix   string
+
 	LogLevel  string
 	LogPretty bool
 }
 
 func FromEnv() Config {
+	mqttDiscovery := envBool(true, "AJAXBRIDGE_MQTT_DISCOVERY", "AJAX2PROM_MQTT_DISCOVERY")
 	return Config{
 		SIAListenAddr:     envString(":8099", "AJAXBRIDGE_SIA_ADDR", "AJAX2PROM_SIA_ADDR"),
 		HTTPAddr:          envString(":8080", "AJAXBRIDGE_HTTP_ADDR", "AJAX2PROM_HTTP_ADDR"),
@@ -59,16 +74,29 @@ func FromEnv() Config {
 		MQTTPassword:      envValue("AJAXBRIDGE_MQTT_PASSWORD", "AJAX2PROM_MQTT_PASSWORD"),
 		MQTTClientID:      envString("ajaxbridge", "AJAXBRIDGE_MQTT_CLIENT_ID", "AJAX2PROM_MQTT_CLIENT_ID"),
 		MQTTTopicPrefix:   envString("ajaxbridge", "AJAXBRIDGE_MQTT_TOPIC_PREFIX", "AJAX2PROM_MQTT_TOPIC_PREFIX"),
-		MQTTDiscovery:     envBool(true, "AJAXBRIDGE_MQTT_DISCOVERY", "AJAX2PROM_MQTT_DISCOVERY"),
+		MQTTDiscovery:     mqttDiscovery,
 		MQTTDiscoveryPrefix: envString(
 			"homeassistant",
 			"AJAXBRIDGE_MQTT_DISCOVERY_PREFIX",
 			"AJAX2PROM_MQTT_DISCOVERY_PREFIX",
 		),
-		MQTTTimeout: envDuration(5*time.Second, "AJAXBRIDGE_MQTT_TIMEOUT", "AJAX2PROM_MQTT_TIMEOUT"),
-		MQTTRetain:  envBool(true, "AJAXBRIDGE_MQTT_RETAIN", "AJAX2PROM_MQTT_RETAIN"),
-		LogLevel:    envString("info", "AJAXBRIDGE_LOG_LEVEL", "AJAX2PROM_LOG_LEVEL"),
-		LogPretty:   envBool(false, "AJAXBRIDGE_LOG_PRETTY", "AJAX2PROM_LOG_PRETTY"),
+		MQTTTimeout:            envDuration(5*time.Second, "AJAXBRIDGE_MQTT_TIMEOUT", "AJAX2PROM_MQTT_TIMEOUT"),
+		MQTTRetain:             envBool(true, "AJAXBRIDGE_MQTT_RETAIN", "AJAX2PROM_MQTT_RETAIN"),
+		JeedomEnabled:          envBool(false, "AJAXBRIDGE_JEEDOM_ENABLED"),
+		JeedomEventTopic:       envString("jeedom/cmd/event/#", "AJAXBRIDGE_JEEDOM_EVENT_TOPIC"),
+		JeedomDiscoveryTopic:   envString("jeedom/discovery/eqLogic/#", "AJAXBRIDGE_JEEDOM_DISCOVERY_TOPIC"),
+		JeedomStateTopicPrefix: envString("ajaxbridge/jeedom", "AJAXBRIDGE_JEEDOM_STATE_TOPIC_PREFIX"),
+		JeedomDiscovery:        envBool(mqttDiscovery, "AJAXBRIDGE_JEEDOM_DISCOVERY"),
+		JeedomEmptyValuePolicy: envString("keep_last", "AJAXBRIDGE_JEEDOM_EMPTY_VALUE_POLICY"),
+		JeedomRetainState:      envBool(true, "AJAXBRIDGE_JEEDOM_RETAIN_STATE"),
+		JeedomRetainDiscovery:  envBool(true, "AJAXBRIDGE_JEEDOM_RETAIN_DISCOVERY"),
+		JeedomSampleDir:        envString("tmp-jeedom", "AJAXBRIDGE_JEEDOM_SAMPLE_DIR"),
+		JeedomDiscoverUnlinked: envBool(false, "AJAXBRIDGE_JEEDOM_DISCOVER_UNLINKED"),
+		JeedomAccountNames:     envCSV("AJAXBRIDGE_JEEDOM_ACCOUNT_NAMES"),
+		JeedomControlsEnabled:  envBool(false, "AJAXBRIDGE_JEEDOM_CONTROLS_ENABLED"),
+		JeedomSetTopicPrefix:   envString("jeedom/cmd/set", "AJAXBRIDGE_JEEDOM_SET_TOPIC_PREFIX"),
+		LogLevel:               envString("info", "AJAXBRIDGE_LOG_LEVEL", "AJAX2PROM_LOG_LEVEL"),
+		LogPretty:              envBool(false, "AJAXBRIDGE_LOG_PRETTY", "AJAX2PROM_LOG_PRETTY"),
 	}
 }
 
@@ -99,6 +127,29 @@ func (c Config) Validate() error {
 	}
 	if c.MQTTBroker != "" && c.MQTTDiscovery && strings.TrimSpace(c.MQTTDiscoveryPrefix) == "" {
 		return errors.New("MQTT discovery prefix is required when MQTT discovery is enabled")
+	}
+	if c.JeedomEnabled && !c.MQTTEnabled() {
+		return errors.New("Jeedom input requires AJAXBRIDGE_MQTT_BROKER")
+	}
+	if c.JeedomEnabled && strings.TrimSpace(c.JeedomEventTopic) == "" {
+		return errors.New("Jeedom event topic is required when Jeedom input is enabled")
+	}
+	if c.JeedomEnabled && strings.TrimSpace(c.JeedomDiscoveryTopic) == "" {
+		return errors.New("Jeedom discovery topic is required when Jeedom input is enabled")
+	}
+	if c.JeedomEnabled && strings.TrimSpace(c.JeedomStateTopicPrefix) == "" {
+		return errors.New("Jeedom state topic prefix is required when Jeedom input is enabled")
+	}
+	if c.JeedomControlsEnabled && !c.JeedomEnabled {
+		return errors.New("Jeedom controls require AJAXBRIDGE_JEEDOM_ENABLED=true")
+	}
+	if c.JeedomControlsEnabled && strings.TrimSpace(c.JeedomSetTopicPrefix) == "" {
+		return errors.New("Jeedom set topic prefix is required when Jeedom controls are enabled")
+	}
+	switch strings.TrimSpace(c.JeedomEmptyValuePolicy) {
+	case "", "keep_last", "unknown":
+	default:
+		return fmt.Errorf("unsupported Jeedom empty value policy %q", c.JeedomEmptyValuePolicy)
 	}
 	return nil
 }

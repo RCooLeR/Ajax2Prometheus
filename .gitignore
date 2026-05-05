@@ -39,6 +39,7 @@ Thumbs.db
 
 # Temporary directories
 tmp/
+tmp-jeedom/
 dist/
 build/
 node_modules/

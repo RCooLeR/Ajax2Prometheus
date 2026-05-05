@@ -23,6 +23,26 @@ services:
       # Optional: AES key configured in Ajax SIA monitoring settings.
       # AJAXBRIDGE_ENCRYPTION_KEY: "REPLACE_WITH_32_HEX_AES_KEY"
 
+      # Optional: publish Home Assistant MQTT discovery and retained state.
+      # AJAXBRIDGE_MQTT_BROKER: "tcp://homeassistant.local:1883"
+      # AJAXBRIDGE_MQTT_USERNAME: "mqtt-user"
+      # AJAXBRIDGE_MQTT_PASSWORD: "mqtt-password"
+      # AJAXBRIDGE_MQTT_TOPIC_PREFIX: "ajaxbridge"
+      # AJAXBRIDGE_MQTT_DISCOVERY: "true"
+
+      # Optional: consume Jeedom Ajax plugin values from MQTT Manager.
+      # AJAXBRIDGE_JEEDOM_ENABLED: "true"
+      # AJAXBRIDGE_JEEDOM_EVENT_TOPIC: "jeedom/cmd/event/#"
+      # AJAXBRIDGE_JEEDOM_DISCOVERY_TOPIC: "jeedom/discovery/eqLogic/#"
+      # AJAXBRIDGE_JEEDOM_STATE_TOPIC_PREFIX: "ajaxbridge/jeedom"
+      # AJAXBRIDGE_JEEDOM_DISCOVERY: "true"
+      # AJAXBRIDGE_JEEDOM_EMPTY_VALUE_POLICY: "keep_last"
+      # AJAXBRIDGE_JEEDOM_SAMPLE_DIR: "/data/tmp-jeedom"
+      # AJAXBRIDGE_JEEDOM_DISCOVER_UNLINKED: "false"
+      # AJAXBRIDGE_JEEDOM_ACCOUNT_NAMES: "Будинок"
+      # AJAXBRIDGE_JEEDOM_CONTROLS_ENABLED: "false"
+      # AJAXBRIDGE_JEEDOM_SET_TOPIC_PREFIX: "jeedom/cmd/set"
+
       # Optional: forward raw SIA frames to Home Assistant's SIA integration.
       # Use an IP/hostname reachable from inside this container.
       # AJAXBRIDGE_FORWARD_ADDR: "home-assistant.example:12345,cms.example:7700"

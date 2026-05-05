@@ -21,22 +21,24 @@ type Catalog struct {
 }
 
 type Device struct {
-	Account        string    `json:"account"`
-	Zone           string    `json:"zone"`
-	Partition      string    `json:"partition,omitempty"`
-	Group          string    `json:"group,omitempty"`
-	Device         string    `json:"device,omitempty"`
-	Name           string    `json:"name"`
-	Room           string    `json:"room"`
-	Kind           string    `json:"kind"`
-	Events         []string  `json:"events"`
-	Description    string    `json:"description,omitempty"`
-	AutoDiscovered bool      `json:"auto_discovered,omitempty"`
-	FirstSeenAt    time.Time `json:"first_seen_at,omitempty"`
-	LastSeenAt     time.Time `json:"last_seen_at,omitempty"`
-	LastEventCode  string    `json:"last_event_code,omitempty"`
-	LastEventName  string    `json:"last_event_name,omitempty"`
-	LastSignal     string    `json:"last_signal,omitempty"`
+	Account          string    `json:"account"`
+	Zone             string    `json:"zone"`
+	Partition        string    `json:"partition,omitempty"`
+	Group            string    `json:"group,omitempty"`
+	Device           string    `json:"device,omitempty"`
+	Name             string    `json:"name"`
+	Room             string    `json:"room"`
+	Kind             string    `json:"kind"`
+	Events           []string  `json:"events"`
+	Description      string    `json:"description,omitempty"`
+	JeedomNames      []string  `json:"jeedom_names,omitempty"`
+	JeedomCommandIDs []string  `json:"jeedom_command_ids,omitempty"`
+	AutoDiscovered   bool      `json:"auto_discovered,omitempty"`
+	FirstSeenAt      time.Time `json:"first_seen_at,omitempty"`
+	LastSeenAt       time.Time `json:"last_seen_at,omitempty"`
+	LastEventCode    string    `json:"last_event_code,omitempty"`
+	LastEventName    string    `json:"last_event_name,omitempty"`
+	LastSignal       string    `json:"last_signal,omitempty"`
 }
 
 type UpsertResult struct {

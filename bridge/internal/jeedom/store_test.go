@@ -1,0 +1,87 @@
+package jeedom
+
+import (
+	"encoding/json"
+	"testing"
+	"time"
+)
+
+func TestStoreEmptyValueKeepsLastNumericValue(t *testing.T) {
+	store := NewStore("keep_last")
+	now := time.Unix(100, 0)
+
+	first := Event{
+		Topic:       "jeedom/cmd/event/56",
+		CommandID:   "56",
+		ObjectName:  "None",
+		DeviceName:  "Серверна",
+		CommandName: "Puissance",
+		Type:        "info",
+		Subtype:     "numeric",
+		Value:       json.RawMessage(`123.4`),
+		ReceivedAt:  now,
+	}
+	store.Apply(first)
+
+	empty := first
+	empty.Value = json.RawMessage(`""`)
+	empty.ReceivedAt = now.Add(time.Second)
+	result := store.Apply(empty)
+
+	if !result.EmptyValue {
+		t.Fatal("expected empty value result")
+	}
+	device, ok := store.Device("serverna")
+	if !ok {
+		t.Fatal("missing device state")
+	}
+	if got := device.Values["power_w"]; got != 123.4 {
+		t.Fatalf("power_w = %#v, want 123.4", got)
+	}
+}
+
+func TestStoreKeepsEnglishCommandNameAndRawFrenchName(t *testing.T) {
+	store := NewStore("keep_last")
+	result := store.Apply(Event{
+		Topic:       "jeedom/cmd/event/12",
+		CommandID:   "12",
+		DeviceName:  "Hub",
+		CommandName: "Alimentation secteur",
+		Subtype:     "binary",
+		Value:       json.RawMessage(`1`),
+		ReceivedAt:  time.Unix(100, 0),
+	})
+
+	if result.Command.Name != "External power" {
+		t.Fatalf("command name = %q, want External power", result.Command.Name)
+	}
+	if result.Command.RawName != "Alimentation secteur" {
+		t.Fatalf("raw name = %q, want original French", result.Command.RawName)
+	}
+}
+
+func TestStoreDisambiguatesDuplicateDeviceNamesByCommandGroup(t *testing.T) {
+	store := NewStore("keep_last")
+	now := time.Unix(100, 0)
+
+	events := []Event{
+		{Topic: "jeedom/cmd/event/60", CommandID: "60", DeviceName: "Дим", CommandName: "Etat", Value: json.RawMessage(`"PASSIVE"`), ReceivedAt: now},
+		{Topic: "jeedom/cmd/event/64", CommandID: "64", DeviceName: "Дим", CommandName: "Température", Value: json.RawMessage(`15`), ReceivedAt: now},
+		{Topic: "jeedom/cmd/event/96", CommandID: "96", DeviceName: "Дим", CommandName: "Etat", Value: json.RawMessage(`"PASSIVE"`), ReceivedAt: now},
+		{Topic: "jeedom/cmd/event/100", CommandID: "100", DeviceName: "Дим", CommandName: "Température", Value: json.RawMessage(`24`), ReceivedAt: now},
+	}
+	for _, evt := range events {
+		store.Apply(evt)
+	}
+
+	devices := store.Devices()
+	if len(devices) != 2 {
+		t.Fatalf("devices length = %d, want 2: %#v", len(devices), devices)
+	}
+	if _, ok := store.Device("dym"); !ok {
+		t.Fatal("missing first duplicate group slug dym")
+	}
+	if _, ok := store.Device("dym_96"); !ok {
+		t.Fatal("missing second duplicate group slug dym_96")
+	}
+}

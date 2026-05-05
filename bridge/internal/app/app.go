@@ -18,6 +18,7 @@ import (
 	"github.com/RCooLeR/AjaxBridge/internal/forward"
 	"github.com/RCooLeR/AjaxBridge/internal/hamqtt"
 	"github.com/RCooLeR/AjaxBridge/internal/httpapi"
+	"github.com/RCooLeR/AjaxBridge/internal/jeedom"
 	"github.com/RCooLeR/AjaxBridge/internal/metrics"
 	"github.com/RCooLeR/AjaxBridge/internal/sia"
 	"github.com/RCooLeR/AjaxBridge/internal/state"
@@ -103,6 +104,23 @@ func Run(parent context.Context, cfg config.Config, log zerolog.Logger) error {
 			Msg("SIA forwarders enabled")
 	}
 
+	var jeedomStore *jeedom.Store
+	var jeedomController *jeedom.Controller
+	if cfg.JeedomEnabled {
+		jeedomStore = jeedom.NewStoreWithResolver(cfg.JeedomEmptyValuePolicy, jeedom.NewCatalogResolver(devices, jeedom.CatalogResolverConfig{
+			Account:          cfg.Account,
+			AccountNames:     cfg.JeedomAccountNames,
+			DiscoverUnlinked: cfg.JeedomDiscoverUnlinked,
+		}))
+		if mqttPublisher != nil {
+			jeedomController = jeedom.NewController(jeedom.ControllerConfig{
+				Enabled:              cfg.JeedomControlsEnabled,
+				StateTopicPrefix:     cfg.JeedomStateTopicPrefix,
+				JeedomSetTopicPrefix: cfg.JeedomSetTopicPrefix,
+			}, jeedomStore, mqttPublisher, log.With().Str("component", "jeedom_control").Logger())
+		}
+	}
+
 	application := &App{
 		cfg:       cfg,
 		log:       log,
@@ -117,8 +135,41 @@ func Run(parent context.Context, cfg config.Config, log zerolog.Logger) error {
 		mqttQueue: mqttQueue,
 	}
 
-	httpServer := httpapi.New(cfg.HTTPAddr, stateEngine, eventStore, devices, registry, log.With().Str("component", "http").Logger())
+	httpServer := httpapi.New(cfg.HTTPAddr, stateEngine, eventStore, devices, jeedomStore, jeedomController, registry, log.With().Str("component", "http").Logger())
 	siaServer := sia.NewServer(cfg.SIAListenAddr, cfg.ReadTimeout, application.handleSIAFrame, log.With().Str("component", "sia").Logger())
+
+	if cfg.JeedomEnabled && mqttPublisher != nil {
+		jeedomPublisher := jeedom.NewPublisher(jeedom.PublisherConfig{
+			StateTopicPrefix: cfg.JeedomStateTopicPrefix,
+			Discovery:        cfg.JeedomDiscovery,
+			DiscoveryPrefix:  cfg.MQTTDiscoveryPrefix,
+			DiscoveryNode:    cfg.MQTTTopicPrefix,
+			RetainState:      cfg.JeedomRetainState,
+			RetainDiscovery:  cfg.JeedomRetainDiscovery,
+			Controls:         cfg.JeedomControlsEnabled,
+		}, mqttPublisher)
+		jeedomService := jeedom.NewService(
+			jeedom.ServiceConfig{EventTopic: cfg.JeedomEventTopic, DiscoveryTopic: cfg.JeedomDiscoveryTopic},
+			jeedomStore,
+			mqttPublisher,
+			jeedomPublisher,
+			metricSet,
+			jeedom.NewSampleWriter(cfg.JeedomSampleDir),
+			log.With().Str("component", "jeedom").Logger(),
+		)
+		jeedomService.SetController(jeedomController)
+		if err := jeedomService.Start(ctx); err != nil {
+			log.Warn().Err(err).Str("topic", cfg.JeedomEventTopic).Msg("Jeedom MQTT input not started")
+		} else {
+			log.Info().
+				Str("event_topic", cfg.JeedomEventTopic).
+				Str("discovery_topic", cfg.JeedomDiscoveryTopic).
+				Str("state_prefix", cfg.JeedomStateTopicPrefix).
+				Str("sample_dir", cfg.JeedomSampleDir).
+				Bool("controls", cfg.JeedomControlsEnabled).
+				Msg("Jeedom MQTT input enabled")
+		}
+	}
 
 	var wg sync.WaitGroup
 	errs := make(chan error, 2)

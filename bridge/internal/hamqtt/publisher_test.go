@@ -1,6 +1,7 @@
 package hamqtt
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
@@ -185,6 +186,44 @@ func TestPublishUpdatePublishesOnlyProvidedSubset(t *testing.T) {
 	}
 	if !client.hasTopic("ajaxbridge/accounts/A0F80D/state") {
 		t.Fatalf("missing account state publish: %#v", client.publishes)
+	}
+}
+
+func TestDiscoveryIncludesStateTopicAsJSONAttributesTopic(t *testing.T) {
+	client := &stubClient{open: true}
+	publisher := New(Config{
+		Broker:          "tcp://mqtt.local:1883",
+		ClientID:        "ajaxbridge",
+		TopicPrefix:     "ajaxbridge",
+		Discovery:       true,
+		DiscoveryPrefix: "homeassistant",
+		Timeout:         time.Second,
+		Retain:          true,
+	}, zerologNop())
+	publisher.client = client
+
+	if err := publisher.PublishUpdate(t.Context(), Update{
+		Zones: []state.Zone{{
+			Account:      "A0F80D",
+			Zone:         "3",
+			DeviceEvents: []string{"fire"},
+			SignalActive: map[string]bool{"fire": true},
+		}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	payload := client.payloadForTopic("homeassistant/binary_sensor/ajaxbridge/zone_a0f80d_3_alarm_active/config")
+	raw, ok := payload.([]byte)
+	if !ok {
+		t.Fatalf("discovery payload = %#v, want []byte", payload)
+	}
+	var cfg map[string]any
+	if err := json.Unmarshal(raw, &cfg); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := cfg["json_attributes_topic"], "ajaxbridge/accounts/A0F80D/zones/3/state"; got != want {
+		t.Fatalf("json_attributes_topic = %#v, want %q", got, want)
 	}
 }
 

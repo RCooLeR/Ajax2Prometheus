@@ -45,12 +45,15 @@ type Publisher struct {
 	publishedStates map[string]string
 	accountPlans    map[string]accountPlan
 	zonePlans       map[string]zonePlan
+	subscriptions   map[string]MessageHandler
 }
 
 type Update struct {
 	Accounts []state.Account
 	Zones    []state.Zone
 }
+
+type MessageHandler = func(topic string, payload []byte)
 
 type accountPlan struct {
 	stateTopic string
@@ -92,6 +95,7 @@ type discoveryConfig struct {
 	DeviceClass         string     `json:"device_class,omitempty"`
 	EntityCategory      string     `json:"entity_category,omitempty"`
 	Icon                string     `json:"icon,omitempty"`
+	JSONAttributesTopic string     `json:"json_attributes_topic,omitempty"`
 	Device              deviceInfo `json:"device"`
 }
 
@@ -167,6 +171,7 @@ func New(cfg Config, log zerolog.Logger) *Publisher {
 		publishedStates: make(map[string]string),
 		accountPlans:    make(map[string]accountPlan),
 		zonePlans:       make(map[string]zonePlan),
+		subscriptions:   make(map[string]MessageHandler),
 	}
 }
 
@@ -194,6 +199,7 @@ func (p *Publisher) Connect(ctx context.Context) error {
 		p.resetCaches()
 		token := client.Publish(p.availabilityTopic(), 1, true, payloadOnline)
 		token.WaitTimeout(p.cfg.Timeout)
+		p.resubscribe(client)
 		p.log.Info().Str("broker", p.cfg.Broker).Msg("MQTT connected")
 	}
 	opts.OnConnectionLost = func(_ paho.Client, err error) {
@@ -246,6 +252,59 @@ func (p *Publisher) PublishUpdate(ctx context.Context, update Update) error {
 	}
 
 	return errors.Join(errs...)
+}
+
+func (p *Publisher) Subscribe(ctx context.Context, topic string, handler MessageHandler) error {
+	if !p.Enabled() || p.client == nil {
+		return nil
+	}
+	topic = strings.TrimSpace(topic)
+	if topic == "" || handler == nil {
+		return nil
+	}
+
+	p.mu.Lock()
+	p.subscriptions[topic] = handler
+	p.mu.Unlock()
+
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if !p.client.IsConnectionOpen() {
+		return nil
+	}
+	return p.wait(ctx, p.client.Subscribe(topic, 1, wrapMessageHandler(handler)))
+}
+
+func (p *Publisher) PublishStateMessage(ctx context.Context, topic string, payload []byte, retain bool) error {
+	if !p.Enabled() || p.client == nil {
+		return nil
+	}
+	return p.publishState(ctx, topic, payload, retain)
+}
+
+func (p *Publisher) PublishDiscoveryMessage(ctx context.Context, key, topic string, payload []byte, retain bool) error {
+	if !p.Enabled() || p.client == nil {
+		return nil
+	}
+	if retain {
+		return p.publishDiscoveryMessage(ctx, discoveryMessage{key: key, topic: topic, payload: payload})
+	}
+	return p.publish(ctx, topic, payload, false)
+}
+
+func (p *Publisher) PublishCommandMessage(ctx context.Context, topic string, payload []byte) error {
+	if !p.Enabled() || p.client == nil {
+		return nil
+	}
+	return p.publish(ctx, topic, payload, false)
+}
+
+func (p *Publisher) AvailabilityTopic() string {
+	if p == nil {
+		return ""
+	}
+	return p.availabilityTopic()
 }
 
 func (p *Publisher) publishAccount(ctx context.Context, account state.Account) error {
@@ -346,6 +405,26 @@ func (p *Publisher) resetCaches() {
 	defer p.mu.Unlock()
 	p.discovered = make(map[string]struct{})
 	p.publishedStates = make(map[string]string)
+}
+
+func (p *Publisher) resubscribe(client paho.Client) {
+	p.mu.Lock()
+	subscriptions := make(map[string]MessageHandler, len(p.subscriptions))
+	for topic, handler := range p.subscriptions {
+		subscriptions[topic] = handler
+	}
+	p.mu.Unlock()
+
+	for topic, handler := range subscriptions {
+		token := client.Subscribe(topic, 1, wrapMessageHandler(handler))
+		if ok := token.WaitTimeout(p.cfg.Timeout); !ok {
+			p.log.Warn().Str("topic", topic).Msg("MQTT subscription timed out")
+			continue
+		}
+		if err := token.Error(); err != nil {
+			p.log.Warn().Err(err).Str("topic", topic).Msg("MQTT subscription failed")
+		}
+	}
 }
 
 func (p *Publisher) markDiscoveredPending(key string) bool {
@@ -467,6 +546,7 @@ func (p *Publisher) buildDiscoveryMessages(entities []entity, stateTopic string,
 			DeviceClass:         ent.DeviceClass,
 			EntityCategory:      ent.EntityCategory,
 			Icon:                ent.Icon,
+			JSONAttributesTopic: stateTopic,
 			Device:              device,
 		}
 		if ent.Binary {
@@ -870,4 +950,10 @@ func fallback(value, fallbackValue string) string {
 		return fallbackValue
 	}
 	return value
+}
+
+func wrapMessageHandler(handler MessageHandler) paho.MessageHandler {
+	return func(_ paho.Client, message paho.Message) {
+		handler(message.Topic(), append([]byte(nil), message.Payload()...))
+	}
 }

@@ -2,6 +2,7 @@ package metrics
 
 import (
 	"strconv"
+	"time"
 
 	"github.com/RCooLeR/AjaxBridge/internal/event"
 	"github.com/RCooLeR/AjaxBridge/internal/forward"
@@ -30,6 +31,17 @@ type Metrics struct {
 	zoneTamperLast   *prometheus.GaugeVec
 	zoneTrouble      *prometheus.GaugeVec
 	zoneLastEvent    *prometheus.GaugeVec
+
+	jeedomMessages      prometheus.Counter
+	jeedomParseErrors   prometheus.Counter
+	jeedomEmptyValues   prometheus.Counter
+	jeedomLastUpdate    *prometheus.GaugeVec
+	jeedomCommandValue  *prometheus.GaugeVec
+	jeedomDevicePower   *prometheus.GaugeVec
+	jeedomDeviceCurrent *prometheus.GaugeVec
+	jeedomDeviceVoltage *prometheus.GaugeVec
+	jeedomDeviceTemp    *prometheus.GaugeVec
+	jeedomDeviceBattery *prometheus.GaugeVec
 }
 
 func New(reg prometheus.Registerer) *Metrics {
@@ -111,6 +123,46 @@ func New(reg prometheus.Registerer) *Metrics {
 			Name: "ajax_zone_last_event_timestamp_seconds",
 			Help: "Unix timestamp for the last received event per zone/device.",
 		}, []string{"account", "partition", "group", "zone", "device", "device_name", "room", "device_kind", "device_events"}),
+		jeedomMessages: prometheus.NewCounter(prometheus.CounterOpts{
+			Name: "ajax_jeedom_mqtt_messages_total",
+			Help: "Total Jeedom MQTT messages received.",
+		}),
+		jeedomParseErrors: prometheus.NewCounter(prometheus.CounterOpts{
+			Name: "ajax_jeedom_mqtt_parse_errors_total",
+			Help: "Total Jeedom MQTT messages that could not be parsed.",
+		}),
+		jeedomEmptyValues: prometheus.NewCounter(prometheus.CounterOpts{
+			Name: "ajax_jeedom_empty_values_total",
+			Help: "Total Jeedom MQTT messages with empty or null values.",
+		}),
+		jeedomLastUpdate: prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Name: "ajax_jeedom_last_update_timestamp_seconds",
+			Help: "Unix timestamp for the last Jeedom command update.",
+		}, []string{"device", "command", "command_id", "metric"}),
+		jeedomCommandValue: prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Name: "ajax_jeedom_command_value",
+			Help: "Last numeric value reported by a Jeedom command.",
+		}, []string{"device", "command", "command_id", "metric"}),
+		jeedomDevicePower: prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Name: "ajax_jeedom_device_power_watts",
+			Help: "Last Jeedom power value per device.",
+		}, []string{"device"}),
+		jeedomDeviceCurrent: prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Name: "ajax_jeedom_device_current_amperes",
+			Help: "Last Jeedom current value per device.",
+		}, []string{"device"}),
+		jeedomDeviceVoltage: prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Name: "ajax_jeedom_device_voltage_volts",
+			Help: "Last Jeedom voltage value per device.",
+		}, []string{"device"}),
+		jeedomDeviceTemp: prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Name: "ajax_jeedom_device_temperature_celsius",
+			Help: "Last Jeedom temperature value per device.",
+		}, []string{"device"}),
+		jeedomDeviceBattery: prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Name: "ajax_jeedom_device_battery_percent",
+			Help: "Last Jeedom battery percent value per device.",
+		}, []string{"device"}),
 	}
 
 	reg.MustRegister(
@@ -133,9 +185,56 @@ func New(reg prometheus.Registerer) *Metrics {
 		m.zoneTamperLast,
 		m.zoneTrouble,
 		m.zoneLastEvent,
+		m.jeedomMessages,
+		m.jeedomParseErrors,
+		m.jeedomEmptyValues,
+		m.jeedomLastUpdate,
+		m.jeedomCommandValue,
+		m.jeedomDevicePower,
+		m.jeedomDeviceCurrent,
+		m.jeedomDeviceVoltage,
+		m.jeedomDeviceTemp,
+		m.jeedomDeviceBattery,
 	)
 
 	return m
+}
+
+func (m *Metrics) ObserveJeedomMessage() {
+	m.jeedomMessages.Inc()
+}
+
+func (m *Metrics) ObserveJeedomParseError() {
+	m.jeedomParseErrors.Inc()
+}
+
+func (m *Metrics) ObserveJeedomEmptyValue() {
+	m.jeedomEmptyValues.Inc()
+}
+
+func (m *Metrics) ObserveJeedomCommand(device, command, commandID, metric string, value float64, lastUpdate time.Time) {
+	labels := prometheus.Labels{
+		"device":     labelValue(device, "unknown"),
+		"command":    labelValue(command, "unknown"),
+		"command_id": labelValue(commandID, "unknown"),
+		"metric":     labelValue(metric, "unknown"),
+	}
+	m.jeedomLastUpdate.With(labels).Set(timestamp(lastUpdate))
+	m.jeedomCommandValue.With(labels).Set(value)
+
+	deviceLabel := prometheus.Labels{"device": labelValue(device, "unknown")}
+	switch metric {
+	case "power_w":
+		m.jeedomDevicePower.With(deviceLabel).Set(value)
+	case "current_a":
+		m.jeedomDeviceCurrent.With(deviceLabel).Set(value)
+	case "voltage_v":
+		m.jeedomDeviceVoltage.With(deviceLabel).Set(value)
+	case "temperature_c":
+		m.jeedomDeviceTemp.With(deviceLabel).Set(value)
+	case "battery_percent":
+		m.jeedomDeviceBattery.With(deviceLabel).Set(value)
+	}
 }
 
 func (m *Metrics) ObserveEvent(evt event.Normalized) {

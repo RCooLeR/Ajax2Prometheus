@@ -26,6 +26,7 @@ var (
 func main() {
 	cfg := config.FromEnv()
 	forwardAddrs := cli.NewStringSlice(cfg.ForwardAddresses()...)
+	jeedomAccountNames := cli.NewStringSlice(cfg.JeedomAccountNames...)
 	healthcheckURL := ""
 	healthcheckPath := "/readyz"
 	healthcheckTimeout := 3 * time.Second
@@ -50,6 +51,19 @@ func main() {
 			&cli.StringFlag{Name: "mqtt-discovery-prefix", Value: cfg.MQTTDiscoveryPrefix, Usage: "Home Assistant MQTT discovery prefix", Destination: &cfg.MQTTDiscoveryPrefix, EnvVars: []string{"AJAXBRIDGE_MQTT_DISCOVERY_PREFIX", "AJAX2PROM_MQTT_DISCOVERY_PREFIX"}},
 			&cli.DurationFlag{Name: "mqtt-timeout", Value: cfg.MQTTTimeout, Usage: "MQTT connect and publish timeout", Destination: &cfg.MQTTTimeout, EnvVars: []string{"AJAXBRIDGE_MQTT_TIMEOUT", "AJAX2PROM_MQTT_TIMEOUT"}},
 			&cli.BoolFlag{Name: "mqtt-retain", Value: cfg.MQTTRetain, Usage: "Retain MQTT state messages", Destination: &cfg.MQTTRetain, EnvVars: []string{"AJAXBRIDGE_MQTT_RETAIN", "AJAX2PROM_MQTT_RETAIN"}},
+			&cli.BoolFlag{Name: "jeedom-enabled", Value: cfg.JeedomEnabled, Usage: "Enable read-only Jeedom MQTT input", Destination: &cfg.JeedomEnabled, EnvVars: []string{"AJAXBRIDGE_JEEDOM_ENABLED"}},
+			&cli.StringFlag{Name: "jeedom-event-topic", Value: cfg.JeedomEventTopic, Usage: "Jeedom MQTT event subscription topic", Destination: &cfg.JeedomEventTopic, EnvVars: []string{"AJAXBRIDGE_JEEDOM_EVENT_TOPIC"}},
+			&cli.StringFlag{Name: "jeedom-discovery-topic", Value: cfg.JeedomDiscoveryTopic, Usage: "Jeedom MQTT eqLogic discovery subscription topic", Destination: &cfg.JeedomDiscoveryTopic, EnvVars: []string{"AJAXBRIDGE_JEEDOM_DISCOVERY_TOPIC"}},
+			&cli.StringFlag{Name: "jeedom-state-topic-prefix", Value: cfg.JeedomStateTopicPrefix, Usage: "MQTT topic prefix for normalized Jeedom device state", Destination: &cfg.JeedomStateTopicPrefix, EnvVars: []string{"AJAXBRIDGE_JEEDOM_STATE_TOPIC_PREFIX"}},
+			&cli.BoolFlag{Name: "jeedom-discovery", Value: cfg.JeedomDiscovery, Usage: "Publish Home Assistant MQTT discovery for Jeedom values", Destination: &cfg.JeedomDiscovery, EnvVars: []string{"AJAXBRIDGE_JEEDOM_DISCOVERY"}},
+			&cli.StringFlag{Name: "jeedom-empty-value-policy", Value: cfg.JeedomEmptyValuePolicy, Usage: "How Jeedom empty values are handled: keep_last or unknown", Destination: &cfg.JeedomEmptyValuePolicy, EnvVars: []string{"AJAXBRIDGE_JEEDOM_EMPTY_VALUE_POLICY"}},
+			&cli.BoolFlag{Name: "jeedom-retain-state", Value: cfg.JeedomRetainState, Usage: "Retain normalized Jeedom state messages", Destination: &cfg.JeedomRetainState, EnvVars: []string{"AJAXBRIDGE_JEEDOM_RETAIN_STATE"}},
+			&cli.BoolFlag{Name: "jeedom-retain-discovery", Value: cfg.JeedomRetainDiscovery, Usage: "Retain Jeedom Home Assistant discovery configs", Destination: &cfg.JeedomRetainDiscovery, EnvVars: []string{"AJAXBRIDGE_JEEDOM_RETAIN_DISCOVERY"}},
+			&cli.StringFlag{Name: "jeedom-sample-dir", Value: cfg.JeedomSampleDir, Usage: "Directory for captured raw Jeedom MQTT sample JSON files; empty disables capture", Destination: &cfg.JeedomSampleDir, EnvVars: []string{"AJAXBRIDGE_JEEDOM_SAMPLE_DIR"}},
+			&cli.BoolFlag{Name: "jeedom-discover-unlinked", Value: cfg.JeedomDiscoverUnlinked, Usage: "Publish HA discovery for Jeedom devices that are not linked to SIA catalog devices", Destination: &cfg.JeedomDiscoverUnlinked, EnvVars: []string{"AJAXBRIDGE_JEEDOM_DISCOVER_UNLINKED"}},
+			&cli.StringSliceFlag{Name: "jeedom-account-name", Value: jeedomAccountNames, Usage: "Jeedom device name(s) that represent the Ajax/SIA account, for example Будинок. Repeat flag or use comma-separated AJAXBRIDGE_JEEDOM_ACCOUNT_NAMES.", Destination: jeedomAccountNames, EnvVars: []string{"AJAXBRIDGE_JEEDOM_ACCOUNT_NAMES"}},
+			&cli.BoolFlag{Name: "jeedom-controls-enabled", Value: cfg.JeedomControlsEnabled, Usage: "Enable allowlisted Jeedom on/off controls through HTTP and MQTT switch commands", Destination: &cfg.JeedomControlsEnabled, EnvVars: []string{"AJAXBRIDGE_JEEDOM_CONTROLS_ENABLED"}},
+			&cli.StringFlag{Name: "jeedom-set-topic-prefix", Value: cfg.JeedomSetTopicPrefix, Usage: "Jeedom MQTT command topic prefix, usually jeedom/cmd/set", Destination: &cfg.JeedomSetTopicPrefix, EnvVars: []string{"AJAXBRIDGE_JEEDOM_SET_TOPIC_PREFIX"}},
 			&cli.StringFlag{Name: "account", Value: cfg.Account, Usage: "Expected Ajax account/object number; empty allows all accounts", Destination: &cfg.Account, EnvVars: []string{"AJAXBRIDGE_ACCOUNT", "AJAX2PROM_ACCOUNT"}},
 			&cli.StringFlag{Name: "encryption-key", Value: cfg.EncryptionKey, Usage: "AES key as 32/48/64 hex characters or raw 16/24/32 bytes", Destination: &cfg.EncryptionKey, EnvVars: []string{"AJAXBRIDGE_ENCRYPTION_KEY", "AJAX2PROM_ENCRYPTION_KEY"}},
 			&cli.BoolFlag{Name: "strict-crc", Value: cfg.StrictCRC, Usage: "Reject frames with invalid CRC", Destination: &cfg.StrictCRC, EnvVars: []string{"AJAXBRIDGE_STRICT_CRC", "AJAX2PROM_STRICT_CRC"}},
@@ -61,6 +75,7 @@ func main() {
 		},
 		Action: func(_ *cli.Context) error {
 			cfg.SIAForwardAddrs = forwardAddrs.Value()
+			cfg.JeedomAccountNames = jeedomAccountNames.Value()
 			logger, err := configureLogger(cfg)
 			if err != nil {
 				return err
