@@ -348,6 +348,35 @@ func TestPublishSnapshotDoesNotCleanCurrentDiscoveryNode(t *testing.T) {
 	}
 }
 
+func TestCleanupTopicMatcherTargetsOnlyStaleJeedomAndLegacyTopics(t *testing.T) {
+	publisher := New(Config{
+		Broker:          "tcp://mqtt.local:1883",
+		ClientID:        "ajaxbridge",
+		TopicPrefix:     "ajaxbridge",
+		DiscoveryPrefix: "homeassistant",
+	}, zerologNop())
+	patterns := publisher.cleanupSubscriptions(CleanupConfig{
+		JeedomStateTopicPrefix: "ajaxbridge/jeedom",
+	})
+
+	cases := map[string]bool{
+		"homeassistant/sensor/ajaxbridge/jeedom_cmd_56/config":            true,
+		"homeassistant/switch/ajaxbridge/jeedom_control_serverna/config":  true,
+		"ajaxbridge/jeedom/devices/serverna/state":                        true,
+		"homeassistant/binary_sensor/ajax2prometheus/zone_1_alarm/config": true,
+		"ajax2prometheus/accounts/A0F80D/state":                           true,
+		"homeassistant/binary_sensor/ajaxbridge/zone_a0f80d_alarm/config": false,
+		"homeassistant/sensor/ajaxbridge/account_a0f80d_mode/config":      false,
+		"ajaxbridge/accounts/A0F80D/state":                                false,
+		"ajaxbridge/accounts/A0F80D/zones/8/state":                        false,
+	}
+	for topic, want := range cases {
+		if got := cleanupTopicMatches(patterns, topic); got != want {
+			t.Fatalf("cleanupTopicMatches(%q) = %t, want %t", topic, got, want)
+		}
+	}
+}
+
 func zerologNop() zerolog.Logger {
 	return zerolog.Nop()
 }

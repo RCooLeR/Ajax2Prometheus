@@ -57,6 +57,12 @@ func TestFromEnvUsesJeedomDefaults(t *testing.T) {
 	if cfg.JeedomSetTopicPrefix != "jeedom/cmd/set" {
 		t.Fatalf("JeedomSetTopicPrefix = %q, want default", cfg.JeedomSetTopicPrefix)
 	}
+	if cfg.MQTTCleanupRetained {
+		t.Fatal("MQTTCleanupRetained default = true, want false")
+	}
+	if cfg.MQTTCleanupRetainedWait <= 0 {
+		t.Fatalf("MQTTCleanupRetainedWait = %s, want positive default", cfg.MQTTCleanupRetainedWait)
+	}
 }
 
 func TestValidateRequiresMQTTBrokerWhenJeedomEnabled(t *testing.T) {

@@ -100,6 +100,25 @@ func Run(parent context.Context, cfg config.Config, log zerolog.Logger) error {
 		if err := mqttPublisher.Connect(ctx); err != nil {
 			log.Warn().Err(err).Str("broker", cfg.MQTTBroker).Msg("MQTT connect failed; continuing without blocking SIA")
 		}
+		if cfg.MQTTCleanupRetained {
+			result, err := mqttPublisher.CleanupRetained(ctx, hamqtt.CleanupConfig{
+				DiscoveryPrefix:        cfg.MQTTDiscoveryPrefix,
+				DiscoveryNode:          cfg.MQTTTopicPrefix,
+				TopicPrefix:            cfg.MQTTTopicPrefix,
+				JeedomStateTopicPrefix: cfg.JeedomStateTopicPrefix,
+				Wait:                   cfg.MQTTCleanupRetainedWait,
+			})
+			if err != nil {
+				log.Warn().Err(err).Msg("MQTT retained cleanup failed")
+			} else {
+				log.Warn().
+					Int("received", result.Received).
+					Int("matched", result.Matched).
+					Int("cleared", result.Cleared).
+					Strs("topics", result.Topics).
+					Msg("MQTT retained cleanup completed")
+			}
+		}
 		mqttQueue = make(chan hamqtt.Update, 1)
 		defer mqttPublisher.Close()
 	}

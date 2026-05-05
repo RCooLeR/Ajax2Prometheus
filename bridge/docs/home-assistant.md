@@ -628,7 +628,16 @@ Duplicate devices:
 - Restart AjaxBridge, then force Jeedom MQTT Manager to republish eqLogic discovery or wait for Jeedom events so linked discovery is republished with the SIA device identifier.
 - Reload or restart Home Assistant MQTT after stale retained topics are cleared.
 
-Clear retained discovery/state topics from a shell with Mosquitto clients:
+If you do not have Mosquitto clients installed, run the bridge once with temporary cleanup enabled:
+
+```yaml
+AJAXBRIDGE_MQTT_CLEANUP_RETAINED: "true"
+AJAXBRIDGE_MQTT_CLEANUP_RETAINED_WAIT: "8s"
+```
+
+Restart AjaxBridge, wait for the log line `MQTT retained cleanup completed`, then remove the flag or set it back to `false` and restart again. The cleaner clears retained Jeedom discovery topics under `homeassistant/+/ajaxbridge/jeedom_*`, retained Jeedom state under `ajaxbridge/jeedom/devices/+/state`, and legacy `ajax2prometheus` topics.
+
+Alternative shell cleanup with Mosquitto clients:
 
 ```bash
 BROKER=192.168.100.100
