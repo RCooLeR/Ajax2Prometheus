@@ -253,14 +253,14 @@ func (s *Store) Apply(evt Event) ApplyResult {
 			result.UpdatedValue = true
 		}
 	} else {
-		value, ok := mappedValue(evt, mapping)
+		value, ok := mappedValue(evt, mapping, deviceTypeForNormalization(*device))
 		if ok {
 			device.Values[mapping.Metric] = value
 			command.Value = value
 			command.LastValueAt = now
 			result.UpdatedValue = true
 		}
-		if number, ok := NumericRawValue(evt.Value); ok {
+		if number, ok := numericValue(value); ok {
 			result.NumericValue = number
 			result.HasNumeric = true
 		}
@@ -376,7 +376,7 @@ func (s *Store) ApplyDiscovery(discovery Discovery) ApplyDiscoveryResult {
 			}
 		}
 		if !EmptyRawValue(info.Value) && (!hasExisting || existing.LastValueAt.IsZero()) {
-			if value, ok := mappedValue(Event{Value: info.Value}, mapping); ok {
+			if value, ok := mappedValue(Event{Value: info.Value}, mapping, deviceTypeForNormalization(*device)); ok {
 				device.Values[mapping.Metric] = value
 				command.Value = value
 				command.LastValueAt = now
@@ -523,14 +523,46 @@ func deviceHasMetric(device *Device, metric string) bool {
 	return false
 }
 
-func mappedValue(evt Event, mapping Mapping) (any, bool) {
+func mappedValue(evt Event, mapping Mapping, deviceType string) (any, bool) {
 	switch {
 	case mapping.Numeric:
-		return NumericRawValue(evt.Value)
+		value, ok := NumericRawValue(evt.Value)
+		if !ok {
+			return 0, false
+		}
+		return normalizeNumericValue(mapping, deviceType, value), true
 	case mapping.Binary:
 		return BoolRawValue(evt.Value)
 	default:
 		return StringRawValue(evt.Value)
+	}
+}
+
+func normalizeNumericValue(mapping Mapping, deviceType string, value float64) float64 {
+	if mapping.Metric == "voltage_v" && commandKey(deviceType) == "relay" {
+		return value / 10
+	}
+	return value
+}
+
+func deviceTypeForNormalization(device Device) string {
+	return firstNonEmpty(device.JeedomDeviceType, device.HAModel)
+}
+
+func numericValue(value any) (float64, bool) {
+	switch typed := value.(type) {
+	case float64:
+		return typed, true
+	case float32:
+		return float64(typed), true
+	case int:
+		return float64(typed), true
+	case int64:
+		return float64(typed), true
+	case int32:
+		return float64(typed), true
+	default:
+		return 0, false
 	}
 }
 
@@ -966,10 +998,8 @@ func controlAllowed(discovery Discovery, command DiscoveryCommand, action string
 		return false, "only on/off device controls are allowlisted"
 	}
 	switch deviceType {
-	case "relay", "socket", "wallswitch", "lightswitch", "outlet":
+	case "relay", "socket", "wallswitch", "lightswitch", "outlet", "waterstop":
 		return true, ""
-	case "waterstop":
-		return false, "WaterStop controls are blocked by default"
 	case "hub", "hub_2_plus", "hub2plus", "hub_plus", "hubplus":
 		return false, "hub/security controls are blocked by default"
 	default:

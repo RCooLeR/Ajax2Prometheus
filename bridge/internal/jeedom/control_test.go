@@ -94,7 +94,7 @@ func TestControllerPublishesRelayImpulseCommand(t *testing.T) {
 	}
 }
 
-func TestControllerRejectsDeniedAction(t *testing.T) {
+func TestControllerPublishesWaterStopCommand(t *testing.T) {
 	payload := []byte(`{"id":3,"name":"Valve","configuration":{"device":"WaterStop"},"isVisible":1,"isEnable":1,"cmds":{"26":{"id":26,"logicalId":"SWITCH_ON","name":"On","type":"action","subType":"other","isVisible":1}}}`)
 	discovery, err := ParseDiscoveryMessage("jeedom/discovery/eqLogic/3", payload, time.Unix(100, 0))
 	if err != nil {
@@ -102,10 +102,18 @@ func TestControllerRejectsDeniedAction(t *testing.T) {
 	}
 	store := NewStore("keep_last")
 	store.ApplyDiscovery(discovery)
-	controller := NewController(ControllerConfig{Enabled: true}, store, &fakeCommandPublisher{}, zerolog.Nop())
+	mqtt := &fakeCommandPublisher{}
+	controller := NewController(ControllerConfig{Enabled: true}, store, mqtt, zerolog.Nop())
 
-	if _, err := controller.Execute(context.Background(), "valve", "on", "test"); err == nil {
-		t.Fatal("expected denied action error")
+	result, err := controller.Execute(context.Background(), "valve", "on", "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !result.Published || result.CommandID != "26" {
+		t.Fatalf("result = %#v", result)
+	}
+	if mqtt.topic != "jeedom/cmd/set/26" {
+		t.Fatalf("published topic = %q, want jeedom/cmd/set/26", mqtt.topic)
 	}
 }
 

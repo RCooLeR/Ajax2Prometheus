@@ -1,7 +1,7 @@
 package jeedom
 
 import (
-	"encoding/json"
+	"math"
 	"testing"
 	"time"
 )
@@ -118,7 +118,33 @@ func TestStoreApplyDiscoverySeedsCurrentInfoValues(t *testing.T) {
 	}
 }
 
-func TestStoreApplyDiscoveryBlocksWaterStop(t *testing.T) {
+func TestStoreApplyDiscoveryNormalizesRelayVoltageSeed(t *testing.T) {
+	payload := []byte(`{
+	  "id":6,
+	  "name":"Garage gate",
+	  "configuration":{"device":"Relay"},
+	  "isVisible":1,
+	  "isEnable":1,
+	  "cmds":{
+	    "230":{"id":230,"name":"Voltage","type":"info","subType":"numeric","unite":"V","isVisible":1,"currentValue":"289.02"}
+	  }
+	}`)
+	discovery, err := ParseDiscoveryMessage("jeedom/discovery/eqLogic/6", payload, time.Unix(100, 0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	result := NewStore("keep_last").ApplyDiscovery(discovery)
+
+	got, ok := result.Device.Values["voltage_v"].(float64)
+	if !ok {
+		t.Fatalf("voltage_v = %#v, want float64", result.Device.Values["voltage_v"])
+	}
+	if math.Abs(got-28.902) > 1e-9 {
+		t.Fatalf("voltage_v = %#v, want 28.902", got)
+	}
+}
+
+func TestStoreApplyDiscoveryAllowsWaterStopToggleActions(t *testing.T) {
 	payload := []byte(`{
 	  "id":3,
 	  "name":"Valve",
@@ -135,8 +161,9 @@ func TestStoreApplyDiscoveryBlocksWaterStop(t *testing.T) {
 		t.Fatal(err)
 	}
 	result := NewStore("keep_last").ApplyDiscovery(discovery)
-	if result.Device.Actions["on"].Allowed {
-		body, _ := json.Marshal(result.Device.Actions["on"])
-		t.Fatalf("WaterStop action unexpectedly allowed: %s", body)
+	on := result.Device.Actions["on"]
+	off := result.Device.Actions["off"]
+	if !on.Allowed || !off.Allowed {
+		t.Fatalf("WaterStop actions should be allowed: on=%#v off=%#v", on, off)
 	}
 }

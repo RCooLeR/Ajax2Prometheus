@@ -438,6 +438,8 @@ Jeedom discovery topic:
 homeassistant/<component>/ajaxbridge/jeedom_cmd_<command_id>/config
 ```
 
+Relay `voltage_v` values are normalized by AjaxBridge before publishing. The Jeedom Ajax plugin reports relay supply voltages in tenths of volts, so a raw value such as `289.02` is exposed to Home Assistant as `28.902`.
+
 Unique id:
 
 ```text
@@ -497,12 +499,11 @@ Controls are created only when:
 
 Control types:
 
-- `Socket`, `WallSwitch`, `LightSwitch`, and `Outlet` publish Home Assistant MQTT switches when both `on` and `off` actions exist.
+- `Socket`, `WallSwitch`, `LightSwitch`, `Outlet`, and `WaterStop` publish Home Assistant MQTT switches when both `on` and `off` actions exist.
 - `Relay` publishes a Home Assistant MQTT button for impulse control. AjaxBridge uses a discovered `impulse` action when available, otherwise it uses the relay `on` action as the pulse.
 
 Blocked:
 
-- `WaterStop`
 - hub/security controls
 - any unknown device type
 

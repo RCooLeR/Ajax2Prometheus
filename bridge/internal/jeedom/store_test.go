@@ -2,6 +2,7 @@ package jeedom
 
 import (
 	"encoding/json"
+	"math"
 	"testing"
 	"time"
 
@@ -115,5 +116,64 @@ func TestStoreTracksLegacyUnlinkedSlugWhenCatalogLinksDevice(t *testing.T) {
 	}
 	if !containsString(result.Device.LegacyDeviceSlugs, "serverna") {
 		t.Fatalf("LegacyDeviceSlugs = %#v, want serverna", result.Device.LegacyDeviceSlugs)
+	}
+}
+
+func TestStoreNormalizesRelayVoltageFromCatalog(t *testing.T) {
+	catalog := testCatalog(t, devicecatalog.Device{
+		Account:          "A0F80D",
+		Zone:             "6",
+		Name:             "Garage gate relay",
+		Kind:             "Relay",
+		JeedomCommandIDs: []string{"230"},
+	})
+	store := NewStoreWithResolver("keep_last", NewCatalogResolver(catalog, CatalogResolverConfig{}))
+
+	result := store.Apply(Event{
+		Topic:       "jeedom/cmd/event/230",
+		CommandID:   "230",
+		DeviceName:  "Garage gate",
+		CommandName: "Voltage",
+		Type:        "info",
+		Subtype:     "numeric",
+		Value:       json.RawMessage(`289.02`),
+		ReceivedAt:  time.Unix(100, 0),
+	})
+
+	got, ok := result.Device.Values["voltage_v"].(float64)
+	if !ok {
+		t.Fatalf("voltage_v = %#v, want float64", result.Device.Values["voltage_v"])
+	}
+	if math.Abs(got-28.902) > 1e-9 {
+		t.Fatalf("voltage_v = %#v, want 28.902", got)
+	}
+	if math.Abs(result.NumericValue-28.902) > 1e-9 {
+		t.Fatalf("NumericValue = %#v, want 28.902", result.NumericValue)
+	}
+}
+
+func TestStoreKeepsWallSwitchVoltageUnscaled(t *testing.T) {
+	catalog := testCatalog(t, devicecatalog.Device{
+		Account:          "A0F80D",
+		Zone:             "8",
+		Name:             "Server power",
+		Kind:             "WallSwitch",
+		JeedomCommandIDs: []string{"203"},
+	})
+	store := NewStoreWithResolver("keep_last", NewCatalogResolver(catalog, CatalogResolverConfig{}))
+
+	result := store.Apply(Event{
+		Topic:       "jeedom/cmd/event/203",
+		CommandID:   "203",
+		DeviceName:  "Server power",
+		CommandName: "Voltage",
+		Type:        "info",
+		Subtype:     "numeric",
+		Value:       json.RawMessage(`238`),
+		ReceivedAt:  time.Unix(100, 0),
+	})
+
+	if got := result.Device.Values["voltage_v"]; got != 238.0 {
+		t.Fatalf("voltage_v = %#v, want 238", got)
 	}
 }

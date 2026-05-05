@@ -142,7 +142,6 @@ func defaultConfig() Config {
 }
 
 func normalizeConfig(cfg Config) Config {
-	cfg.Enabled = cfg.Enabled
 	if len(cfg.Channels) == 0 {
 		cfg.Channels = defaultConfig().Channels
 	}

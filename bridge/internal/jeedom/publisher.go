@@ -381,7 +381,7 @@ func sortedButtonActions(device Device) []Action {
 
 func toggleCapableDevice(device Device) bool {
 	switch commandKey(firstNonEmpty(device.JeedomDeviceType, device.HAModel)) {
-	case "socket", "wallswitch", "lightswitch", "outlet":
+	case "socket", "wallswitch", "lightswitch", "outlet", "waterstop":
 		return true
 	default:
 		return false

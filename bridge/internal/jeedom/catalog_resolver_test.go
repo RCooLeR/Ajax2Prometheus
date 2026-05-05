@@ -56,6 +56,26 @@ func TestCatalogResolverLinksConfiguredAccountName(t *testing.T) {
 	}
 }
 
+func TestCatalogResolverLinksHubDiscoveryToSingleAccount(t *testing.T) {
+	catalog := testCatalog(t, devicecatalog.Device{Account: "A0F80D", Zone: "1", Name: "Relay"})
+	resolver := NewCatalogResolver(catalog, CatalogResolverConfig{})
+
+	identity := resolver.ResolveDiscovery(Discovery{
+		Name:       "Ajax hub",
+		DeviceType: "HUB_2_PLUS",
+	})
+
+	if identity.LinkedAccount != "A0F80D" || identity.LinkedZone != "" {
+		t.Fatalf("identity = %#v", identity)
+	}
+	if identity.DeviceSlug != "account_a0f80d" {
+		t.Fatalf("DeviceSlug = %q, want account_a0f80d", identity.DeviceSlug)
+	}
+	if len(identity.HAIdentifiers) != 1 || identity.HAIdentifiers[0] != "ajaxbridge_account_A0F80D" {
+		t.Fatalf("HAIdentifiers = %#v", identity.HAIdentifiers)
+	}
+}
+
 func testCatalog(t *testing.T, devices ...devicecatalog.Device) *devicecatalog.Catalog {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "devices.json")

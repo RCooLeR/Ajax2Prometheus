@@ -198,6 +198,27 @@ func TestPublishDevicePublishesToggleForOutletAndImpulseForRelay(t *testing.T) {
 	if got := relayMQTT.discovery["homeassistant/button/ajaxbridge/jeedom_control_garage_gate_impulse/config"]; got == "" {
 		t.Fatalf("relay impulse button discovery missing")
 	}
+
+	waterStopMQTT := &recordingMQTT{}
+	publisher.mqtt = waterStopMQTT
+	waterStop := Device{
+		Source:           Source,
+		Device:           "Water valve",
+		DeviceSlug:       "water_valve",
+		JeedomDeviceType: "WaterStop",
+		Values:           map[string]any{"state": false},
+		RawCommands:      map[string]Command{},
+		Actions: map[string]Action{
+			"on":  {Action: "on", CommandID: "26", DeviceSlug: "water_valve", StateCommandID: "23", Allowed: true},
+			"off": {Action: "off", CommandID: "27", DeviceSlug: "water_valve", StateCommandID: "23", Allowed: true},
+		},
+	}
+	if err := publisher.PublishDevice(context.Background(), waterStop); err != nil {
+		t.Fatal(err)
+	}
+	if got := waterStopMQTT.discovery["homeassistant/switch/ajaxbridge/jeedom_control_water_valve/config"]; got == "" {
+		t.Fatalf("WaterStop toggle switch discovery missing")
+	}
 }
 
 func TestPublishDeviceClearsLegacyUnlinkedSwitchAndState(t *testing.T) {

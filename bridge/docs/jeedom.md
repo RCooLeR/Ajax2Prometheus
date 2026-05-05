@@ -265,6 +265,8 @@ Known French string values are also normalized:
 | `CHARGE` | `CHARGED` |
 | `DECHARGE` | `DISCHARGED` |
 
+Relay voltage values from the Jeedom Ajax plugin are divided by 10 before publishing, because the plugin reports those relay supply voltages in tenths of volts.
+
 ## Duplicate Prevention With SIA
 
 Jeedom and SIA often describe the same physical Ajax device. To avoid duplicate Home Assistant devices, link Jeedom to SIA in `data/devices.json`:
@@ -326,12 +328,11 @@ When enabled, AjaxBridge reads Jeedom eqLogic discovery, registers action comman
 
 Allowed control types:
 
-- `Socket`, `WallSwitch`, `LightSwitch`, and `Outlet`: Home Assistant switch toggles when both `on` and `off` actions exist.
+- `Socket`, `WallSwitch`, `LightSwitch`, `Outlet`, and `WaterStop`: Home Assistant switch toggles when both `on` and `off` actions exist.
 - `Relay`: Home Assistant button impulse. AjaxBridge uses a discovered `impulse` action when available, otherwise it uses the relay `on` action as the pulse.
 
 Blocked by default:
 
-- `WaterStop`
 - hub/security actions such as arm, disarm, night mode, panic, and fire-detector mute
 - any device type not on the allowlist
 

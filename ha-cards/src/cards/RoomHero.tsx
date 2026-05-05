@@ -281,6 +281,7 @@ function forceNestedVideoObjectFit(rootElement: HTMLElement): () => void {
       video.style.setProperty('object-fit', 'fill', 'important');
       video.style.setProperty('width', '100%', 'important');
       video.style.setProperty('height', '100%', 'important');
+      video.muted = true;
     });
 
     root.querySelectorAll('*').forEach((element) => {

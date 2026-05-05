@@ -116,6 +116,9 @@ func (r *CatalogResolver) ResolveDiscovery(discovery Discovery) DeviceIdentity {
 	if _, ok := r.accountNames[aliasKey(discovery.Name)]; ok && r.account.DeviceSlug != "" && isHubDeviceType(discovery.DeviceType) {
 		return r.account
 	}
+	if r.account.DeviceSlug != "" && isHubDeviceType(discovery.DeviceType) {
+		return r.account
+	}
 	return DeviceIdentity{
 		DiscoveryDisabled: !r.cfg.DiscoverUnlinked,
 	}
