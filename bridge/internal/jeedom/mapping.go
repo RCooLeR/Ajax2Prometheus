@@ -9,6 +9,7 @@ const (
 	ComponentSensor       = "sensor"
 	ComponentBinarySensor = "binary_sensor"
 	ComponentSwitch       = "switch"
+	ComponentButton       = "button"
 )
 
 type Mapping struct {

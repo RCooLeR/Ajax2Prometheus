@@ -53,6 +53,7 @@ type ControlResult struct {
 func NewController(cfg ControllerConfig, store *Store, mqtt CommandPublisher, log zerolog.Logger) *Controller {
 	cfg.StateTopicPrefix = trimTopic(firstNonEmpty(cfg.StateTopicPrefix, "ajaxbridge/jeedom"))
 	cfg.JeedomSetTopicPrefix = trimTopic(firstNonEmpty(cfg.JeedomSetTopicPrefix, "jeedom/cmd/set"))
+	cfg.CommandPayload = firstNonEmpty(cfg.CommandPayload, "1")
 	return &Controller{cfg: cfg, store: store, mqtt: mqtt, log: log}
 }
 

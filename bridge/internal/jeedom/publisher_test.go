@@ -59,12 +59,13 @@ func TestDiscoveryPayloadUsesStableCommandIDAndDeviceIdentifier(t *testing.T) {
 
 func TestSwitchDiscoveryUsesBridgeCommandTopic(t *testing.T) {
 	device := Device{
-		Source:     Source,
-		Device:     "Garage gate",
-		DeviceSlug: "garage_gate",
+		Source:           Source,
+		Device:           "Server outlet",
+		DeviceSlug:       "server_outlet",
+		JeedomDeviceType: "Outlet",
 		Actions: map[string]Action{
-			"on":  {Action: "on", CommandID: "85", DeviceSlug: "garage_gate", StateCommandID: "81", Allowed: true},
-			"off": {Action: "off", CommandID: "86", DeviceSlug: "garage_gate", StateCommandID: "81", Allowed: true},
+			"on":  {Action: "on", CommandID: "85", DeviceSlug: "server_outlet", StateCommandID: "81", Allowed: true},
+			"off": {Action: "off", CommandID: "86", DeviceSlug: "server_outlet", StateCommandID: "81", Allowed: true},
 		},
 	}
 	publisher := NewPublisher(PublisherConfig{
@@ -79,21 +80,123 @@ func TestSwitchDiscoveryUsesBridgeCommandTopic(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if topic != "homeassistant/switch/ajaxbridge/jeedom_control_garage_gate/config" {
+	if topic != "homeassistant/switch/ajaxbridge/jeedom_control_server_outlet/config" {
 		t.Fatalf("discovery topic = %q", topic)
 	}
 	var payload DiscoveryConfig
 	if err := json.Unmarshal(body, &payload); err != nil {
 		t.Fatal(err)
 	}
-	if payload.CommandTopic != "ajaxbridge/jeedom/devices/garage_gate/set" {
+	if payload.CommandTopic != "ajaxbridge/jeedom/devices/server_outlet/set" {
 		t.Fatalf("command_topic = %q", payload.CommandTopic)
 	}
-	if payload.StateTopic != "ajaxbridge/jeedom/devices/garage_gate/state" {
+	if payload.StateTopic != "ajaxbridge/jeedom/devices/server_outlet/state" {
 		t.Fatalf("state_topic = %q", payload.StateTopic)
 	}
 	if payload.Optimistic == nil || *payload.Optimistic {
 		t.Fatalf("optimistic = %#v, want false", payload.Optimistic)
+	}
+}
+
+func TestButtonDiscoveryUsesImpulsePayload(t *testing.T) {
+	device := Device{
+		Source:           Source,
+		Device:           "Garage gate",
+		DeviceSlug:       "garage_gate",
+		JeedomDeviceType: "Relay",
+		Actions: map[string]Action{
+			"on": {Action: "on", CommandID: "85", DeviceSlug: "garage_gate", StateCommandID: "81", Allowed: true},
+		},
+	}
+	publisher := NewPublisher(PublisherConfig{
+		StateTopicPrefix: "ajaxbridge/jeedom",
+		Discovery:        true,
+		DiscoveryPrefix:  "homeassistant",
+		DiscoveryNode:    "ajaxbridge",
+		Controls:         true,
+	}, fakeMQTT{})
+
+	topic, body, err := publisher.BuildButtonDiscovery(device.Actions["on"], device)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if topic != "homeassistant/button/ajaxbridge/jeedom_control_garage_gate_impulse/config" {
+		t.Fatalf("discovery topic = %q", topic)
+	}
+	var payload DiscoveryConfig
+	if err := json.Unmarshal(body, &payload); err != nil {
+		t.Fatal(err)
+	}
+	if payload.Name != "Impulse" {
+		t.Fatalf("name = %q, want Impulse", payload.Name)
+	}
+	if payload.PayloadPress != "ON" {
+		t.Fatalf("payload_press = %q, want ON", payload.PayloadPress)
+	}
+	if payload.CommandTopic != "ajaxbridge/jeedom/devices/garage_gate/set" {
+		t.Fatalf("command_topic = %q", payload.CommandTopic)
+	}
+	if payload.StateTopic != "" {
+		t.Fatalf("button state_topic = %q, want empty", payload.StateTopic)
+	}
+}
+
+func TestPublishDevicePublishesToggleForOutletAndImpulseForRelay(t *testing.T) {
+	publisher := NewPublisher(PublisherConfig{
+		StateTopicPrefix: "ajaxbridge/jeedom",
+		Discovery:        true,
+		DiscoveryPrefix:  "homeassistant",
+		DiscoveryNode:    "ajaxbridge",
+		RetainDiscovery:  true,
+		Controls:         true,
+	}, nil)
+
+	outletMQTT := &recordingMQTT{}
+	publisher.mqtt = outletMQTT
+	outlet := Device{
+		Source:           Source,
+		Device:           "Server outlet",
+		DeviceSlug:       "server_outlet",
+		JeedomDeviceType: "Outlet",
+		Values:           map[string]any{"state": false},
+		RawCommands:      map[string]Command{},
+		Actions: map[string]Action{
+			"on":  {Action: "on", CommandID: "85", DeviceSlug: "server_outlet", StateCommandID: "81", Allowed: true},
+			"off": {Action: "off", CommandID: "86", DeviceSlug: "server_outlet", StateCommandID: "81", Allowed: true},
+		},
+	}
+	if err := publisher.PublishDevice(context.Background(), outlet); err != nil {
+		t.Fatal(err)
+	}
+	if got := outletMQTT.discovery["homeassistant/switch/ajaxbridge/jeedom_control_server_outlet/config"]; got == "" {
+		t.Fatalf("outlet toggle switch discovery missing")
+	}
+	if got := outletMQTT.discovery["homeassistant/button/ajaxbridge/jeedom_control_server_outlet_impulse/config"]; got != "" {
+		t.Fatalf("outlet impulse button discovery = %q, want cleanup/empty", got)
+	}
+
+	relayMQTT := &recordingMQTT{}
+	publisher.mqtt = relayMQTT
+	relay := Device{
+		Source:           Source,
+		Device:           "Garage gate",
+		DeviceSlug:       "garage_gate",
+		JeedomDeviceType: "Relay",
+		Values:           map[string]any{"state": false},
+		RawCommands:      map[string]Command{},
+		Actions: map[string]Action{
+			"on":  {Action: "on", CommandID: "85", DeviceSlug: "garage_gate", StateCommandID: "81", Allowed: true},
+			"off": {Action: "off", CommandID: "86", DeviceSlug: "garage_gate", StateCommandID: "81", Allowed: true},
+		},
+	}
+	if err := publisher.PublishDevice(context.Background(), relay); err != nil {
+		t.Fatal(err)
+	}
+	if got := relayMQTT.discovery["homeassistant/switch/ajaxbridge/jeedom_control_garage_gate/config"]; got != "" {
+		t.Fatalf("relay toggle switch discovery = %q, want cleanup/empty", got)
+	}
+	if got := relayMQTT.discovery["homeassistant/button/ajaxbridge/jeedom_control_garage_gate_impulse/config"]; got == "" {
+		t.Fatalf("relay impulse button discovery missing")
 	}
 }
 

@@ -38,12 +38,25 @@ export interface DashboardChip {
   active: boolean;
 }
 
+export interface DashboardMetric {
+  id: string;
+  label: string;
+  value: string;
+  icon: IconRef;
+  tone: GlowTone;
+}
+
 export interface RoomSmdIvsCounts {
   total: number;
   human: number;
   vehicle: number;
   animal: number;
   ivs: number;
+}
+
+export interface RoomClimate {
+  temperature?: string;
+  humidity?: string;
 }
 
 export interface Room {
@@ -58,6 +71,7 @@ export interface Room {
   statusTone: GlowTone;
   smdIvs?: RoomSmdIvsCounts;
   dahuaCameraCount?: number;
+  climate?: RoomClimate;
 }
 
 export interface DeviceHeroMedia {
@@ -94,6 +108,7 @@ export interface Device {
   attention: boolean;
   heroMedia?: DeviceHeroMedia;
   actions?: DeviceAction[];
+  metrics?: DashboardMetric[];
 }
 
 export interface EventItem {
@@ -120,6 +135,7 @@ export interface RoomSummary {
   attentionCount: number;
   smdIvs: RoomSmdIvsCounts;
   dahuaCameraCount: number;
+  climate?: RoomClimate;
   latestEventLabel: string;
   tone: GlowTone;
 }

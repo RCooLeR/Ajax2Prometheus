@@ -40,6 +40,7 @@ export function getRoomSummaries(data: DashboardData): Record<string, RoomSummar
       attentionCount,
       smdIvs: room.smdIvs ?? emptySmdIvsCounts(),
       dahuaCameraCount: room.dahuaCameraCount ?? 0,
+      climate: room.climate,
       latestEventLabel: latestEvent?.title ?? 'No recent events',
       tone: attentionCount > 0 ? 'amber' : room.statusTone,
     };

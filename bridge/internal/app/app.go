@@ -127,6 +127,7 @@ func Run(parent context.Context, cfg config.Config, log zerolog.Logger) error {
 				Enabled:              cfg.JeedomControlsEnabled,
 				StateTopicPrefix:     cfg.JeedomStateTopicPrefix,
 				JeedomSetTopicPrefix: cfg.JeedomSetTopicPrefix,
+				CommandPayload:       cfg.JeedomControlPayload,
 			}, jeedomStore, mqttPublisher, log.With().Str("component", "jeedom_control").Logger())
 		}
 	}

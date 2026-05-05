@@ -48,3 +48,4 @@ images-for-cards/
 
 # Docker overrides
 docker-compose.override.yml
+/ha_cleanup_duplicate_entities.py

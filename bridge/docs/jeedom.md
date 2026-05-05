@@ -113,6 +113,7 @@ environment:
   AJAXBRIDGE_JEEDOM_ACCOUNT_NAMES: "House"
   AJAXBRIDGE_JEEDOM_CONTROLS_ENABLED: "false"
   AJAXBRIDGE_JEEDOM_SET_TOPIC_PREFIX: "jeedom/cmd/set"
+  AJAXBRIDGE_JEEDOM_CONTROL_PAYLOAD: "1"
 ```
 
 Variables:
@@ -130,8 +131,9 @@ Variables:
 | `AJAXBRIDGE_JEEDOM_SAMPLE_DIR` | empty | Raw Jeedom MQTT sample capture directory. Empty disables capture. Leave empty in production. |
 | `AJAXBRIDGE_JEEDOM_DISCOVER_UNLINKED` | `false` | Publish HA discovery for Jeedom devices not linked to SIA catalog devices. |
 | `AJAXBRIDGE_JEEDOM_ACCOUNT_NAMES` | empty | Jeedom names that represent the SIA account/hub device. |
-| `AJAXBRIDGE_JEEDOM_CONTROLS_ENABLED` | `false` | Enable allowlisted on/off controls. |
+| `AJAXBRIDGE_JEEDOM_CONTROLS_ENABLED` | `false` | Enable allowlisted toggles and relay impulse controls. |
 | `AJAXBRIDGE_JEEDOM_SET_TOPIC_PREFIX` | `jeedom/cmd/set` | Jeedom action topic prefix. |
+| `AJAXBRIDGE_JEEDOM_CONTROL_PAYLOAD` | `1` | Payload sent to Jeedom action topics. |
 
 ## Expected Jeedom Event Payload
 
@@ -320,15 +322,12 @@ Controls are disabled by default:
 AJAXBRIDGE_JEEDOM_CONTROLS_ENABLED: "false"
 ```
 
-When enabled, AjaxBridge reads Jeedom eqLogic discovery, registers action command ids, and exposes only allowlisted on/off controls.
+When enabled, AjaxBridge reads Jeedom eqLogic discovery, registers action command ids, and exposes only allowlisted controls.
 
-Allowed device types:
+Allowed control types:
 
-- `Relay`
-- `Socket`
-- `WallSwitch`
-- `LightSwitch`
-- `Outlet`
+- `Socket`, `WallSwitch`, `LightSwitch`, and `Outlet`: Home Assistant switch toggles when both `on` and `off` actions exist.
+- `Relay`: Home Assistant button impulse. AjaxBridge uses a discovered `impulse` action when available, otherwise it uses the relay `on` action as the pulse.
 
 Blocked by default:
 
@@ -336,7 +335,7 @@ Blocked by default:
 - hub/security actions such as arm, disarm, night mode, panic, and fire-detector mute
 - any device type not on the allowlist
 
-Home Assistant switch command topic:
+Home Assistant switch/button command topic:
 
 ```text
 ajaxbridge/jeedom/devices/<device_slug>/set
@@ -347,6 +346,7 @@ Payloads:
 ```text
 ON
 OFF
+IMPULSE
 ```
 
 AjaxBridge resolves the Jeedom action command id and publishes:
@@ -355,7 +355,7 @@ AjaxBridge resolves the Jeedom action command id and publishes:
 jeedom/cmd/set/<command_id>
 ```
 
-The Jeedom command payload is empty by default.
+The Jeedom command payload is `1` by default. Override it with `AJAXBRIDGE_JEEDOM_CONTROL_PAYLOAD` if your MQTT Manager action commands expect a different payload.
 
 AjaxBridge also subscribes to this same `jeedom/cmd/set/#` prefix. That gives best-effort visibility into commands issued by other MQTT clients when the command id is known from eqLogic discovery. Commands issued directly inside Jeedom may not be visible as command topics, so state-change detection still depends on Jeedom publishing the related `state` info command.
 
@@ -385,7 +385,7 @@ For WallSwitch/Outlet on/off:
 
 For relay trigger notifications:
 
-- Use `control` rules for bridge-issued relay commands.
+- Use `control` rules for bridge-issued relay impulse commands.
 - Use `state` change rules for physical or Jeedom-originated relay changes, if Jeedom publishes the state.
 
 ## Debug Endpoints
@@ -422,4 +422,4 @@ Controls do not work:
 - Confirm `/jeedom/actions` shows `allowed: true` for the target device.
 - Confirm the device type is allowlisted.
 - Check `/jeedom/control-audit?limit=100`.
-- Confirm MQTT Manager accepts `jeedom/cmd/set/<command_id>`.
+- Confirm MQTT Manager accepts `jeedom/cmd/set/<command_id>` with payload `1`, or set `AJAXBRIDGE_JEEDOM_CONTROL_PAYLOAD` to the payload your Jeedom action expects.

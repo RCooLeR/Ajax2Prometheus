@@ -908,6 +908,8 @@ func normalizeDiscoveryAction(command DiscoveryCommand) string {
 		return "on"
 	case "SWITCH_OFF", "OFF":
 		return "off"
+	case "IMPULSE", "PULSE", "TOGGLE", "SWITCH_TOGGLE", "RELAY_IMPULSE":
+		return "impulse"
 	case "ARM":
 		return "arm"
 	case "NIGHT_MODE":
@@ -922,6 +924,8 @@ func normalizeDiscoveryAction(command DiscoveryCommand) string {
 		return "on"
 	case "off":
 		return "off"
+	case "impulse", "impulsion", "pulse", "toggle":
+		return "impulse"
 	case "armement", "arm":
 		return "arm"
 	case "modenuit", "nightmode":
@@ -943,16 +947,25 @@ func NormalizeControlAction(action string) string {
 		return "on"
 	case "0", "false", "off", "close", "disable":
 		return "off"
+	case "impulse", "impulsion", "pulse", "momentary", "toggle":
+		return "impulse"
 	default:
 		return strings.ToLower(strings.TrimSpace(action))
 	}
 }
 
 func controlAllowed(discovery Discovery, command DiscoveryCommand, action string) (bool, string) {
+	deviceType := commandKey(firstNonEmpty(discovery.DeviceType, discovery.ApplyDevice))
+	if action == "impulse" {
+		if deviceType == "relay" {
+			return true, ""
+		}
+		return false, "only relay impulse controls are allowlisted"
+	}
 	if action != "on" && action != "off" {
 		return false, "only on/off device controls are allowlisted"
 	}
-	switch strings.ToLower(firstNonEmpty(discovery.DeviceType, discovery.ApplyDevice)) {
+	switch deviceType {
 	case "relay", "socket", "wallswitch", "lightswitch", "outlet":
 		return true, ""
 	case "waterstop":

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import type {
   DashboardChip,
   DashboardData,
+  DashboardMetric,
   Device,
   DeviceAction,
   DeviceHeroMedia,
@@ -10,6 +11,7 @@ import type {
   GlowTone,
   IconRef,
   Room,
+  RoomClimate,
   RoomSmdIvsCounts,
   SystemState,
 } from '../models/dashboard';
@@ -105,6 +107,7 @@ interface ResolvedDevice extends Device {
   cameraLike: boolean;
   sensorLike: boolean;
   severity: number;
+  metrics?: DashboardMetric[];
 }
 
 interface RoomMetrics {
@@ -116,6 +119,27 @@ interface RoomMetrics {
   sensorCount: number;
   smdIvs: RoomSmdIvsCounts;
   latestEventLabel: string;
+}
+
+interface MetricCandidate extends DashboardMetric {
+  kind: string;
+  priority: number;
+}
+
+interface AjaxDeviceMetricContext {
+  lastEventName: string;
+  lastEventAt: string;
+  lastSignal: string;
+  alarmSignal: string;
+  alarmActive: boolean;
+  tamperActive: boolean;
+  troubleActive: boolean;
+  activeSignals: string[];
+}
+
+interface ClimateSample {
+  value: number;
+  unit: string;
 }
 
 const DAHUA_HINT = /(dahua|rroller)/i;
@@ -366,6 +390,7 @@ function buildAjaxDevices(
     const alarmActive = isOn(firstEntityState(linkedEntities, states, '_alarm_active'));
     const tamperActive = isOn(firstEntityState(linkedEntities, states, '_tamper_active'));
     const troubleActive = isOn(firstEntityState(linkedEntities, states, '_trouble_active'));
+    const actionEntries = linkedEntities.filter((entry) => isActionableEntity(entry));
     const activeSignals = linkedEntities
       .filter((entry) => signalNameFromEntityId(entry.entity_id) !== null)
       .filter((entry) => isOn(states[entry.entity_id]))
@@ -392,6 +417,17 @@ function buildAjaxDevices(
       entityIds: linkedEntities.map((entry) => entry.entity_id),
     });
     const eventType = mapSignalToEventType(alarmSignal || lastSignal, alarmActive, offline);
+    const actions = buildDeviceActions(actionEntries, states);
+    const metrics = buildDeviceMetrics(linkedEntities, states, {
+      lastEventName,
+      lastEventAt,
+      lastSignal,
+      alarmSignal,
+      alarmActive,
+      tamperActive,
+      troubleActive,
+      activeSignals,
+    });
 
     output.push({
       id: deviceEntry.id,
@@ -403,11 +439,13 @@ function buildAjaxDevices(
       tone: toneFromSeverity(severity),
       status: headline,
       connectivity: offline ? 'Offline' : 'Online',
-      battery: activeSignals.includes('battery') ? 'Low' : 'Nominal',
-      signal: humanizeSlug(lastSignal || 'idle'),
+      battery: readAjaxBatteryLabel(linkedEntities, states, activeSignals),
+      signal: readAjaxSignalLabel(linkedEntities, states, lastSignal),
       entityId: linkedEntities[0]?.entity_id ?? '',
       isOnline: !offline,
       attention: severity >= 2,
+      actions,
+      metrics,
       lastEventAt,
       lastEventType: eventType,
       lastEventDescription: `${sourceLabel}: ${lastEventName}`,
@@ -555,6 +593,7 @@ function buildGenericIntegrationDevice(
   const latestTimelineEvent = timelineEvents?.[0];
   const heroMedia = buildHeroMedia(mediaEntries, states);
   const actions = type === 'camera' ? undefined : buildDeviceActions(actionEntries, states);
+  const metrics = buildDeviceMetrics(entityEntries, states);
 
   debugDahuaCandidate(name, model, entityEntries, states, activeEntry, activeState);
 
@@ -575,6 +614,7 @@ function buildGenericIntegrationDevice(
     attention,
     heroMedia,
     actions,
+    metrics,
     lastEventAt: latestTimelineEvent?.occurredAt ?? lastEventAt,
     lastEventType: latestTimelineEvent?.type ?? eventType,
     lastEventDescription: latestTimelineEvent?.description ?? description,
@@ -680,6 +720,7 @@ function buildRoom(
 ): Room {
   const accent = accentForRoom(area.name);
   const image = resolveRoomImage(area, entityEntries, states);
+  const climate = buildRoomClimate(entityEntries, states);
   const counts = metrics ?? {
     deviceCount: 0,
     onlineCount: 0,
@@ -703,6 +744,7 @@ function buildRoom(
     statusTone: counts.attentionCount > 0 ? 'amber' : counts.onlineCount === 0 ? 'red' : 'green',
     smdIvs: counts.smdIvs,
     dahuaCameraCount: counts.dahuaCameraCount,
+    climate,
   };
 }
 
@@ -994,6 +1036,7 @@ function toPublicDevice(device: ResolvedDevice): Device {
     attention: device.attention,
     heroMedia: device.heroMedia,
     actions: device.actions,
+    metrics: device.metrics,
   };
 }
 
@@ -1282,7 +1325,7 @@ function buildHeroMedia(
   const picture = readEntityPicture(state);
   const title = entityDisplayName(entry, state);
   if (entityDomain(entry.entity_id) === 'camera') {
-    const streamEntityId = resolvePreferredStreamEntity(entry, states);
+    const streamEntityId = resolvePreferredStreamEntity(entry, entries, states);
     const streamPicture = streamEntityId ? readEntityPicture(states[streamEntityId]) : '';
     const posterSrc = picture || streamPicture || `/api/camera_proxy/${streamEntityId ?? entry.entity_id}`;
 
@@ -1394,6 +1437,9 @@ function actionLabel(
       if (entityDomain(entry.entity_id) === 'lock') {
         return safeString(state?.state).toLowerCase() === 'unlocked' ? 'Lock door' : 'Unlock';
       }
+      if (entityDomain(entry.entity_id) === 'switch') {
+        return safeString(state?.state).toLowerCase() === 'on' ? 'Turn off' : 'Turn on';
+      }
       return entityDisplayName(entry, state);
     }
   }
@@ -1437,22 +1483,650 @@ function actionPriority(label: string): number {
   return 10;
 }
 
+function buildDeviceMetrics(
+  entries: HomeAssistantEntityEntry[],
+  states: Record<string, HomeAssistantState>,
+  ajaxContext?: AjaxDeviceMetricContext,
+): DashboardMetric[] | undefined {
+  const candidates: MetricCandidate[] = [];
+
+  if (ajaxContext) {
+    candidates.push(...ajaxContextMetrics(ajaxContext));
+  }
+
+  for (const entry of entries) {
+    const candidate = metricCandidateFromEntity(entry, states[entry.entity_id]);
+    if (candidate) {
+      candidates.push(candidate);
+    }
+  }
+
+  const metrics = dedupeMetrics(candidates)
+    .sort((left, right) => left.priority - right.priority || left.label.localeCompare(right.label))
+    .slice(0, 8)
+    .map(({ kind: _kind, priority: _priority, ...metric }) => metric);
+
+  return metrics.length > 0 ? metrics : undefined;
+}
+
+function ajaxContextMetrics(context: AjaxDeviceMetricContext): MetricCandidate[] {
+  const metrics: MetricCandidate[] = [];
+  const lastSignal = safeString(context.lastSignal);
+  const alarmSignal = safeString(context.alarmSignal);
+  const lastEventName = safeString(context.lastEventName);
+
+  if (context.alarmActive && alarmSignal && alarmSignal !== 'none') {
+    metrics.push({
+      id: `metric:alarm_signal:${slugPart(alarmSignal)}`,
+      kind: 'alarm_signal',
+      label: 'Alarm signal',
+      value: humanizeSlug(alarmSignal),
+      icon: { category: 'events', key: 'alarm' },
+      tone: 'red',
+      priority: 12,
+    });
+  }
+
+  if (context.tamperActive) {
+    metrics.push({
+      id: 'metric:tamper:active',
+      kind: 'tamper',
+      label: 'Tamper',
+      value: 'Active',
+      icon: { category: 'events', key: 'tamper_detected' },
+      tone: 'red',
+      priority: 14,
+    });
+  }
+
+  if (context.troubleActive) {
+    metrics.push({
+      id: 'metric:trouble:active',
+      kind: 'trouble',
+      label: 'Trouble',
+      value: 'Active',
+      icon: { category: 'system-states', key: 'trouble' },
+      tone: 'amber',
+      priority: 15,
+    });
+  }
+
+  if (lastSignal && lastSignal !== 'idle' && lastSignal !== 'none') {
+    metrics.push({
+      id: `metric:last_signal:${slugPart(lastSignal)}`,
+      kind: 'last_signal',
+      label: 'Last signal',
+      value: humanizeSlug(lastSignal),
+      icon: { category: 'sensors', key: 'signal' },
+      tone: context.activeSignals.length > 0 ? 'amber' : 'slate',
+      priority: 80,
+    });
+  }
+
+  if (lastEventName && lastEventName !== 'Awaiting event') {
+    metrics.push({
+      id: `metric:last_event:${slugPart(lastEventName)}`,
+      kind: 'last_event',
+      label: 'Last event',
+      value: lastEventName,
+      icon: { category: 'misc', key: 'history' },
+      tone: 'slate',
+      priority: 90,
+    });
+  }
+
+  if (context.lastEventAt) {
+    metrics.push({
+      id: 'metric:last_event_at',
+      kind: 'last_event_at',
+      label: 'Updated',
+      value: formatShortDateTime(context.lastEventAt),
+      icon: { category: 'misc', key: 'history' },
+      tone: 'slate',
+      priority: 95,
+    });
+  }
+
+  return metrics;
+}
+
+function metricCandidateFromEntity(
+  entry: HomeAssistantEntityEntry,
+  state?: HomeAssistantState,
+): MetricCandidate | null {
+  if (!state || isIgnoredMetricState(state)) {
+    return null;
+  }
+
+  const domain = entityDomain(entry.entity_id);
+  const deviceClass = safeString(state.attributes.device_class).toLowerCase();
+  const text = entityDescriptorText(entry, state);
+
+  if (domain === 'sensor') {
+    return sensorMetricCandidate(entry, state, deviceClass, text);
+  }
+
+  if (domain === 'binary_sensor') {
+    return binaryMetricCandidate(entry, state, deviceClass, text);
+  }
+
+  if (domain === 'switch') {
+    const active = isOn(state);
+    return {
+      id: `metric:${entry.entity_id}`,
+      kind: 'switch',
+      label: actionMetricLabel(entry, state, 'Switch'),
+      value: active ? 'On' : 'Off',
+      icon: { category: 'misc', key: 'energy' },
+      tone: active ? 'green' : 'slate',
+      priority: 35,
+    };
+  }
+
+  if (domain === 'lock') {
+    const unlocked = safeString(state.state).toLowerCase() === 'unlocked';
+    return {
+      id: `metric:${entry.entity_id}`,
+      kind: 'lock',
+      label: actionMetricLabel(entry, state, 'Lock'),
+      value: unlocked ? 'Unlocked' : humanizeHomeAssistantState(state),
+      icon: { category: 'security-states', key: unlocked ? 'unlocked' : 'locked' },
+      tone: unlocked ? 'amber' : 'green',
+      priority: 34,
+    };
+  }
+
+  return null;
+}
+
+function sensorMetricCandidate(
+  entry: HomeAssistantEntityEntry,
+  state: HomeAssistantState,
+  deviceClass: string,
+  text: string,
+): MetricCandidate | null {
+  const unit = safeString(state.attributes.unit_of_measurement);
+
+  if (deviceClass === 'temperature' || matchesMetricName(text, ['temperature', 'temp', 'temperature_c'])) {
+    return {
+      id: `metric:${entry.entity_id}`,
+      kind: 'temperature',
+      label: 'Temperature',
+      value: formatSensorState(state, unit || 'C', 1),
+      icon: { category: 'sensors', key: 'temperature' },
+      tone: temperatureTone(parseStateNumber(state)),
+      priority: 20,
+    };
+  }
+
+  if (deviceClass === 'humidity' || matchesMetricName(text, ['humidity', 'humidite', 'humidity_percent'])) {
+    return {
+      id: `metric:${entry.entity_id}`,
+      kind: 'humidity',
+      label: 'Humidity',
+      value: formatSensorState(state, unit || '%', 0),
+      icon: { category: 'sensors', key: 'humidity' },
+      tone: 'cyan',
+      priority: 21,
+    };
+  }
+
+  if (deviceClass === 'battery' || matchesMetricName(text, ['battery', 'batterie', 'battery_percent'])) {
+    const battery = parseStateNumber(state);
+    return {
+      id: `metric:${entry.entity_id}`,
+      kind: 'battery',
+      label: 'Battery',
+      value: formatSensorState(state, unit || '%', 0),
+      icon: { category: 'sensors', key: 'battery' },
+      tone: battery !== null && battery <= 20 ? 'amber' : 'green',
+      priority: 30,
+    };
+  }
+
+  if (deviceClass === 'signal_strength' || matchesMetricName(text, ['signal', 'rssi', 'signal_dbm', 'signal_level'])) {
+    return {
+      id: `metric:${entry.entity_id}`,
+      kind: 'signal_strength',
+      label: 'Signal',
+      value: formatSensorState(state, unit, 0),
+      icon: { category: 'sensors', key: 'signal' },
+      tone: signalTone(parseStateNumber(state), unit),
+      priority: 31,
+    };
+  }
+
+  if (deviceClass === 'power' || matchesMetricName(text, ['power_w', 'puissance'])) {
+    return {
+      id: `metric:${entry.entity_id}`,
+      kind: 'power',
+      label: 'Power',
+      value: formatSensorState(state, unit || 'W', 0),
+      icon: { category: 'misc', key: 'energy' },
+      tone: 'cyan',
+      priority: 40,
+    };
+  }
+
+  if (deviceClass === 'energy' || matchesMetricName(text, ['energy_kwh', 'consumption', 'consommation'])) {
+    return {
+      id: `metric:${entry.entity_id}`,
+      kind: 'energy',
+      label: 'Energy',
+      value: formatSensorState(state, unit || 'kWh', 1),
+      icon: { category: 'misc', key: 'energy' },
+      tone: 'cyan',
+      priority: 41,
+    };
+  }
+
+  if (deviceClass === 'current' || matchesMetricName(text, ['current_a', 'courant'])) {
+    return {
+      id: `metric:${entry.entity_id}`,
+      kind: 'current',
+      label: 'Current',
+      value: formatSensorState(state, unit || 'A', 1),
+      icon: { category: 'misc', key: 'energy' },
+      tone: 'cyan',
+      priority: 42,
+    };
+  }
+
+  if (deviceClass === 'voltage' || matchesMetricName(text, ['voltage_v', 'tension'])) {
+    return {
+      id: `metric:${entry.entity_id}`,
+      kind: 'voltage',
+      label: 'Voltage',
+      value: formatSensorState(state, unit || 'V', 0),
+      icon: { category: 'misc', key: 'energy' },
+      tone: 'cyan',
+      priority: 43,
+    };
+  }
+
+  if (matchesMetricName(text, ['battery_state'])) {
+    return {
+      id: `metric:${entry.entity_id}`,
+      kind: 'battery_state',
+      label: 'Battery state',
+      value: humanizeHomeAssistantState(state),
+      icon: { category: 'sensors', key: 'battery' },
+      tone: stateLooksNominal(state) ? 'green' : 'amber',
+      priority: 32,
+    };
+  }
+
+  if (matchesMetricName(text, ['state', 'status', 'etat'])) {
+    return {
+      id: `metric:${entry.entity_id}`,
+      kind: 'state',
+      label: 'State',
+      value: humanizeHomeAssistantState(state),
+      icon: { category: 'misc', key: 'info' },
+      tone: stateLooksNominal(state) ? 'green' : 'slate',
+      priority: 50,
+    };
+  }
+
+  return null;
+}
+
+function binaryMetricCandidate(
+  entry: HomeAssistantEntityEntry,
+  state: HomeAssistantState,
+  deviceClass: string,
+  text: string,
+): MetricCandidate | null {
+  const active = isActiveDahuaState(state);
+  const activeTone: GlowTone = active ? 'amber' : 'green';
+
+  if (deviceClass === 'connectivity' || looksLikePositiveConnectivityEntity(entry, state)) {
+    const online = isPositiveConnectivityState(state);
+    return {
+      id: `metric:${entry.entity_id}`,
+      kind: 'connectivity',
+      label: 'Link',
+      value: online ? 'Online' : 'Offline',
+      icon: { category: 'system-states', key: online ? 'online' : 'offline' },
+      tone: online ? 'green' : 'red',
+      priority: 10,
+    };
+  }
+
+  if (deviceClass === 'battery' || matchesMetricName(text, ['battery'])) {
+    return {
+      id: `metric:${entry.entity_id}`,
+      kind: 'battery_low',
+      label: 'Battery',
+      value: active ? 'Low' : 'Normal',
+      icon: { category: 'sensors', key: 'battery' },
+      tone: active ? 'amber' : 'green',
+      priority: 30,
+    };
+  }
+
+  if (deviceClass === 'power' || matchesMetricName(text, ['external_power', 'mainspower', 'power'])) {
+    return {
+      id: `metric:${entry.entity_id}`,
+      kind: 'external_power',
+      label: 'Power',
+      value: active ? 'Mains' : humanizeHomeAssistantState(state),
+      icon: { category: 'misc', key: 'energy' },
+      tone: active ? 'green' : 'amber',
+      priority: 33,
+    };
+  }
+
+  if (deviceClass === 'tamper' || matchesMetricName(text, ['tamper', 'sabotage'])) {
+    return {
+      id: `metric:${entry.entity_id}`,
+      kind: 'tamper',
+      label: 'Tamper',
+      value: active ? 'Active' : 'Clear',
+      icon: { category: 'events', key: 'tamper_detected' },
+      tone: active ? 'red' : 'green',
+      priority: 14,
+    };
+  }
+
+  if (['door', 'window', 'opening'].includes(deviceClass) || matchesMetricName(text, ['door', 'window', 'opening', 'ouverture'])) {
+    const isWindow = deviceClass === 'window' || text.includes('window');
+    const label = isWindow ? 'Window' : 'Opening';
+    return {
+      id: `metric:${entry.entity_id}`,
+      kind: isWindow ? 'window' : 'opening',
+      label,
+      value: humanizeHomeAssistantState(state),
+      icon: { category: 'security-states', key: active ? (isWindow ? 'window_open' : 'door_open') : (isWindow ? 'window_closed' : 'door_closed') },
+      tone: activeTone,
+      priority: 22,
+    };
+  }
+
+  if (deviceClass === 'moisture' || matchesMetricName(text, ['leak', 'fuite', 'water_leak'])) {
+    return {
+      id: `metric:${entry.entity_id}`,
+      kind: 'leak',
+      label: 'Leak',
+      value: active ? 'Detected' : 'Dry',
+      icon: { category: 'sensors', key: 'water_leak' },
+      tone: active ? 'red' : 'green',
+      priority: 23,
+    };
+  }
+
+  if (['motion', 'occupancy', 'presence'].includes(deviceClass) || matchesMetricName(text, ['motion', 'presence'])) {
+    return {
+      id: `metric:${entry.entity_id}`,
+      kind: 'motion',
+      label: 'Motion',
+      value: active ? 'Detected' : 'Quiet',
+      icon: { category: 'sensors', key: 'motion' },
+      tone: active ? 'amber' : 'green',
+      priority: 24,
+    };
+  }
+
+  if (['problem', 'safety', 'smoke', 'gas'].includes(deviceClass)) {
+    return {
+      id: `metric:${entry.entity_id}`,
+      kind: deviceClass || 'problem',
+      label: titleMetricLabel(deviceClass || entityIdLeaf(entry.entity_id)),
+      value: humanizeHomeAssistantState(state),
+      icon: iconForBinaryDeviceClass(deviceClass, active),
+      tone: active ? (deviceClass === 'safety' || deviceClass === 'smoke' || deviceClass === 'gas' ? 'red' : 'amber') : 'green',
+      priority: active ? 13 : 55,
+    };
+  }
+
+  return null;
+}
+
+function dedupeMetrics(candidates: MetricCandidate[]): MetricCandidate[] {
+  const byKind = new Map<string, MetricCandidate>();
+  const usedIds = new Set<string>();
+
+  for (const candidate of candidates) {
+    if (!candidate.value || usedIds.has(candidate.id)) {
+      continue;
+    }
+    usedIds.add(candidate.id);
+
+    const current = byKind.get(candidate.kind);
+    if (!current || candidate.priority < current.priority || (candidate.priority === current.priority && candidate.value.length > current.value.length)) {
+      byKind.set(candidate.kind, candidate);
+    }
+  }
+
+  return [...byKind.values()];
+}
+
+function buildRoomClimate(
+  entries: HomeAssistantEntityEntry[],
+  states: Record<string, HomeAssistantState>,
+): RoomClimate | undefined {
+  const temperatures: ClimateSample[] = [];
+  const humidities: ClimateSample[] = [];
+
+  for (const entry of entries) {
+    const state = states[entry.entity_id];
+    const sample = climateSampleFromEntity(entry, state);
+    if (!sample) {
+      continue;
+    }
+    if (sample.kind === 'temperature') {
+      temperatures.push(sample);
+    } else {
+      humidities.push(sample);
+    }
+  }
+
+  const climate: RoomClimate = {};
+  if (temperatures.length > 0) {
+    climate.temperature = formatAverageSample(temperatures, 'C', 1);
+  }
+  if (humidities.length > 0) {
+    climate.humidity = formatAverageSample(humidities, '%', 0);
+  }
+
+  return climate.temperature || climate.humidity ? climate : undefined;
+}
+
+function climateSampleFromEntity(
+  entry: HomeAssistantEntityEntry,
+  state?: HomeAssistantState,
+): (ClimateSample & { kind: 'temperature' | 'humidity' }) | null {
+  if (!state || entityDomain(entry.entity_id) !== 'sensor' || isIgnoredMetricState(state)) {
+    return null;
+  }
+
+  const value = parseStateNumber(state);
+  if (value === null) {
+    return null;
+  }
+
+  const deviceClass = safeString(state.attributes.device_class).toLowerCase();
+  const text = entityDescriptorText(entry, state);
+  const unit = safeString(state.attributes.unit_of_measurement);
+
+  if (deviceClass === 'temperature' || matchesMetricName(text, ['temperature', 'temp', 'temperature_c'])) {
+    return { kind: 'temperature', value, unit };
+  }
+
+  if (deviceClass === 'humidity' || matchesMetricName(text, ['humidity', 'humidite', 'humidity_percent'])) {
+    return { kind: 'humidity', value, unit };
+  }
+
+  return null;
+}
+
+function readAjaxBatteryLabel(
+  entries: HomeAssistantEntityEntry[],
+  states: Record<string, HomeAssistantState>,
+  activeSignals: string[],
+): string {
+  const batteryMetric = entries
+    .map((entry) => metricCandidateFromEntity(entry, states[entry.entity_id]))
+    .find((metric) => metric?.kind === 'battery' || metric?.kind === 'battery_low' || metric?.kind === 'battery_state');
+
+  if (batteryMetric) {
+    return batteryMetric.value;
+  }
+
+  return activeSignals.includes('battery') ? 'Low' : readBatteryLabel(entries, states);
+}
+
+function readAjaxSignalLabel(
+  entries: HomeAssistantEntityEntry[],
+  states: Record<string, HomeAssistantState>,
+  lastSignal: string,
+): string {
+  const signalMetric = entries
+    .map((entry) => metricCandidateFromEntity(entry, states[entry.entity_id]))
+    .find((metric) => metric?.kind === 'signal_strength');
+
+  if (signalMetric) {
+    return signalMetric.value;
+  }
+
+  return humanizeSlug(lastSignal || 'idle');
+}
+
+function actionMetricLabel(
+  entry: HomeAssistantEntityEntry,
+  state: HomeAssistantState,
+  fallbackLabel: string,
+): string {
+  const label = entityDisplayName(entry, state);
+  return /^control$/i.test(label) ? fallbackLabel : label;
+}
+
+function matchesMetricName(text: string, needles: string[]): boolean {
+  return needles.some((needle) => {
+    const escaped = needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return new RegExp(`(^|[\\s._-])${escaped}([\\s._-]|$)`, 'i').test(text);
+  });
+}
+
+function iconForBinaryDeviceClass(deviceClass: string, active: boolean): IconRef {
+  switch (deviceClass) {
+    case 'smoke':
+      return { category: 'sensors', key: 'smoke' };
+    case 'gas':
+      return { category: 'sensors', key: 'gas' };
+    case 'safety':
+      return { category: 'misc', key: active ? 'alert' : 'check' };
+    default:
+      return { category: 'system-states', key: active ? 'trouble' : 'ok' };
+  }
+}
+
+function titleMetricLabel(value: string): string {
+  const label = humanizeSlug(value);
+  return label === 'Problem' ? 'Trouble' : label;
+}
+
+function entityDescriptorText(entry: HomeAssistantEntityEntry, state: HomeAssistantState): string {
+  return [
+    entry.entity_id,
+    entry.name,
+    entry.original_name,
+    state.attributes.friendly_name,
+    state.attributes.device_class,
+  ]
+    .map(safeString)
+    .join(' ')
+    .toLowerCase();
+}
+
+function formatSensorState(state: HomeAssistantState, unit: string, maximumFractionDigits: number): string {
+  const number = parseStateNumber(state);
+  if (number === null) {
+    return humanizeHomeAssistantState(state);
+  }
+  return formatMetricNumber(number, unit, maximumFractionDigits);
+}
+
+function formatAverageSample(samples: ClimateSample[], fallbackUnit: string, maximumFractionDigits: number): string {
+  const total = samples.reduce((sum, sample) => sum + sample.value, 0);
+  const unit = samples.map((sample) => sample.unit).find(Boolean) ?? fallbackUnit;
+  return formatMetricNumber(total / samples.length, unit, maximumFractionDigits);
+}
+
+function formatMetricNumber(value: number, unit: string, maximumFractionDigits: number): string {
+  const formatted = new Intl.NumberFormat('en-GB', {
+    maximumFractionDigits,
+    minimumFractionDigits: maximumFractionDigits > 0 ? 1 : 0,
+  }).format(value);
+  return unit ? `${formatted} ${unit}` : formatted;
+}
+
+function formatShortDateTime(value: string): string {
+  const parsed = Date.parse(value);
+  if (!Number.isFinite(parsed)) {
+    return value;
+  }
+  return new Intl.DateTimeFormat('en-GB', {
+    day: '2-digit',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(new Date(parsed));
+}
+
+function parseStateNumber(state?: HomeAssistantState): number | null {
+  const raw = safeString(state?.state).replace(',', '.');
+  if (!raw || raw === 'unknown' || raw === 'unavailable') {
+    return null;
+  }
+  const value = Number.parseFloat(raw);
+  return Number.isFinite(value) ? value : null;
+}
+
+function isIgnoredMetricState(state: HomeAssistantState): boolean {
+  const value = safeString(state.state).toLowerCase();
+  return value === '' || value === 'unknown' || value === 'unavailable';
+}
+
+function stateLooksNominal(state: HomeAssistantState): boolean {
+  const value = safeString(state.state).toLowerCase();
+  return ['ok', 'normal', 'nominal', 'clear', 'off', 'closed', 'locked', 'online', 'connected', 'available'].includes(value);
+}
+
+function temperatureTone(value: number | null): GlowTone {
+  if (value === null) {
+    return 'cyan';
+  }
+  if (value <= 5 || value >= 35) {
+    return 'amber';
+  }
+  return 'cyan';
+}
+
+function signalTone(value: number | null, unit: string): GlowTone {
+  if (value === null) {
+    return 'cyan';
+  }
+  if (unit.toLowerCase() === 'dbm') {
+    return value <= -95 ? 'amber' : 'green';
+  }
+  return value <= 1 ? 'amber' : 'green';
+}
+
 function resolvePreferredStreamEntity(
   entry: HomeAssistantEntityEntry,
+  entries: HomeAssistantEntityEntry[],
   states: Record<string, HomeAssistantState>,
 ): string | null {
   const entityId = entry.entity_id;
-  if (hasAvailableState(states[entityId])) {
-    return entityId;
-  }
-
-  if (entityId.startsWith('camera.dahua_nvr_camera_dahua_nvr_')) {
-    return hasAvailableState(states[entityId]) ? entityId : null;
-  }
-
-  const leaf = entityIdLeaf(entityId);
-  const base = leaf.replace(/_(main|sub)$/i, '');
-  const candidates = Object.keys(states).filter((stateEntityId) => stateEntityId.startsWith('camera.dahua_nvr_camera_dahua_nvr_'));
+  const base = streamBaseKey(entityId);
+  const explicitCandidates = entries
+    .map((candidate) => candidate.entity_id)
+    .filter((candidateId) => entityDomain(candidateId) === 'camera');
+  const relatedStateCandidates = Object.keys(states).filter(
+    (candidateId) => entityDomain(candidateId) === 'camera' && streamEntityMayMatch(candidateId, base),
+  );
+  const candidates = Array.from(new Set([...explicitCandidates, entityId, ...relatedStateCandidates]));
 
   const ranked = candidates
     .map((candidate) => ({
@@ -1466,20 +2140,92 @@ function resolvePreferredStreamEntity(
 }
 
 function streamCandidateScore(entityId: string, base: string, state?: HomeAssistantState): number {
-  const leaf = entityIdLeaf(entityId);
-  if (!hasAvailableState(state)) {
+  if (!state || !hasAvailableState(state)) {
     return 0;
   }
-  if (leaf === `dahua_nvr_camera_dahua_nvr_${base}`) {
-    return 100;
+
+  const matchScore = streamCandidateMatchScore(entityId, base);
+  if (matchScore === 0) {
+    return 0;
   }
-  if (leaf.endsWith(`_${base}`)) {
-    return 90;
+
+  return matchScore + focusedStreamPreferenceScore(entityId, state);
+}
+
+function streamEntityMayMatch(entityId: string, base: string): boolean {
+  return streamCandidateMatchScore(entityId, base) > 0;
+}
+
+function streamCandidateMatchScore(entityId: string, base: string): number {
+  const candidateBase = streamBaseKey(entityId);
+  if (!base || !candidateBase) {
+    return 0;
   }
-  if (leaf.includes(base)) {
-    return 70;
+  if (candidateBase === base) {
+    return 1000;
+  }
+  if (candidateBase.endsWith(`_${base}`) || base.endsWith(`_${candidateBase}`)) {
+    return 850;
+  }
+  if (candidateBase.includes(base) || base.includes(candidateBase)) {
+    return 650;
   }
   return 0;
+}
+
+function focusedStreamPreferenceScore(entityId: string, state: HomeAssistantState): number {
+  const text = streamDescriptorText(entityId, state);
+  let score = 0;
+
+  if (/(^|[\s._-])main($|[\s._-])/.test(text)) {
+    score += 400;
+  }
+  if (/(^|[\s._-])(quality|high|hd)($|[\s._-])/.test(text)) {
+    score += 350;
+  }
+  if (/(^|[\s._-])(sub|stable|low|sd)($|[\s._-])/.test(text)) {
+    score -= 300;
+  }
+
+  const profiles = readObjectRecord(state.attributes.bridge_profiles);
+  if (profiles?.quality) {
+    score += 25;
+  }
+  if (profiles?.main) {
+    score += 25;
+  }
+
+  return score;
+}
+
+function streamDescriptorText(entityId: string, state: HomeAssistantState): string {
+  return [
+    entityIdLeaf(entityId),
+    state.attributes.friendly_name,
+    state.attributes.preferred_video_profile,
+    state.attributes.recommended_profile,
+    state.attributes.video_profile,
+    state.attributes.stream_profile,
+    state.attributes.profile,
+    state.attributes.stream_source,
+  ]
+    .map(safeString)
+    .join(' ')
+    .toLowerCase();
+}
+
+function streamBaseKey(entityId: string): string {
+  return entityIdLeaf(entityId)
+    .toLowerCase()
+    .replace(/^dahua_nvr_camera_dahua_nvr_/, '')
+    .replace(/^dahua_nvr_/, '')
+    .replace(/_(main|sub|quality|stable|high|low|hd|sd)$/i, '')
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+}
+
+function readObjectRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null;
 }
 
 function isNamedDahuaAlertEntity(entry: HomeAssistantEntityEntry, state?: HomeAssistantState): boolean {

@@ -53,6 +53,7 @@ type DiscoveryConfig struct {
 	EntityCategory      string          `json:"entity_category,omitempty"`
 	PayloadOn           string          `json:"payload_on,omitempty"`
 	PayloadOff          string          `json:"payload_off,omitempty"`
+	PayloadPress        string          `json:"payload_press,omitempty"`
 	Optimistic          *bool           `json:"optimistic,omitempty"`
 	AvailabilityTopic   string          `json:"availability_topic,omitempty"`
 	PayloadAvailable    string          `json:"payload_available,omitempty"`
@@ -86,9 +87,10 @@ func (p *Publisher) PublishDevice(ctx context.Context, device Device) error {
 				}
 			}
 			if p.cfg.Controls {
-				key := "jeedom_switch_discovery_cleanup:" + device.DeviceSlug
-				topic := strings.Join([]string{p.cfg.DiscoveryPrefix, ComponentSwitch, p.cfg.DiscoveryNode, "jeedom_control_" + Slug(device.DeviceSlug), "config"}, "/")
-				if err := p.mqtt.PublishDiscoveryMessage(ctx, key, topic, []byte{}, true); err != nil {
+				if err := p.publishSwitchDiscoveryCleanup(ctx, device.DeviceSlug, "jeedom_switch_discovery_cleanup"); err != nil {
+					return err
+				}
+				if err := p.publishButtonDiscoveryCleanup(ctx, device.DeviceSlug, "impulse", "jeedom_button_discovery_cleanup"); err != nil {
 					return err
 				}
 			}
@@ -113,12 +115,35 @@ func (p *Publisher) PublishDevice(ctx context.Context, device Device) error {
 				}
 			}
 			if p.cfg.Controls {
-				for _, action := range sortedSwitchActions(device.Actions) {
+				switchActions := sortedSwitchActions(device)
+				if len(switchActions) == 0 {
+					if err := p.publishSwitchDiscoveryCleanup(ctx, device.DeviceSlug, "jeedom_switch_discovery_cleanup"); err != nil {
+						return err
+					}
+				}
+				for _, action := range switchActions {
 					topic, payload, err := p.BuildSwitchDiscovery(action, device)
 					if err != nil {
 						return err
 					}
 					key := "jeedom_switch_discovery:" + action.DeviceSlug
+					if err := p.mqtt.PublishDiscoveryMessage(ctx, key, topic, payload, p.cfg.RetainDiscovery); err != nil {
+						return err
+					}
+				}
+
+				buttonActions := sortedButtonActions(device)
+				if len(buttonActions) == 0 {
+					if err := p.publishButtonDiscoveryCleanup(ctx, device.DeviceSlug, "impulse", "jeedom_button_discovery_cleanup"); err != nil {
+						return err
+					}
+				}
+				for _, action := range buttonActions {
+					topic, payload, err := p.BuildButtonDiscovery(action, device)
+					if err != nil {
+						return err
+					}
+					key := "jeedom_button_discovery:" + buttonObjectID(action, device)
 					if err := p.mqtt.PublishDiscoveryMessage(ctx, key, topic, payload, p.cfg.RetainDiscovery); err != nil {
 						return err
 					}
@@ -174,9 +199,10 @@ func (p *Publisher) publishLegacyCleanup(ctx context.Context, device Device) err
 			continue
 		}
 		if p.cfg.Controls {
-			key := "jeedom_legacy_switch_cleanup:" + legacySlug
-			topic := strings.Join([]string{p.cfg.DiscoveryPrefix, ComponentSwitch, p.cfg.DiscoveryNode, "jeedom_control_" + legacySlug, "config"}, "/")
-			if err := p.mqtt.PublishDiscoveryMessage(ctx, key, topic, []byte{}, true); err != nil {
+			if err := p.publishSwitchDiscoveryCleanup(ctx, legacySlug, "jeedom_legacy_switch_cleanup"); err != nil {
+				return err
+			}
+			if err := p.publishButtonDiscoveryCleanup(ctx, legacySlug, "impulse", "jeedom_legacy_button_cleanup"); err != nil {
 				return err
 			}
 		}
@@ -267,8 +293,36 @@ func (p *Publisher) BuildSwitchDiscovery(action Action, device Device) (string, 
 	if err != nil {
 		return "", nil, err
 	}
-	topic := strings.Join([]string{p.cfg.DiscoveryPrefix, ComponentSwitch, p.cfg.DiscoveryNode, "jeedom_control_" + Slug(device.DeviceSlug), "config"}, "/")
+	topic := p.discoveryTopicFor(ComponentSwitch, switchObjectID(device.DeviceSlug))
 	return topic, payload, nil
+}
+
+func (p *Publisher) BuildButtonDiscovery(action Action, device Device) (string, []byte, error) {
+	stateTopic := p.StateTopic(device.DeviceSlug)
+	cfg := DiscoveryConfig{
+		Name:                buttonControlName(action, device),
+		UniqueID:            "ajaxbridge_jeedom_control_" + Slug(device.DeviceSlug) + "_" + buttonActionSlug(action, device),
+		CommandTopic:        p.CommandTopic(device.DeviceSlug),
+		PayloadPress:        controlPayload(action.Action),
+		JSONAttributesTopic: stateTopic,
+		Device: DiscoveryDevice{
+			Identifiers:  discoveryIdentifiers(device),
+			Name:         device.Device,
+			Manufacturer: firstNonEmpty(device.HAManufacturer, "Ajax via Jeedom"),
+			Model:        firstNonEmpty(device.HAModel, "Jeedom MQTT Bridge"),
+		},
+	}
+	if p.mqtt != nil && p.mqtt.AvailabilityTopic() != "" {
+		cfg.AvailabilityTopic = p.mqtt.AvailabilityTopic()
+		cfg.PayloadAvailable = "online"
+		cfg.PayloadNotAvailable = "offline"
+	}
+
+	payload, err := json.Marshal(cfg)
+	if err != nil {
+		return "", nil, err
+	}
+	return p.discoveryTopicFor(ComponentButton, buttonObjectID(action, device)), payload, nil
 }
 
 func (p *Publisher) discoveryTopic(command Command) string {
@@ -297,14 +351,78 @@ func discoveryIdentifiers(device Device) []string {
 	return append([]string(nil), device.HAIdentifiers...)
 }
 
-func sortedSwitchActions(actions map[string]Action) []Action {
-	on, hasOn := actions["on"]
-	off, hasOff := actions["off"]
+func sortedSwitchActions(device Device) []Action {
+	if !toggleCapableDevice(device) {
+		return nil
+	}
+
+	on, hasOn := device.Actions["on"]
+	off, hasOff := device.Actions["off"]
 	if !hasOn || !hasOff || !on.Allowed || !off.Allowed {
 		return nil
 	}
 	on.StateCommandID = firstNonEmpty(on.StateCommandID, off.StateCommandID)
 	return []Action{on}
+}
+
+func sortedButtonActions(device Device) []Action {
+	if !impulseCapableDevice(device) {
+		return nil
+	}
+
+	if impulse, ok := device.Actions["impulse"]; ok && impulse.Allowed {
+		return []Action{impulse}
+	}
+	if on, ok := device.Actions["on"]; ok && on.Allowed {
+		return []Action{on}
+	}
+	return nil
+}
+
+func toggleCapableDevice(device Device) bool {
+	switch commandKey(firstNonEmpty(device.JeedomDeviceType, device.HAModel)) {
+	case "socket", "wallswitch", "lightswitch", "outlet":
+		return true
+	default:
+		return false
+	}
+}
+
+func impulseCapableDevice(device Device) bool {
+	return commandKey(firstNonEmpty(device.JeedomDeviceType, device.HAModel)) == "relay"
+}
+
+func switchObjectID(deviceSlug string) string {
+	return "jeedom_control_" + Slug(deviceSlug)
+}
+
+func buttonObjectID(action Action, device Device) string {
+	return "jeedom_control_" + Slug(device.DeviceSlug) + "_" + buttonActionSlug(action, device)
+}
+
+func buttonActionSlug(action Action, device Device) string {
+	if impulseCapableDevice(device) && NormalizeControlAction(action.Action) == "on" {
+		return "impulse"
+	}
+	return Slug(NormalizeControlAction(action.Action))
+}
+
+func buttonControlName(action Action, device Device) string {
+	if impulseCapableDevice(device) && (NormalizeControlAction(action.Action) == "on" || NormalizeControlAction(action.Action) == "impulse") {
+		return "Impulse"
+	}
+	return firstNonEmpty(action.Name, EnglishActionName(action.Action, action.RawName), "Action")
+}
+
+func controlPayload(action string) string {
+	switch NormalizeControlAction(action) {
+	case "on":
+		return payloadOn
+	case "off":
+		return payloadOff
+	default:
+		return strings.ToUpper(NormalizeControlAction(action))
+	}
 }
 
 func sortedCommands(commands map[string]Command) []Command {
@@ -436,4 +554,25 @@ func commandName(command Command) string {
 
 func trimTopic(value string) string {
 	return strings.Trim(strings.TrimSpace(value), "/")
+}
+
+func (p *Publisher) publishSwitchDiscoveryCleanup(ctx context.Context, deviceSlug, keyPrefix string) error {
+	return p.mqtt.PublishDiscoveryMessage(
+		ctx,
+		keyPrefix+":"+Slug(deviceSlug),
+		p.discoveryTopicFor(ComponentSwitch, switchObjectID(deviceSlug)),
+		[]byte{},
+		true,
+	)
+}
+
+func (p *Publisher) publishButtonDiscoveryCleanup(ctx context.Context, deviceSlug, actionSlug, keyPrefix string) error {
+	objectID := "jeedom_control_" + Slug(deviceSlug) + "_" + Slug(actionSlug)
+	return p.mqtt.PublishDiscoveryMessage(
+		ctx,
+		keyPrefix+":"+Slug(deviceSlug)+":"+Slug(actionSlug),
+		p.discoveryTopicFor(ComponentButton, objectID),
+		[]byte{},
+		true,
+	)
 }

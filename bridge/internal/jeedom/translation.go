@@ -18,6 +18,8 @@ func EnglishActionName(action, rawName string) string {
 		return "On"
 	case "off":
 		return "Off"
+	case "impulse":
+		return "Impulse"
 	case "arm":
 		return "Arm"
 	case "night_mode":
@@ -95,6 +97,8 @@ func translateCommandLabel(value string) string {
 		return "Disarm"
 	case "panic":
 		return "Panic"
+	case "impulse", "impulsion", "pulse", "toggle":
+		return "Impulse"
 	case "arretdetectionincendie", "mutefiredetectors":
 		return "Mute fire detectors"
 	default:

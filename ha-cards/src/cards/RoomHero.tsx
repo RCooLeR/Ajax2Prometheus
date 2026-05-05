@@ -20,6 +20,7 @@ export function RoomHero({ room, roomSummary, selectedDevice, hass }: RoomHeroPr
   const actions = selectedDevice?.actions ?? [];
   const videoMode = heroMedia?.kind === 'stream';
   const showDahuaStats = roomSummary.dahuaCameraCount > 0;
+  const climate = roomSummary.climate ?? room.climate;
 
   useEffect(() => {
     setPendingActionId(null);
@@ -40,8 +41,9 @@ export function RoomHero({ room, roomSummary, selectedDevice, hass }: RoomHeroPr
     setActionFeedback(null);
 
     try {
-      await hass.callService(domain, service, {}, { entity_id: entityId });
-      setActionFeedback('Action sent');
+      console.debug('[ajaxbridge] calling Home Assistant service', { domain, service, entityId });
+      await hass.callService(domain, service, { entity_id: entityId });
+      setActionFeedback(`Sent ${domain}.${service}`);
     } catch {
       setActionFeedback('Action failed');
     } finally {
@@ -113,6 +115,22 @@ export function RoomHero({ room, roomSummary, selectedDevice, hass }: RoomHeroPr
             icon={{ category: 'misc', key: roomSummary.attentionCount > 0 ? 'alert' : 'check' }}
             tone={roomSummary.attentionCount > 0 ? 'amber' : 'green'}
           />
+          {climate?.temperature ? (
+            <RoomHeroStat
+              label="Temperature"
+              value={climate.temperature}
+              icon={{ category: 'sensors', key: 'temperature' }}
+              tone="cyan"
+            />
+          ) : null}
+          {climate?.humidity ? (
+            <RoomHeroStat
+              label="Humidity"
+              value={climate.humidity}
+              icon={{ category: 'sensors', key: 'humidity' }}
+              tone="cyan"
+            />
+          ) : null}
           {showDahuaStats ? (
             <>
               <RoomHeroStat
@@ -193,7 +211,7 @@ function NativeCameraStream({ hass, stateObj }: NativeCameraStreamProps) {
 
     const assignStreamProps = () => {
       streamElement.hass = hass;
-      streamElement.stateObj = stateObj;
+      streamElement.stateObj = preferFocusedCameraState(stateObj);
     };
 
     if (customElements.get('ha-camera-stream')) {
@@ -213,12 +231,129 @@ function NativeCameraStream({ hass, stateObj }: NativeCameraStreamProps) {
     };
   }, [hass, stateObj]);
 
+  useEffect(() => {
+    const streamElement = streamRef.current;
+    if (!streamElement) {
+      return;
+    }
+
+    return forceNestedVideoObjectFit(streamElement);
+  }, [stateObj.entity_id]);
+
   return createElement('ha-camera-stream', {
     ref: streamRef,
     className: 'room-hero__media room-hero__native-stream',
     'data-audio-muted': 'true',
     'data-audio-volume': '1',
   });
+}
+
+function forceNestedVideoObjectFit(rootElement: HTMLElement): () => void {
+  const observers: MutationObserver[] = [];
+  const observedRoots = new WeakSet<Node>();
+  let rafId = 0;
+  let cleanupTimer = 0;
+  let active = true;
+
+  const scheduleApply = () => {
+    window.cancelAnimationFrame(rafId);
+    rafId = window.requestAnimationFrame(apply);
+  };
+
+  const observeRoot = (root: Node & ParentNode) => {
+    if (!active || observedRoots.has(root)) {
+      return;
+    }
+
+    observedRoots.add(root);
+    const observer = new MutationObserver(scheduleApply);
+    observer.observe(root, {
+      childList: true,
+      subtree: true,
+    });
+    observers.push(observer);
+  };
+
+  const visit = (root: Node & ParentNode) => {
+    observeRoot(root);
+
+    root.querySelectorAll('video').forEach((video) => {
+      video.style.setProperty('object-fit', 'fill', 'important');
+      video.style.setProperty('width', '100%', 'important');
+      video.style.setProperty('height', '100%', 'important');
+    });
+
+    root.querySelectorAll('*').forEach((element) => {
+      const shadowRoot = element.shadowRoot;
+      if (shadowRoot) {
+        visit(shadowRoot);
+      }
+    });
+  };
+
+  function apply() {
+    if (!active) {
+      return;
+    }
+
+    visit(rootElement);
+  }
+
+  apply();
+  cleanupTimer = window.setInterval(scheduleApply, 500);
+
+  return () => {
+    active = false;
+    window.cancelAnimationFrame(rafId);
+    window.clearInterval(cleanupTimer);
+    observers.forEach((observer) => observer.disconnect());
+  };
+}
+
+function preferFocusedCameraState(stateObj: HomeAssistantState): HomeAssistantState {
+  const focusedProfile = resolveFocusedVideoProfile(stateObj.attributes);
+  const profile = readBridgeProfile(stateObj.attributes, focusedProfile);
+  const streamSource = readString(profile?.stream_url) || readString(profile?.local_stream_url);
+
+  return {
+    ...stateObj,
+    attributes: {
+      ...stateObj.attributes,
+      preferred_video_profile: focusedProfile,
+      recommended_profile: focusedProfile,
+      ...(streamSource ? { stream_source: streamSource } : {}),
+    },
+  };
+}
+
+function resolveFocusedVideoProfile(attributes: Record<string, unknown>): string {
+  const profiles = readRecord(attributes.bridge_profiles);
+  if (profiles?.quality) {
+    return 'quality';
+  }
+  if (profiles?.main) {
+    return 'main';
+  }
+
+  const preferred = readString(attributes.preferred_video_profile) || readString(attributes.recommended_profile);
+  if (preferred && !/stable|sub|low|sd/i.test(preferred)) {
+    return preferred;
+  }
+
+  return 'quality';
+}
+
+function readBridgeProfile(attributes: Record<string, unknown>, profileKey: string): Record<string, unknown> | null {
+  const profiles = readRecord(attributes.bridge_profiles);
+  return readRecord(profiles?.[profileKey]);
+}
+
+function readRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null;
+}
+
+function readString(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : '';
 }
 
 interface RoomHeroStatProps {

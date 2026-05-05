@@ -32,9 +32,65 @@ func TestControllerPublishesJeedomSetCommand(t *testing.T) {
 	if mqtt.topic != "jeedom/cmd/set/85" {
 		t.Fatalf("published topic = %q, want jeedom/cmd/set/85", mqtt.topic)
 	}
+	if mqtt.payload != "1" {
+		t.Fatalf("published payload = %q, want 1", mqtt.payload)
+	}
 	audits := store.ControlAudit(1)
 	if len(audits) != 1 || audits[0].Result != "published" {
 		t.Fatalf("audit = %#v", audits)
+	}
+}
+
+func TestControllerUsesConfiguredJeedomCommandPayload(t *testing.T) {
+	discovery, err := ParseDiscoveryMessage("jeedom/discovery/eqLogic/10", []byte(relayDiscoveryPayload), time.Unix(100, 0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	store := NewStore("keep_last")
+	store.ApplyDiscovery(discovery)
+	mqtt := &fakeCommandPublisher{}
+	controller := NewController(ControllerConfig{
+		Enabled:              true,
+		StateTopicPrefix:     "ajaxbridge/jeedom",
+		JeedomSetTopicPrefix: "jeedom/cmd/set",
+		CommandPayload:       "go",
+	}, store, mqtt, zerolog.Nop())
+
+	if _, err := controller.Execute(context.Background(), "garage_gate", "ON", "test"); err != nil {
+		t.Fatal(err)
+	}
+	if mqtt.payload != "go" {
+		t.Fatalf("published payload = %q, want go", mqtt.payload)
+	}
+}
+
+func TestControllerPublishesRelayImpulseCommand(t *testing.T) {
+	payload := []byte(`{"id":11,"name":"Garage pulse","configuration":{"device":"Relay","applyDevice":"Relay"},"isVisible":1,"isEnable":1,"cmds":{"90":{"id":90,"logicalId":"IMPULSE","name":"Impulsion","type":"action","subType":"other","isVisible":1}}}`)
+	discovery, err := ParseDiscoveryMessage("jeedom/discovery/eqLogic/11", payload, time.Unix(100, 0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	store := NewStore("keep_last")
+	store.ApplyDiscovery(discovery)
+	mqtt := &fakeCommandPublisher{}
+	controller := NewController(ControllerConfig{
+		Enabled:              true,
+		StateTopicPrefix:     "ajaxbridge/jeedom",
+		JeedomSetTopicPrefix: "jeedom/cmd/set",
+	}, store, mqtt, zerolog.Nop())
+
+	result, err := controller.Execute(context.Background(), "garage_pulse", "IMPULSE", "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !result.Published || result.CommandID != "90" {
+		t.Fatalf("result = %#v", result)
+	}
+	if mqtt.topic != "jeedom/cmd/set/90" {
+		t.Fatalf("published topic = %q, want jeedom/cmd/set/90", mqtt.topic)
+	}
+	if mqtt.payload != "1" {
+		t.Fatalf("published payload = %q, want 1", mqtt.payload)
 	}
 }
 

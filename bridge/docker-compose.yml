@@ -43,6 +43,7 @@ services:
       # AJAXBRIDGE_JEEDOM_ACCOUNT_NAMES: "Будинок"
       # AJAXBRIDGE_JEEDOM_CONTROLS_ENABLED: "false"
       # AJAXBRIDGE_JEEDOM_SET_TOPIC_PREFIX: "jeedom/cmd/set"
+      # AJAXBRIDGE_JEEDOM_CONTROL_PAYLOAD: "1"
 
       # Optional: forward raw SIA frames to Home Assistant's SIA integration.
       # Use an IP/hostname reachable from inside this container.

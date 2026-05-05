@@ -27,9 +27,9 @@ Supported control rules:
 | AjaxBridge-issued turn on | `control_on` |
 | AjaxBridge-issued turn off | `control_off` |
 
-Relay trigger detection depends on where the trigger comes from:
+Relay impulse detection depends on where the trigger comes from:
 
-- If the relay/outlet/switch is triggered through AjaxBridge HTTP or Home Assistant MQTT switch, AjaxBridge sees the control request and can notify with `control`, `control_on`, or `control_off`.
+- If the relay/outlet/switch is triggered through AjaxBridge HTTP, a Home Assistant MQTT switch, or a Home Assistant relay impulse button, AjaxBridge sees the control request and can notify with `control`, `control_on`, or `control_off`.
 - If another tool publishes to the Jeedom MQTT Manager command topic `jeedom/cmd/set/<command_id>`, AjaxBridge subscribes to that topic and can notify when the command id maps to a discovered Jeedom action.
 - If the device is triggered physically, from Ajax, or directly from Jeedom, AjaxBridge can notify only when Jeedom publishes a changed `state` info command.
 - If Jeedom does not publish a state command for that equipment, AjaxBridge cannot reliably know the physical on/off state.

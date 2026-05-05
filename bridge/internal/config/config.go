@@ -77,6 +77,8 @@ type Config struct {
 	JeedomControlsEnabled bool
 	// JeedomSetTopicPrefix is the Jeedom MQTT Manager command topic root.
 	JeedomSetTopicPrefix string
+	// JeedomControlPayload is published to Jeedom MQTT Manager action command topics.
+	JeedomControlPayload string
 
 	// NotificationsPath stores configurable threshold, state-change, and control notification rules.
 	NotificationsPath string
@@ -127,6 +129,7 @@ func FromEnv() Config {
 		JeedomAccountNames:     envCSV("AJAXBRIDGE_JEEDOM_ACCOUNT_NAMES"),
 		JeedomControlsEnabled:  envBool(false, "AJAXBRIDGE_JEEDOM_CONTROLS_ENABLED"),
 		JeedomSetTopicPrefix:   envString("jeedom/cmd/set", "AJAXBRIDGE_JEEDOM_SET_TOPIC_PREFIX"),
+		JeedomControlPayload:   envString("1", "AJAXBRIDGE_JEEDOM_CONTROL_PAYLOAD"),
 		NotificationsPath:      envString("data/notifications.json", "AJAXBRIDGE_NOTIFICATIONS_PATH"),
 		LogLevel:               envString("info", "AJAXBRIDGE_LOG_LEVEL", "AJAX2PROM_LOG_LEVEL"),
 		LogPretty:              envBool(false, "AJAXBRIDGE_LOG_PRETTY", "AJAX2PROM_LOG_PRETTY"),

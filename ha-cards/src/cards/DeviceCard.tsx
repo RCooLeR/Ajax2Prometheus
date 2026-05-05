@@ -24,6 +24,10 @@ function getEventStatusClass(tone: GlowTone): string {
 }
 
 export function DeviceCard({ device, eventStatusLabel, eventStatusTone, selected, onSelect }: DeviceCardProps) {
+  const metrics = device.metrics ?? [];
+  const visibleMetrics = metrics.slice(0, 4);
+  const hiddenMetricCount = Math.max(0, metrics.length - visibleMetrics.length);
+
   return (
     <button
       type="button"
@@ -50,7 +54,50 @@ export function DeviceCard({ device, eventStatusLabel, eventStatusTone, selected
             {eventStatusLabel}
           </strong>
         </div>
+        <div className="device-card__status-row">
+          <span className="device-card__status-label">Telemetry</span>
+          <strong className="device-card__status-value">
+            {[device.connectivity, device.battery, device.signal].filter(Boolean).join(' / ')}
+          </strong>
+        </div>
       </div>
+      {visibleMetrics.length > 0 || hiddenMetricCount > 0 || device.actions?.length ? (
+        <div className="device-card__metric-grid">
+          {visibleMetrics.map((metric) => (
+            <span key={metric.id} className={`device-card__metric ${getToneClass(metric.tone)}`}>
+              <span className="device-card__metric-icon">
+                <Icon icon={metric.icon} size={16} />
+              </span>
+              <span className="device-card__metric-copy">
+                <span>{metric.label}</span>
+                <strong>{metric.value}</strong>
+              </span>
+            </span>
+          ))}
+          {hiddenMetricCount > 0 ? (
+            <span className={`device-card__metric ${getToneClass('slate')}`}>
+              <span className="device-card__metric-icon">
+                <Icon icon={{ category: 'misc', key: 'info' }} size={16} />
+              </span>
+              <span className="device-card__metric-copy">
+                <span>More</span>
+                <strong>{hiddenMetricCount}</strong>
+              </span>
+            </span>
+          ) : null}
+          {device.actions?.length ? (
+            <span className={`device-card__metric ${getToneClass('cyan')}`}>
+              <span className="device-card__metric-icon">
+                <Icon icon={{ category: 'misc', key: 'energy' }} size={16} />
+              </span>
+              <span className="device-card__metric-copy">
+                <span>Controls</span>
+                <strong>{device.actions.length}</strong>
+              </span>
+            </span>
+          ) : null}
+        </div>
+      ) : null}
     </button>
   );
 }

@@ -57,6 +57,9 @@ func TestFromEnvUsesJeedomDefaults(t *testing.T) {
 	if cfg.JeedomSetTopicPrefix != "jeedom/cmd/set" {
 		t.Fatalf("JeedomSetTopicPrefix = %q, want default", cfg.JeedomSetTopicPrefix)
 	}
+	if cfg.JeedomControlPayload != "1" {
+		t.Fatalf("JeedomControlPayload = %q, want default 1", cfg.JeedomControlPayload)
+	}
 }
 
 func TestValidateRequiresMQTTBrokerWhenJeedomEnabled(t *testing.T) {

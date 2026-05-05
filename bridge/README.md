@@ -9,7 +9,7 @@ AjaxBridge receives Ajax security hub SIA DC-09 events, keeps the current alarm 
 The bridge is built around two inputs:
 
 - SIA DC-09 from Ajax as the authoritative security source.
-- Optional Jeedom MQTT for device metrics and allowlisted on/off controls.
+- Optional Jeedom MQTT for device metrics, allowlisted toggles, and relay impulse controls.
 
 No database is required. Runtime state is kept in memory, and the optional device catalog lives in `data/devices.json`.
 

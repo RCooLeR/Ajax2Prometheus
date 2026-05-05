@@ -64,6 +64,31 @@ func TestStoreApplyDiscoveryRegistersSafeActions(t *testing.T) {
 	}
 }
 
+func TestStoreApplyDiscoveryRegistersRelayImpulseAction(t *testing.T) {
+	payload := []byte(`{
+	  "id":11,
+	  "name":"Garage pulse",
+	  "configuration":{"device":"Relay","applyDevice":"Relay"},
+	  "isVisible":1,
+	  "isEnable":1,
+	  "cmds":{
+	    "90":{"id":90,"logicalId":"IMPULSE","name":"Impulsion","type":"action","subType":"other","isVisible":1}
+	  }
+	}`)
+	discovery, err := ParseDiscoveryMessage("jeedom/discovery/eqLogic/11", payload, time.Unix(100, 0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	result := NewStore("keep_last").ApplyDiscovery(discovery)
+	impulse := result.Device.Actions["impulse"]
+	if impulse.CommandID != "90" || !impulse.Allowed {
+		t.Fatalf("impulse action = %#v", impulse)
+	}
+	if impulse.Name != "Impulse" {
+		t.Fatalf("impulse name = %q, want Impulse", impulse.Name)
+	}
+}
+
 func TestStoreApplyDiscoverySeedsCurrentInfoValues(t *testing.T) {
 	payload := []byte(`{
 	  "id":8,

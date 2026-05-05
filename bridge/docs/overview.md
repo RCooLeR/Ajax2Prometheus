@@ -7,7 +7,7 @@ The bridge has two input sources:
 | Source | Required | Role |
 | --- | --- | --- |
 | SIA DC-09 | Yes | Authoritative security state from the Ajax hub. |
-| Jeedom MQTT | No | Additional metrics and allowlisted on/off controls from Jeedom Ajax equipment. |
+| Jeedom MQTT | No | Additional metrics, allowlisted toggles, and relay impulse controls from Jeedom Ajax equipment. |
 
 SIA always has priority. If SIA and Jeedom report different security state for the same physical device, dashboards and integrations must use SIA. Jeedom is used for values SIA does not provide well, such as power, current, voltage, energy, battery, signal diagnostics, and safe outlet/relay/switch controls.
 
@@ -96,7 +96,7 @@ Legacy `AJAX2PROM_*` variables are still accepted as compatibility aliases.
 | `GET /jeedom/commands` | Jeedom command metadata. |
 | `GET /jeedom/actions` | Jeedom action metadata. |
 | `GET /jeedom/control-audit?limit=100` | Recent Jeedom control attempts. |
-| `POST /jeedom/devices/{slug}/control` | Jeedom on/off control, when enabled. |
+| `POST /jeedom/devices/{slug}/control` | Jeedom toggle or relay impulse control, when enabled. |
 
 ## Data Files
 

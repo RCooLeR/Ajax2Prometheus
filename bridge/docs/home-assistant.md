@@ -183,7 +183,7 @@ When a Jeedom device is linked by `jeedom_names` or `jeedom_command_ids`, its en
 }
 ```
 
-This is the duplicate-prevention rule. Home Assistant sees SIA alarm/trouble entities, Jeedom metrics, and optional Jeedom control switch as entities of the same physical device.
+This is the duplicate-prevention rule. Home Assistant sees SIA alarm/trouble entities, Jeedom metrics, and optional Jeedom control entities as entities of the same physical device.
 
 For linked devices, SIA-owned security/status values stay authoritative. Jeedom commands that duplicate SIA concepts such as tamper, bypass, external power, fire, smoke, water leak, and hardware/connectivity trouble are cleaned from Home Assistant discovery and are not rediscovered. Jeedom still publishes its normalized state JSON for debugging and notifications, and Home Assistant still gets Jeedom-only measurements such as `temperature_c`, `power_w`, `current_a`, `voltage_v`, and `energy_kwh`.
 
@@ -487,22 +487,18 @@ These metrics are kept in state/debug JSON but are intentionally not Home Assist
 - `event`
 - `event_code`
 
-## Jeedom Control Switches
+## Jeedom Controls
 
 Controls are created only when:
 
 - `AJAXBRIDGE_JEEDOM_CONTROLS_ENABLED=true`
 - eqLogic discovery was received
-- both `on` and `off` actions exist
 - the device type is allowlisted
 
-Allowed device types:
+Control types:
 
-- `Relay`
-- `Socket`
-- `WallSwitch`
-- `LightSwitch`
-- `Outlet`
+- `Socket`, `WallSwitch`, `LightSwitch`, and `Outlet` publish Home Assistant MQTT switches when both `on` and `off` actions exist.
+- `Relay` publishes a Home Assistant MQTT button for impulse control. AjaxBridge uses a discovered `impulse` action when available, otherwise it uses the relay `on` action as the pulse.
 
 Blocked:
 
@@ -514,6 +510,12 @@ Home Assistant switch discovery:
 
 ```text
 homeassistant/switch/ajaxbridge/jeedom_control_<device_slug>/config
+```
+
+Home Assistant relay impulse button discovery:
+
+```text
+homeassistant/button/ajaxbridge/jeedom_control_<device_slug>_impulse/config
 ```
 
 Unique id:
@@ -535,11 +537,15 @@ ON
 OFF
 ```
 
+Relay impulse buttons publish `ON` for an `on`-backed pulse or `IMPULSE` for a dedicated impulse action.
+
 AjaxBridge then publishes to Jeedom:
 
 ```text
 jeedom/cmd/set/<command_id>
 ```
+
+The Jeedom action payload is `1` by default. Override `AJAXBRIDGE_JEEDOM_CONTROL_PAYLOAD` if your MQTT Manager command expects another payload.
 
 Every HTTP or MQTT control attempt is visible at:
 
@@ -547,7 +553,7 @@ Every HTTP or MQTT control attempt is visible at:
 GET /jeedom/control-audit?limit=100
 ```
 
-The same Jeedom state and control data can drive AjaxBridge notifications. A `state` metric change can notify when a WallSwitch or Outlet turns on/off, and `control_on` or `control_off` can notify when Home Assistant sends a switch command through AjaxBridge.
+The same Jeedom state and control data can drive AjaxBridge notifications. A `state` metric change can notify when a WallSwitch or Outlet turns on/off, and `control_on`, `control_off`, or `control` can notify when Home Assistant sends a command through AjaxBridge.
 
 ## Dashboard And Card Guide
 
@@ -560,6 +566,7 @@ Recommended card anchors:
 | Device trouble tile | `binary_sensor.zone_<account>_<zone>_trouble_active` |
 | Jeedom power tile | A linked Jeedom `power_w`, `current_a`, or `voltage_v` entity |
 | Controllable outlet/switch | `switch.jeedom_control_<device_slug>` or the final HA entity id |
+| Relay impulse | `button.jeedom_control_<device_slug>_impulse` or the final HA entity id |
 
 Because Home Assistant entity ids can be renamed, custom cards should let the user configure anchor entity ids. Read the full JSON payload from entity attributes for rich UI.
 
@@ -590,7 +597,8 @@ Useful dashboard groupings:
 
 | Device type | Primary SIA fields | Secondary Jeedom fields | Optional command |
 | --- | --- | --- | --- |
-| Relay/socket/wall switch | `alarm_active`, `trouble_active`, `signal_active.power` | `power_w`, `current_a`, `voltage_v`, `energy_kwh`, `online` | `switch.jeedom_control_<slug>` |
+| Relay | `alarm_active`, `trouble_active`, `signal_active.power` | `power_w`, `current_a`, `voltage_v`, `energy_kwh`, `online` | `button.jeedom_control_<slug>_impulse` |
+| Socket/wall switch/outlet | `alarm_active`, `trouble_active`, `signal_active.power` | `power_w`, `current_a`, `voltage_v`, `energy_kwh`, `online`, `state` | `switch.jeedom_control_<slug>` |
 | Leak detector | `signal_active.water_leak`, `tamper_active`, `trouble_active` | `battery_percent`, `online`, `signal_level` | none |
 | Fire detector | `signal_active.fire`, `signal_active.smoke`, `tamper_active`, `trouble_active` | `temperature_c`, `battery_percent`, `online` | none |
 | Door/window sensor | `signal_active.burglary`, `tamper_active`, `trouble_active` | `opening`, `battery_percent`, `online` | none |
@@ -671,12 +679,14 @@ Wrong names or rooms:
 - Keep `account` and `zone` stable.
 - Restart AjaxBridge so discovery configs are republished.
 
-Jeedom control switch missing:
+Jeedom control entity missing:
 
 - Confirm `AJAXBRIDGE_JEEDOM_CONTROLS_ENABLED=true`.
-- Confirm `/jeedom/actions` has both `on` and `off` with `allowed: true`.
+- For Socket, WallSwitch, LightSwitch, and Outlet toggles, confirm `/jeedom/actions` has both `on` and `off` with `allowed: true`.
+- For Relay impulse buttons, confirm `/jeedom/actions` has `impulse` or `on` with `allowed: true`.
 - Confirm the device type is `Relay`, `Socket`, `WallSwitch`, `LightSwitch`, or `Outlet`.
 - Confirm eqLogic discovery was received from Jeedom MQTT Manager.
+- Confirm MQTT Manager accepts `jeedom/cmd/set/<command_id>` with payload `1`, or configure `AJAXBRIDGE_JEEDOM_CONTROL_PAYLOAD`.
 
 Numeric Jeedom values missing:
 
