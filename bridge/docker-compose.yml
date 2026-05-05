@@ -30,10 +30,6 @@ services:
       # AJAXBRIDGE_MQTT_PASSWORD: "mqtt-password"
       # AJAXBRIDGE_MQTT_TOPIC_PREFIX: "ajaxbridge"
       # AJAXBRIDGE_MQTT_DISCOVERY: "true"
-      # Temporary cleanup: set true once to clear stale retained AjaxBridge Jeedom
-      # and legacy ajax2prometheus MQTT discovery/state topics, then set false again.
-      # AJAXBRIDGE_MQTT_CLEANUP_RETAINED: "true"
-      # AJAXBRIDGE_MQTT_CLEANUP_RETAINED_WAIT: "8s"
 
       # Optional: consume Jeedom Ajax plugin values from MQTT Manager.
       # AJAXBRIDGE_JEEDOM_ENABLED: "true"

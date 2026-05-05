@@ -130,6 +130,100 @@ func TestPublishDeviceClearsLegacyUnlinkedSwitchAndState(t *testing.T) {
 	}
 }
 
+func TestPublishDeviceCleansSIAMergedDuplicateCommands(t *testing.T) {
+	mqtt := &recordingMQTT{}
+	publisher := NewPublisher(PublisherConfig{
+		StateTopicPrefix: "ajaxbridge/jeedom",
+		Discovery:        true,
+		DiscoveryPrefix:  "homeassistant",
+		DiscoveryNode:    "ajaxbridge",
+		RetainDiscovery:  true,
+	}, mqtt)
+
+	device := Device{
+		Source:        Source,
+		Device:        "Garage fire detector",
+		DeviceSlug:    "sia_a0f80d_zone_4",
+		LinkedSource:  "sia",
+		LinkedAccount: "A0F80D",
+		LinkedZone:    "4",
+		HAIdentifiers: []string{"ajaxbridge_A0F80D_zone_4"},
+		Values:        map[string]any{},
+		RawCommands: map[string]Command{
+			"134": {
+				CommandID: "134",
+				Name:      "Bypassed",
+				Metric:    "bypass",
+				Component: ComponentBinarySensor,
+			},
+			"136": {
+				CommandID:   "136",
+				Name:        "Temperature",
+				Metric:      "temperature_c",
+				Component:   ComponentSensor,
+				Unit:        "\u00b0C",
+				DeviceClass: "temperature",
+				StateClass:  "measurement",
+			},
+		},
+	}
+
+	if err := publisher.PublishDevice(context.Background(), device); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := mqtt.discovery["homeassistant/binary_sensor/ajaxbridge/jeedom_cmd_134/config"]; got != "" {
+		t.Fatalf("SIA-owned bypass command discovery = %q, want retained cleanup", got)
+	}
+	if got := mqtt.discovery["homeassistant/sensor/ajaxbridge/jeedom_cmd_134/config"]; got != "" {
+		t.Fatalf("SIA-owned bypass sensor migration cleanup = %q, want empty", got)
+	}
+	if got := mqtt.discovery["homeassistant/sensor/ajaxbridge/jeedom_cmd_136/config"]; got == "" {
+		t.Fatalf("Jeedom temperature measurement discovery missing")
+	}
+	if got := mqtt.discovery["homeassistant/binary_sensor/ajaxbridge/jeedom_cmd_136/config"]; got != "" {
+		t.Fatalf("stale Jeedom temperature binary discovery = %q, want retained cleanup", got)
+	}
+}
+
+func TestPublishDeviceKeepsControlStateForLinkedSIADevice(t *testing.T) {
+	mqtt := &recordingMQTT{}
+	publisher := NewPublisher(PublisherConfig{
+		StateTopicPrefix: "ajaxbridge/jeedom",
+		Discovery:        true,
+		DiscoveryPrefix:  "homeassistant",
+		DiscoveryNode:    "ajaxbridge",
+		RetainDiscovery:  true,
+	}, mqtt)
+
+	device := Device{
+		Source:        Source,
+		Device:        "Server power",
+		DeviceSlug:    "sia_a0f80d_zone_8",
+		LinkedSource:  "sia",
+		LinkedAccount: "A0F80D",
+		LinkedZone:    "8",
+		HAIdentifiers: []string{"ajaxbridge_A0F80D_zone_8"},
+		Values:        map[string]any{},
+		RawCommands: map[string]Command{
+			"52": {
+				CommandID: "52",
+				Name:      "State",
+				Metric:    "state",
+				Component: ComponentBinarySensor,
+			},
+		},
+	}
+
+	if err := publisher.PublishDevice(context.Background(), device); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := mqtt.discovery["homeassistant/binary_sensor/ajaxbridge/jeedom_cmd_52/config"]; got == "" {
+		t.Fatalf("Jeedom control state discovery should stay for linked SIA device")
+	}
+}
+
 type fakeMQTT struct{}
 
 func (fakeMQTT) PublishStateMessage(context.Context, string, []byte, bool) error {

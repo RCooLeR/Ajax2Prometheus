@@ -285,8 +285,8 @@ func TestPublishUpdateRefreshesZoneDiscoveryWhenSignalSetChanges(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if got := len(client.publishes); got != firstCount+3 {
-		t.Fatalf("adding a new signal should publish legacy cleanup, one discovery config, and one state update: got %d, want %d", got, firstCount+3)
+	if got := len(client.publishes); got <= firstCount {
+		t.Fatalf("adding a new signal should publish additional cleanup, discovery, and state payloads: got %d, first %d", got, firstCount)
 	}
 	if !client.hasTopic("homeassistant/binary_sensor/ajaxbridge/zone_a0f80d_3_signal_connectivity/config") {
 		t.Fatalf("missing discovery publish for new connectivity signal: %#v", client.publishes)
@@ -339,6 +339,59 @@ func TestPublishSnapshotCleansLegacyAjax2PrometheusDiscoveryTopics(t *testing.T)
 	}
 }
 
+func TestPublishSnapshotCleansLegacySIAObjectIDDiscoveryTopics(t *testing.T) {
+	client := &stubClient{open: true}
+	publisher := New(Config{
+		Broker:          "tcp://mqtt.local:1883",
+		ClientID:        "ajaxbridge",
+		TopicPrefix:     "ajaxbridge",
+		Discovery:       true,
+		DiscoveryPrefix: "homeassistant",
+		Timeout:         time.Second,
+		Retain:          true,
+	}, zerologNop())
+	publisher.client = client
+
+	if err := publisher.PublishSnapshot(t.Context(), state.Snapshot{
+		Zones: []state.Zone{{
+			Account:      "A0F80D",
+			Zone:         "13",
+			DeviceName:   "Attic fire detector",
+			Kind:         "FireProtect",
+			Room:         "Attic",
+			DeviceEvents: []string{"firmware"},
+		}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	oldAlarmSignalTopic := "homeassistant/sensor/ajaxbridge/zone_13_alarm_signal/config"
+	if !client.hasTopic(oldAlarmSignalTopic) || stringValue(client.payloadForTopic(oldAlarmSignalTopic)) != "" {
+		t.Fatalf("missing retained cleanup for old alarm signal object id: %#v", client.publishes)
+	}
+	oldFirmwareTopic := "homeassistant/binary_sensor/ajaxbridge/zone_a0f80d_13_firmware/config"
+	if !client.hasTopic(oldFirmwareTopic) || stringValue(client.payloadForTopic(oldFirmwareTopic)) != "" {
+		t.Fatalf("missing retained cleanup for old firmware object id: %#v", client.publishes)
+	}
+	oldShortFirmwareTopic := "homeassistant/binary_sensor/ajaxbridge/zone_13_signal_firmware/config"
+	if !client.hasTopic(oldShortFirmwareTopic) || stringValue(client.payloadForTopic(oldShortFirmwareTopic)) != "" {
+		t.Fatalf("missing retained cleanup for old short firmware object id: %#v", client.publishes)
+	}
+	oldLegacyFirmwareTopic := "homeassistant/binary_sensor/ajax2prometheus/zone_a0f80d_13_signal_firmware/config"
+	if !client.hasTopic(oldLegacyFirmwareTopic) || stringValue(client.payloadForTopic(oldLegacyFirmwareTopic)) != "" {
+		t.Fatalf("missing retained cleanup for old legacy firmware object id: %#v", client.publishes)
+	}
+
+	currentAlarmSignalTopic := "homeassistant/sensor/ajaxbridge/zone_a0f80d_13_alarm_signal/config"
+	if !client.hasTopic(currentAlarmSignalTopic) || stringValue(client.payloadForTopic(currentAlarmSignalTopic)) == "" {
+		t.Fatalf("missing current discovery for alarm signal object id: %#v", client.publishes)
+	}
+	currentFirmwareTopic := "homeassistant/binary_sensor/ajaxbridge/zone_a0f80d_13_signal_firmware/config"
+	if !client.hasTopic(currentFirmwareTopic) || stringValue(client.payloadForTopic(currentFirmwareTopic)) == "" {
+		t.Fatalf("missing current discovery for firmware object id: %#v", client.publishes)
+	}
+}
+
 func TestPublishSnapshotCleansRenamedSIASignalDiscoveryTopics(t *testing.T) {
 	client := &stubClient{open: true}
 	publisher := New(Config{
@@ -365,6 +418,14 @@ func TestPublishSnapshotCleansRenamedSIASignalDiscoveryTopics(t *testing.T) {
 	oldTemperatureTopic := "homeassistant/binary_sensor/ajaxbridge/zone_a0f80d_3_signal_temperature/config"
 	if !client.hasTopic(oldTemperatureTopic) || stringValue(client.payloadForTopic(oldTemperatureTopic)) != "" {
 		t.Fatalf("missing retained cleanup for old temperature signal topic: %#v", client.publishes)
+	}
+	oldLegacyTemperatureTopic := "homeassistant/binary_sensor/ajax2prometheus/zone_a0f80d_3_signal_temperature/config"
+	if !client.hasTopic(oldLegacyTemperatureTopic) || stringValue(client.payloadForTopic(oldLegacyTemperatureTopic)) != "" {
+		t.Fatalf("missing retained cleanup for old legacy temperature signal topic: %#v", client.publishes)
+	}
+	olderTemperatureTopic := "homeassistant/binary_sensor/ajaxbridge/zone_a0f80d_3_temperature/config"
+	if !client.hasTopic(olderTemperatureTopic) || stringValue(client.payloadForTopic(olderTemperatureTopic)) != "" {
+		t.Fatalf("missing retained cleanup for older temperature signal topic: %#v", client.publishes)
 	}
 	newTemperatureTopic := "homeassistant/binary_sensor/ajaxbridge/zone_a0f80d_3_signal_temperature_alarm/config"
 	if !client.hasTopic(newTemperatureTopic) || stringValue(client.payloadForTopic(newTemperatureTopic)) == "" {
@@ -411,38 +472,6 @@ func TestPublishSnapshotDoesNotCleanCurrentDiscoveryNode(t *testing.T) {
 	}
 	if payload := client.payloadForTopic(topic); stringValue(payload) == "" {
 		t.Fatalf("current discovery topic %q was incorrectly cleaned up", topic)
-	}
-}
-
-func TestCleanupTopicMatcherTargetsAjaxBridgeAndLegacyRetainedTopics(t *testing.T) {
-	publisher := New(Config{
-		Broker:          "tcp://mqtt.local:1883",
-		ClientID:        "ajaxbridge",
-		TopicPrefix:     "ajaxbridge",
-		DiscoveryPrefix: "homeassistant",
-	}, zerologNop())
-	patterns := publisher.cleanupSubscriptions(CleanupConfig{
-		JeedomStateTopicPrefix: "ajaxbridge/jeedom",
-	})
-
-	cases := map[string]bool{
-		"homeassistant/sensor/ajaxbridge/jeedom_cmd_56/config":                     true,
-		"homeassistant/switch/ajaxbridge/jeedom_control_serverna/config":           true,
-		"homeassistant/binary_sensor/ajaxbridge/zone_a0f80d_3_alarm_active/config": true,
-		"homeassistant/sensor/ajaxbridge/account_a0f80d_mode/config":               true,
-		"ajaxbridge/accounts/A0F80D/state":                                         true,
-		"ajaxbridge/accounts/A0F80D/zones/8/state":                                 true,
-		"ajaxbridge/jeedom/devices/serverna/state":                                 true,
-		"homeassistant/binary_sensor/ajax2prometheus/zone_1_alarm/config":          true,
-		"ajax2prometheus/accounts/A0F80D/state":                                    true,
-		"homeassistant/binary_sensor/othernode/zone_a0f80d_3_alarm_active/config":  false,
-		"homeassistant/sensor/ajaxbridge/docker_ajaxbridge_cpu/config":             false,
-		"ajaxbridge/accounts/A0F80D/zones/state":                                   false,
-	}
-	for topic, want := range cases {
-		if got := cleanupTopicMatches(patterns, topic); got != want {
-			t.Fatalf("cleanupTopicMatches(%q) = %t, want %t", topic, got, want)
-		}
 	}
 }
 

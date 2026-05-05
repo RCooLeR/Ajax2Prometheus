@@ -55,21 +55,6 @@ type Update struct {
 
 type MessageHandler = func(topic string, payload []byte)
 
-type CleanupConfig struct {
-	DiscoveryPrefix        string
-	DiscoveryNode          string
-	TopicPrefix            string
-	JeedomStateTopicPrefix string
-	Wait                   time.Duration
-}
-
-type CleanupResult struct {
-	Received int
-	Matched  int
-	Cleared  int
-	Topics   []string
-}
-
 type accountPlan struct {
 	stateTopic string
 	cleanup    []discoveryMessage
@@ -87,11 +72,6 @@ type discoveryMessage struct {
 	key     string
 	topic   string
 	payload []byte
-}
-
-type cleanupSubscription struct {
-	Topic string
-	Match func(topic string) bool
 }
 
 type deviceInfo struct {
@@ -294,202 +274,6 @@ func (p *Publisher) Subscribe(ctx context.Context, topic string, handler Message
 		return nil
 	}
 	return p.wait(ctx, p.client.Subscribe(topic, 1, wrapMessageHandler(handler)))
-}
-
-func (p *Publisher) CleanupRetained(ctx context.Context, cfg CleanupConfig) (CleanupResult, error) {
-	var result CleanupResult
-	if !p.Enabled() || p.client == nil {
-		return result, nil
-	}
-	if err := ctx.Err(); err != nil {
-		return result, err
-	}
-	if !p.client.IsConnectionOpen() {
-		return result, errors.New("MQTT client is not connected")
-	}
-
-	if cfg.Wait <= 0 {
-		cfg.Wait = 5 * time.Second
-	}
-	patterns := p.cleanupSubscriptions(cfg)
-	matches := make(map[string]struct{})
-	var mu sync.Mutex
-	handler := func(_ paho.Client, message paho.Message) {
-		topic := message.Topic()
-		mu.Lock()
-		result.Received++
-		if cleanupTopicMatches(patterns, topic) {
-			if _, ok := matches[topic]; !ok {
-				matches[topic] = struct{}{}
-				result.Matched++
-			}
-		}
-		mu.Unlock()
-	}
-
-	for _, pattern := range patterns {
-		if err := p.wait(ctx, p.client.Subscribe(pattern.Topic, 1, handler)); err != nil {
-			return result, err
-		}
-	}
-	timer := time.NewTimer(cfg.Wait)
-	select {
-	case <-ctx.Done():
-		timer.Stop()
-		return result, ctx.Err()
-	case <-timer.C:
-	}
-	topics := make([]string, 0, len(matches))
-	mu.Lock()
-	for topic := range matches {
-		topics = append(topics, topic)
-	}
-	mu.Unlock()
-	sort.Strings(topics)
-
-	for _, pattern := range patterns {
-		_ = p.client.Unsubscribe(pattern.Topic).WaitTimeout(p.cfg.Timeout)
-	}
-	for _, topic := range topics {
-		if err := p.publish(ctx, topic, []byte{}, true); err != nil {
-			return result, err
-		}
-		result.Cleared++
-	}
-	result.Topics = topics
-	return result, nil
-}
-
-func (p *Publisher) cleanupSubscriptions(cfg CleanupConfig) []cleanupSubscription {
-	discoveryPrefix := trimTopic(cfg.DiscoveryPrefix)
-	if discoveryPrefix == "" {
-		discoveryPrefix = p.cfg.DiscoveryPrefix
-	}
-	if discoveryPrefix == "" {
-		discoveryPrefix = "homeassistant"
-	}
-	discoveryNode := strings.TrimSpace(cfg.DiscoveryNode)
-	if discoveryNode == "" {
-		discoveryNode = p.discoveryNode()
-	}
-	discoveryNode = slug(discoveryNode)
-	if discoveryNode == "" || discoveryNode == "unknown" {
-		discoveryNode = "ajaxbridge"
-	}
-	topicPrefix := trimTopic(cfg.TopicPrefix)
-	if topicPrefix == "" {
-		topicPrefix = p.cfg.TopicPrefix
-	}
-	if topicPrefix == "" {
-		topicPrefix = "ajaxbridge"
-	}
-	jeedomStatePrefix := trimTopic(cfg.JeedomStateTopicPrefix)
-	if jeedomStatePrefix == "" {
-		jeedomStatePrefix = topicPrefix + "/jeedom"
-	}
-
-	return []cleanupSubscription{
-		{
-			Topic: strings.Join([]string{discoveryPrefix, "+", discoveryNode, "+", "config"}, "/"),
-			Match: func(topic string) bool {
-				return matchAjaxBridgeDiscoveryTopic(discoveryPrefix, discoveryNode, topic)
-			},
-		},
-		{
-			Topic: topicPrefix + "/accounts/+/state",
-			Match: func(topic string) bool {
-				return matchSIAStateTopic(topicPrefix, topic)
-			},
-		},
-		{
-			Topic: topicPrefix + "/accounts/+/zones/+/state",
-			Match: func(topic string) bool {
-				return matchSIAStateTopic(topicPrefix, topic)
-			},
-		},
-		{
-			Topic: discoveryPrefix + "/+/ajax2prometheus/#",
-			Match: func(topic string) bool {
-				return matchTopicPrefix(topic, discoveryPrefix+"/") && strings.Contains(trimTopic(topic), "/ajax2prometheus/")
-			},
-		},
-		{
-			Topic: jeedomStatePrefix + "/devices/+/state",
-			Match: func(topic string) bool {
-				return matchJeedomStateTopic(jeedomStatePrefix, topic)
-			},
-		},
-		{
-			Topic: "ajax2prometheus/#",
-			Match: func(topic string) bool {
-				return matchTopicPrefix(topic, "ajax2prometheus")
-			},
-		},
-	}
-}
-
-func cleanupTopicMatches(patterns []cleanupSubscription, topic string) bool {
-	for _, pattern := range patterns {
-		if pattern.Match != nil && pattern.Match(topic) {
-			return true
-		}
-	}
-	return false
-}
-
-func matchAjaxBridgeDiscoveryTopic(discoveryPrefix, discoveryNode, topic string) bool {
-	parts := strings.Split(trimTopic(topic), "/")
-	if len(parts) != 5 {
-		return false
-	}
-	if parts[0] != discoveryPrefix || parts[2] != discoveryNode || parts[4] != "config" {
-		return false
-	}
-	return strings.HasPrefix(parts[3], "account_") ||
-		strings.HasPrefix(parts[3], "zone_") ||
-		strings.HasPrefix(parts[3], "jeedom_cmd_") ||
-		strings.HasPrefix(parts[3], "jeedom_control_")
-}
-
-func matchSIAStateTopic(prefix, topic string) bool {
-	prefix = trimTopic(prefix)
-	topic = trimTopic(topic)
-	if prefix == "" || topic == "" {
-		return false
-	}
-	prefixParts := strings.Split(prefix, "/")
-	topicParts := strings.Split(topic, "/")
-	if len(topicParts) < len(prefixParts) {
-		return false
-	}
-	for i, part := range prefixParts {
-		if topicParts[i] != part {
-			return false
-		}
-	}
-	rest := topicParts[len(prefixParts):]
-	if len(rest) == 3 {
-		return rest[0] == "accounts" && rest[1] != "" && rest[2] == "state"
-	}
-	if len(rest) == 5 {
-		return rest[0] == "accounts" && rest[1] != "" && rest[2] == "zones" && rest[3] != "" && rest[4] == "state"
-	}
-	return false
-}
-
-func matchJeedomStateTopic(prefix, topic string) bool {
-	prefix = trimTopic(prefix)
-	topic = trimTopic(topic)
-	if prefix == "" || !strings.HasPrefix(topic, prefix+"/devices/") {
-		return false
-	}
-	return strings.HasSuffix(topic, "/state")
-}
-
-func matchTopicPrefix(topic, prefix string) bool {
-	topic = trimTopic(topic)
-	prefix = trimTopic(prefix)
-	return topic == prefix || strings.HasPrefix(topic, prefix+"/")
 }
 
 func (p *Publisher) PublishStateMessage(ctx context.Context, topic string, payload []byte, retain bool) error {
@@ -734,7 +518,7 @@ func (p *Publisher) zonePlanFor(zone state.Zone) (zonePlan, error) {
 	plan = zonePlan{
 		signature:  signature,
 		stateTopic: p.zoneStateTopic(zone.Account, zone.Zone),
-		cleanup:    append(p.legacyCleanupMessages(entities), p.renamedSignalCleanupMessages(zone)...),
+		cleanup:    p.zoneCleanupMessages(zone, entities),
 		discovery:  discovery,
 	}
 
@@ -802,18 +586,123 @@ func (p *Publisher) legacyCleanupMessages(entities []entity) []discoveryMessage 
 	return messages
 }
 
+func (p *Publisher) zoneCleanupMessages(zone state.Zone, entities []entity) []discoveryMessage {
+	messages := make([]discoveryMessage, 0, len(entities)*len(legacyDiscoveryNodes))
+	messages = append(messages, p.legacyCleanupMessages(entities)...)
+	messages = append(messages, p.legacySIAObjectCleanupMessages(zone, entities)...)
+	messages = append(messages, p.renamedSignalCleanupMessages(zone)...)
+	return dedupeDiscoveryMessages(messages)
+}
+
+func (p *Publisher) legacySIAObjectCleanupMessages(zone state.Zone, entities []entity) []discoveryMessage {
+	if len(entities) == 0 {
+		return nil
+	}
+	messages := make([]discoveryMessage, 0, len(entities)*4)
+	nodes := cleanupDiscoveryNodes(p.discoveryNode())
+	base := "zone_" + zone.Account + "_" + zone.Zone + "_"
+	for _, ent := range entities {
+		suffix := strings.TrimPrefix(ent.ObjectID, base)
+		if suffix == ent.ObjectID {
+			continue
+		}
+		for _, objectID := range legacySIAObjectIDs(zone, suffix) {
+			for _, node := range nodes {
+				messages = append(messages, discoveryMessage{
+					key:     "cleanup:legacy_sia_object:" + node + ":" + ent.Component + "/" + objectID,
+					topic:   p.discoveryTopic(ent.Component, node, objectID),
+					payload: []byte{},
+				})
+			}
+		}
+	}
+	return messages
+}
+
+func cleanupDiscoveryNodes(currentNode string) []string {
+	seen := make(map[string]struct{}, len(legacyDiscoveryNodes)+1)
+	nodes := make([]string, 0, len(legacyDiscoveryNodes)+1)
+	for _, node := range append([]string{currentNode}, legacyDiscoveryNodes...) {
+		node = slug(node)
+		if node == "" || node == "unknown" {
+			continue
+		}
+		if _, ok := seen[node]; ok {
+			continue
+		}
+		seen[node] = struct{}{}
+		nodes = append(nodes, node)
+	}
+	return nodes
+}
+
+func legacySIAObjectIDs(zone state.Zone, suffix string) []string {
+	base := "zone_" + zone.Account + "_" + zone.Zone + "_"
+	candidates := []string{
+		"zone_" + zone.Zone + "_" + suffix,
+		"zone_" + zone.Account + "_" + suffix,
+	}
+	if strings.HasPrefix(suffix, "signal_") {
+		signal := strings.TrimPrefix(suffix, "signal_")
+		candidates = append(candidates,
+			base+signal,
+			"zone_"+zone.Zone+"_"+signal,
+			"zone_"+zone.Zone+"_signal_"+signal,
+			"zone_"+zone.Account+"_"+signal,
+			"zone_"+zone.Account+"_signal_"+signal,
+		)
+	}
+	return uniqueObjectIDs(candidates)
+}
+
+func uniqueObjectIDs(candidates []string) []string {
+	seen := make(map[string]struct{}, len(candidates))
+	out := make([]string, 0, len(candidates))
+	for _, candidate := range candidates {
+		candidate = strings.TrimSpace(candidate)
+		if candidate == "" {
+			continue
+		}
+		if _, ok := seen[candidate]; ok {
+			continue
+		}
+		seen[candidate] = struct{}{}
+		out = append(out, candidate)
+	}
+	return out
+}
+
+func dedupeDiscoveryMessages(messages []discoveryMessage) []discoveryMessage {
+	seen := make(map[string]struct{}, len(messages))
+	out := messages[:0]
+	for _, message := range messages {
+		if message.topic == "" {
+			continue
+		}
+		if _, ok := seen[message.topic]; ok {
+			continue
+		}
+		seen[message.topic] = struct{}{}
+		out = append(out, message)
+	}
+	return out
+}
+
 func (p *Publisher) renamedSignalCleanupMessages(zone state.Zone) []discoveryMessage {
 	base := "zone_" + zone.Account + "_" + zone.Zone + "_"
 	signals := sortedSignals(zone.DeviceEvents, zone.SignalActive)
 	messages := make([]discoveryMessage, 0, len(signals))
+	nodes := cleanupDiscoveryNodes(p.discoveryNode())
 	for _, signal := range signals {
 		for _, suffix := range legacySignalObjectSuffixes(signal) {
 			objectID := base + suffix
-			messages = append(messages, discoveryMessage{
-				key:     "cleanup:renamed_signal:" + p.discoveryNode() + ":binary_sensor/" + objectID,
-				topic:   p.discoveryTopic("binary_sensor", p.discoveryNode(), objectID),
-				payload: []byte{},
-			})
+			for _, node := range nodes {
+				messages = append(messages, discoveryMessage{
+					key:     "cleanup:renamed_signal:" + node + ":binary_sensor/" + objectID,
+					topic:   p.discoveryTopic("binary_sensor", node, objectID),
+					payload: []byte{},
+				})
+			}
 		}
 	}
 	return messages
@@ -941,9 +830,9 @@ func signalObjectSuffix(signal string) string {
 func legacySignalObjectSuffixes(signal string) []string {
 	switch signal {
 	case "power":
-		return []string{"signal_power"}
+		return []string{"signal_power", "power"}
 	case "temperature":
-		return []string{"signal_temperature"}
+		return []string{"signal_temperature", "temperature"}
 	default:
 		return nil
 	}

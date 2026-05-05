@@ -19,6 +19,7 @@ SIA always has priority. If SIA and Jeedom report different security state for t
 4. HTTP JSON endpoints, Prometheus metrics, MQTT state, and Home Assistant discovery are updated.
 5. If Jeedom input is enabled, Jeedom MQTT Manager events are parsed into a separate Jeedom mirror store.
 6. When Jeedom devices are linked to SIA catalog entries, their Home Assistant entities are attached to the same HA device as the SIA zone.
+7. If Jeedom exposes a linked security/status command that SIA already owns, AjaxBridge cleans the Jeedom HA discovery entry and keeps the SIA entity authoritative.
 
 ## Runtime Ports
 

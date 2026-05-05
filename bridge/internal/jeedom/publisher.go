@@ -81,8 +81,7 @@ func (p *Publisher) PublishDevice(ctx context.Context, device Device) error {
 		commands := sortedCommands(device.RawCommands)
 		if device.DiscoveryDisabled {
 			for _, command := range commands {
-				key := "jeedom_discovery_cleanup:" + command.Component + "/" + discoveryObjectID(command)
-				if err := p.mqtt.PublishDiscoveryMessage(ctx, key, p.discoveryTopic(command), []byte{}, true); err != nil {
+				if err := p.publishCommandDiscoveryCleanup(ctx, command, "jeedom_discovery_cleanup"); err != nil {
 					return err
 				}
 			}
@@ -95,6 +94,15 @@ func (p *Publisher) PublishDevice(ctx context.Context, device Device) error {
 			}
 		} else {
 			for _, command := range commands {
+				if !commandDiscoverable(command, device) {
+					if err := p.publishCommandDiscoveryCleanup(ctx, command, "jeedom_merged_sia_cleanup"); err != nil {
+						return err
+					}
+					continue
+				}
+				if err := p.publishCommandAlternateDiscoveryCleanup(ctx, command); err != nil {
+					return err
+				}
 				topic, payload, err := p.BuildDiscovery(command, device)
 				if err != nil {
 					return err
@@ -124,6 +132,36 @@ func (p *Publisher) PublishDevice(ctx context.Context, device Device) error {
 		return err
 	}
 	return p.mqtt.PublishStateMessage(ctx, stateTopic, payload, p.cfg.RetainState)
+}
+
+func (p *Publisher) publishCommandDiscoveryCleanup(ctx context.Context, command Command, prefix string) error {
+	if command.Component == "" || command.Metric == "" {
+		return nil
+	}
+	key := prefix + ":" + command.Component + "/" + discoveryObjectID(command)
+	if err := p.mqtt.PublishDiscoveryMessage(ctx, key, p.discoveryTopic(command), []byte{}, true); err != nil {
+		return err
+	}
+	for _, component := range alternateDiscoveryComponents(command.Component) {
+		key := prefix + ":" + component + "/" + discoveryObjectID(command)
+		if err := p.mqtt.PublishDiscoveryMessage(ctx, key, p.discoveryTopicFor(component, discoveryObjectID(command)), []byte{}, true); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (p *Publisher) publishCommandAlternateDiscoveryCleanup(ctx context.Context, command Command) error {
+	if command.Component == "" || command.Metric == "" {
+		return nil
+	}
+	for _, component := range alternateDiscoveryComponents(command.Component) {
+		key := "jeedom_component_migration_cleanup:" + component + "/" + discoveryObjectID(command)
+		if err := p.mqtt.PublishDiscoveryMessage(ctx, key, p.discoveryTopicFor(component, discoveryObjectID(command)), []byte{}, true); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (p *Publisher) publishLegacyCleanup(ctx context.Context, device Device) error {
@@ -234,7 +272,22 @@ func (p *Publisher) BuildSwitchDiscovery(action Action, device Device) (string, 
 }
 
 func (p *Publisher) discoveryTopic(command Command) string {
-	return strings.Join([]string{p.cfg.DiscoveryPrefix, command.Component, p.cfg.DiscoveryNode, discoveryObjectID(command), "config"}, "/")
+	return p.discoveryTopicFor(command.Component, discoveryObjectID(command))
+}
+
+func (p *Publisher) discoveryTopicFor(component, objectID string) string {
+	return strings.Join([]string{p.cfg.DiscoveryPrefix, component, p.cfg.DiscoveryNode, objectID, "config"}, "/")
+}
+
+func alternateDiscoveryComponents(component string) []string {
+	switch component {
+	case ComponentSensor:
+		return []string{ComponentBinarySensor}
+	case ComponentBinarySensor:
+		return []string{ComponentSensor}
+	default:
+		return nil
+	}
 }
 
 func discoveryIdentifiers(device Device) []string {
@@ -257,7 +310,7 @@ func sortedSwitchActions(actions map[string]Action) []Action {
 func sortedCommands(commands map[string]Command) []Command {
 	out := make([]Command, 0, len(commands))
 	for _, command := range commands {
-		if command.Component != "" && command.Metric != "" && commandDiscoverable(command) {
+		if command.Component != "" && command.Metric != "" {
 			out = append(out, command)
 		}
 	}
@@ -267,12 +320,45 @@ func sortedCommands(commands map[string]Command) []Command {
 	return out
 }
 
-func commandDiscoverable(command Command) bool {
+func commandDiscoverable(command Command, device Device) bool {
 	switch command.Metric {
 	case "event_source", "event", "event_code":
 		return false
-	default:
+	}
+	return !deviceLinkedToSIA(device) || !siaOwnedJeedomMetric(command.Metric)
+}
+
+func deviceLinkedToSIA(device Device) bool {
+	return strings.EqualFold(strings.TrimSpace(device.LinkedSource), "sia") ||
+		(strings.TrimSpace(device.LinkedAccount) != "" && strings.TrimSpace(device.LinkedZone) != "") ||
+		hasSIAIdentifier(device.HAIdentifiers)
+}
+
+func hasSIAIdentifier(identifiers []string) bool {
+	for _, identifier := range identifiers {
+		identifier = strings.ToLower(strings.TrimSpace(identifier))
+		if strings.HasPrefix(identifier, "ajaxbridge_") && strings.Contains(identifier, "_zone_") {
+			return true
+		}
+	}
+	return false
+}
+
+func siaOwnedJeedomMetric(metric string) bool {
+	switch strings.ToLower(strings.TrimSpace(metric)) {
+	case "alarm", "alarm_active",
+		"tamper",
+		"trouble", "trouble_active",
+		"external_power",
+		"bypass", "tamper_bypass",
+		"battery_low",
+		"connectivity", "hardware", "firmware", "fire_detector",
+		"fire", "smoke", "co", "gas", "gas_or_co",
+		"water_leak",
+		"interference", "accelerometer":
 		return true
+	default:
+		return false
 	}
 }
 

@@ -185,6 +185,8 @@ When a Jeedom device is linked by `jeedom_names` or `jeedom_command_ids`, its en
 
 This is the duplicate-prevention rule. Home Assistant sees SIA alarm/trouble entities, Jeedom metrics, and optional Jeedom control switch as entities of the same physical device.
 
+For linked devices, SIA-owned security/status values stay authoritative. Jeedom commands that duplicate SIA concepts such as tamper, bypass, external power, fire, smoke, water leak, and hardware/connectivity trouble are cleaned from Home Assistant discovery and are not rediscovered. Jeedom still publishes its normalized state JSON for debugging and notifications, and Home Assistant still gets Jeedom-only measurements such as `temperature_c`, `power_w`, `current_a`, `voltage_v`, and `energy_kwh`.
+
 ### Jeedom Unlinked Device
 
 Unlinked Jeedom devices use:
@@ -633,19 +635,12 @@ Duplicate devices:
 - Add `jeedom_names` and `jeedom_command_ids` to `data/devices.json`.
 - Keep `AJAXBRIDGE_JEEDOM_DISCOVER_UNLINKED=false`.
 - Set `AJAXBRIDGE_JEEDOM_ACCOUNT_NAMES` for hub/system Jeedom equipment.
-- Devices shown as manufacturer `Ajax via Jeedom` and model `Jeedom MQTT Bridge` are unlinked Jeedom discovery entries. If the same physical device also exists as `Ajax Systems`, clear old retained discovery and delete the orphan HA device.
+- Do not delete SIA signal entities just to solve Jeedom duplication. Linked Jeedom commands that duplicate SIA security/status values are cleaned automatically; the SIA entity remains authoritative.
+- AjaxBridge also publishes retained cleanup for old SIA discovery object id formats, including old `ajax2prometheus` topics, no-account zone ids such as `zone_13_alarm_signal`, and old signal ids such as `zone_a0f80d_13_firmware`.
+- Devices shown as manufacturer `Ajax via Jeedom` and model `Jeedom MQTT Bridge` are unlinked Jeedom discovery entries. If the same physical device also exists as `Ajax Systems`, clear old retained discovery and republish linked discovery.
 - Restart AjaxBridge, then force Jeedom MQTT Manager to republish eqLogic discovery or wait for Jeedom events so linked discovery is republished with the SIA device identifier.
 - Reload or restart Home Assistant MQTT after stale retained topics are cleared.
-- If the duplicate is the same SIA entity with a Home Assistant suffix such as `_2`, clear retained AjaxBridge discovery/state and then delete any remaining unavailable orphan entity from the Home Assistant entity registry.
-
-If you do not have Mosquitto clients installed, run the bridge once with temporary cleanup enabled:
-
-```yaml
-AJAXBRIDGE_MQTT_CLEANUP_RETAINED: "true"
-AJAXBRIDGE_MQTT_CLEANUP_RETAINED_WAIT: "8s"
-```
-
-Restart AjaxBridge, wait for the log line `MQTT retained cleanup completed`, then remove the flag or set it back to `false` and restart again. The cleaner clears retained AjaxBridge discovery topics for `account_*`, `zone_*`, `jeedom_cmd_*`, and `jeedom_control_*`, retained SIA state under `ajaxbridge/accounts/...`, retained Jeedom state under `ajaxbridge/jeedom/devices/+/state`, and legacy `ajax2prometheus` topics. Startup snapshot publishing recreates the current SIA discovery/state after the cleanup pass.
+- If the duplicate is the same SIA entity with a Home Assistant suffix such as `_2`, clear stale retained MQTT discovery with Mosquitto clients, then reload or restart Home Assistant MQTT.
 
 Alternative shell cleanup with Mosquitto clients:
 
@@ -687,5 +682,4 @@ Numeric Jeedom values missing:
 
 - Confirm `/jeedom/devices` contains `values.temperature_c`, `values.power_w`, `values.current_a`, or `values.voltage_v` for the expected device.
 - Confirm `/jeedom/commands` contains the matching Jeedom command ids and that those ids are listed in `data/devices.json` under `jeedom_command_ids`.
-- Keep `AJAXBRIDGE_MQTT_CLEANUP_RETAINED=false` after the one-time cleanup run. Leaving cleanup enabled on every restart can remove retained HA discovery before Jeedom has replayed all discovery/events.
 - Force Jeedom MQTT Manager to republish eqLogic discovery and command events after changing mappings.
