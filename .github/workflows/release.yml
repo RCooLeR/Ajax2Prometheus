@@ -80,4 +80,4 @@ jobs:
       - name: Upload release assets
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release upload "${GITHUB_REF_NAME}" dist/*_source.tar.gz dist/ha-cards-dist.tar.gz --clobber
+        run: gh release upload "${GITHUB_REF_NAME}" dist/*.tar.gz --clobber
