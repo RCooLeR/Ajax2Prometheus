@@ -10,7 +10,6 @@ RUN mkdir -p /data && chown ajaxbridge:ajaxbridge /data
 WORKDIR /app
 
 COPY --chown=ajaxbridge:ajaxbridge $TARGETPLATFORM/ajaxbridge /app/ajaxbridge
-COPY --chown=ajaxbridge:ajaxbridge logo.png /app/logo.png
 
 USER ajaxbridge
 
