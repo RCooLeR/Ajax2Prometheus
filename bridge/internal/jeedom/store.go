@@ -212,6 +212,7 @@ func (s *Store) Apply(evt Event) ApplyResult {
 	device.LinkedAccount = identity.LinkedAccount
 	device.LinkedZone = identity.LinkedZone
 	device.DiscoveryDisabled = identity.DiscoveryDisabled
+	s.mergeLegacyActionsLocked(device)
 
 	command := Command{
 		CommandID:      evt.CommandID,
@@ -333,6 +334,7 @@ func (s *Store) ApplyDiscovery(discovery Discovery) ApplyDiscoveryResult {
 	if discovery.EqLogicID != "" {
 		s.eqLogics[discovery.EqLogicID] = deviceSlug
 	}
+	s.mergeLegacyActionsLocked(device)
 
 	for _, info := range discovery.InfoCommands {
 		mapping := MappingFor(Event{
@@ -418,6 +420,11 @@ func (s *Store) ApplyDiscovery(discovery Discovery) ApplyDiscoveryResult {
 		}
 		device.Actions[actionName] = action
 		actions = append(actions, action)
+	}
+
+	if target := s.linkedTargetForLegacyLocked(deviceSlug); target != nil {
+		s.copyActionsLocked(target, device)
+		return ApplyDiscoveryResult{Device: copyDevice(*target), Actions: actionsForDevice(target)}
 	}
 
 	return ApplyDiscoveryResult{Device: copyDevice(*device), Actions: actions}
@@ -733,12 +740,25 @@ func (s *Store) Action(deviceSlug, actionName string) (Action, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	device := s.devices[Slug(deviceSlug)]
+	deviceSlug = Slug(deviceSlug)
+	device := s.devices[deviceSlug]
 	if device == nil {
 		return Action{}, false
 	}
-	action, ok := device.Actions[NormalizeControlAction(actionName)]
-	return action, ok
+	actionName = NormalizeControlAction(actionName)
+	if action, ok := device.Actions[actionName]; ok {
+		return action, true
+	}
+	for _, legacySlug := range device.LegacyDeviceSlugs {
+		legacy := s.devices[Slug(legacySlug)]
+		if legacy == nil {
+			continue
+		}
+		if action, ok := legacy.Actions[actionName]; ok {
+			return actionForDevice(action, device), true
+		}
+	}
+	return Action{}, false
 }
 
 func (s *Store) ActionByCommandID(commandID string) (Action, bool) {
@@ -908,6 +928,74 @@ func copyActions(actions map[string]Action) map[string]Action {
 		out[key] = value
 	}
 	return out
+}
+
+func actionsForDevice(device *Device) []Action {
+	if device == nil || len(device.Actions) == 0 {
+		return nil
+	}
+	actions := make([]Action, 0, len(device.Actions))
+	for _, action := range device.Actions {
+		actions = append(actions, action)
+	}
+	sort.Slice(actions, func(i, j int) bool {
+		return actions[i].Action < actions[j].Action
+	})
+	return actions
+}
+
+func (s *Store) mergeLegacyActionsLocked(device *Device) {
+	if device == nil || len(device.LegacyDeviceSlugs) == 0 {
+		return
+	}
+	for _, legacySlug := range device.LegacyDeviceSlugs {
+		legacy := s.devices[Slug(legacySlug)]
+		if legacy == nil || legacy == device {
+			continue
+		}
+		s.copyActionsLocked(device, legacy)
+	}
+}
+
+func (s *Store) linkedTargetForLegacyLocked(legacySlug string) *Device {
+	legacySlug = Slug(legacySlug)
+	if legacySlug == "" || legacySlug == "unknown" {
+		return nil
+	}
+	for _, device := range s.devices {
+		if device == nil || device.DeviceSlug == legacySlug {
+			continue
+		}
+		if containsString(device.LegacyDeviceSlugs, legacySlug) {
+			return device
+		}
+	}
+	return nil
+}
+
+func (s *Store) copyActionsLocked(target, source *Device) {
+	if target == nil || source == nil || len(source.Actions) == 0 {
+		return
+	}
+	if target.Actions == nil {
+		target.Actions = make(map[string]Action)
+	}
+	for actionName, action := range source.Actions {
+		if _, exists := target.Actions[actionName]; exists {
+			continue
+		}
+		target.Actions[actionName] = actionForDevice(action, target)
+	}
+}
+
+func actionForDevice(action Action, device *Device) Action {
+	if device == nil {
+		return action
+	}
+	action.DeviceSlug = device.DeviceSlug
+	action.Device = firstNonEmpty(device.Device, action.Device)
+	action.DeviceType = firstNonEmpty(device.JeedomDeviceType, device.HAModel, action.DeviceType)
+	return action
 }
 
 func mqttTime(value time.Time) string {

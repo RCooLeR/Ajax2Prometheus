@@ -474,7 +474,7 @@
   display: grid;
   align-content: space-between;
   min-height: 0;
-  aspect-ratio: 3 / 1.55;
+  aspect-ratio: 3 / 1.45;
   border-radius: 28px;
   overflow: hidden;
   border: 1px solid var(--border);

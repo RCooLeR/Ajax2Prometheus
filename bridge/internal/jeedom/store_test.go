@@ -119,6 +119,88 @@ func TestStoreTracksLegacyUnlinkedSlugWhenCatalogLinksDevice(t *testing.T) {
 	}
 }
 
+func TestStoreFindsLegacyActionsForLinkedSIADevice(t *testing.T) {
+	store := NewStoreWithResolver("keep_last", legacyActionResolver{})
+	discovery, err := ParseDiscoveryMessage("jeedom/discovery/eqLogic/14", []byte(`{
+	  "id":14,
+	  "name":"Battery",
+	  "configuration":{"device":"Socket"},
+	  "isVisible":1,
+	  "isEnable":1,
+	  "cmds":{
+	    "216":{"id":216,"logicalId":"realState","name":"Etat","type":"info","subType":"binary","isVisible":1},
+	    "220":{"id":220,"logicalId":"SWITCH_ON","name":"On","type":"action","subType":"other","isVisible":1,"value":"216"},
+	    "221":{"id":221,"logicalId":"SWITCH_OFF","name":"Off","type":"action","subType":"other","isVisible":1,"value":"216"}
+	  }
+	}`), time.Unix(100, 0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	store.ApplyDiscovery(discovery)
+	store.Apply(Event{
+		Topic:       "jeedom/cmd/event/216",
+		CommandID:   "216",
+		DeviceName:  "Battery",
+		CommandName: "Etat",
+		Type:        "info",
+		Subtype:     "binary",
+		Value:       json.RawMessage(`1`),
+		ReceivedAt:  time.Unix(101, 0),
+	})
+
+	action, ok := store.Action("sia_a0f80d_zone_14", "OFF")
+	if !ok {
+		t.Fatal("missing linked SIA off action")
+	}
+	if action.CommandID != "221" || action.DeviceSlug != "sia_a0f80d_zone_14" || action.DeviceType != "Socket" {
+		t.Fatalf("action = %#v", action)
+	}
+	device, ok := store.Device("sia_a0f80d_zone_14")
+	if !ok {
+		t.Fatal("missing linked SIA device")
+	}
+	if _, ok := device.Actions["off"]; !ok {
+		t.Fatalf("linked SIA device did not inherit actions: %#v", device.Actions)
+	}
+}
+
+func TestStorePropagatesLegacyDiscoveryActionsToExistingLinkedDevice(t *testing.T) {
+	store := NewStoreWithResolver("keep_last", legacyActionResolver{})
+	store.Apply(Event{
+		Topic:       "jeedom/cmd/event/216",
+		CommandID:   "216",
+		DeviceName:  "Battery",
+		CommandName: "Etat",
+		Type:        "info",
+		Subtype:     "binary",
+		Value:       json.RawMessage(`0`),
+		ReceivedAt:  time.Unix(100, 0),
+	})
+
+	discovery, err := ParseDiscoveryMessage("jeedom/discovery/eqLogic/14", []byte(`{
+	  "id":14,
+	  "name":"Battery",
+	  "configuration":{"device":"Socket"},
+	  "isVisible":1,
+	  "isEnable":1,
+	  "cmds":{
+	    "220":{"id":220,"logicalId":"SWITCH_ON","name":"On","type":"action","subType":"other","isVisible":1},
+	    "221":{"id":221,"logicalId":"SWITCH_OFF","name":"Off","type":"action","subType":"other","isVisible":1}
+	  }
+	}`), time.Unix(101, 0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	result := store.ApplyDiscovery(discovery)
+
+	if result.Device.DeviceSlug != "sia_a0f80d_zone_14" {
+		t.Fatalf("discovery result device = %q, want linked SIA slug", result.Device.DeviceSlug)
+	}
+	if result.Device.Actions["on"].CommandID != "220" || result.Device.Actions["off"].CommandID != "221" {
+		t.Fatalf("linked actions = %#v", result.Device.Actions)
+	}
+}
+
 func TestStoreNormalizesRelayVoltageFromCatalog(t *testing.T) {
 	catalog := testCatalog(t, devicecatalog.Device{
 		Account:          "A0F80D",
@@ -370,4 +452,28 @@ func TestStoreDoesNotDeriveMultiTransmitterGridPowerFromTransmitterEventCode(t *
 	if _, ok := result.Device.Values["grid_power"]; ok {
 		t.Fatalf("multitransmitter grid_power = %#v, want no derived value", result.Device.Values["grid_power"])
 	}
+}
+
+type legacyActionResolver struct{}
+
+func (legacyActionResolver) Resolve(evt Event, _ Mapping) DeviceIdentity {
+	if evt.CommandID != "216" {
+		return DeviceIdentity{}
+	}
+	return DeviceIdentity{
+		DeviceSlug:        "sia_a0f80d_zone_14",
+		DeviceName:        "Battery heater",
+		BaseSlug:          "sia_a0f80d_zone_14",
+		HAIdentifiers:     []string{"ajaxbridge_A0F80D_zone_14"},
+		HAManufacturer:    "Ajax Systems",
+		HAModel:           "Socket",
+		LegacyDeviceSlugs: []string{"battery"},
+		LinkedSource:      "sia",
+		LinkedAccount:     "A0F80D",
+		LinkedZone:        "14",
+	}
+}
+
+func (legacyActionResolver) ResolveDiscovery(Discovery) DeviceIdentity {
+	return DeviceIdentity{DiscoveryDisabled: true}
 }
