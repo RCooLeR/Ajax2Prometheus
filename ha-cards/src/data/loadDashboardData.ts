@@ -1,15 +1,88 @@
 import devicesData from './devices.json';
 import eventsData from './events.json';
 import roomsData from './rooms.json';
-import systemStateData from './systemState.json';
-import type { DashboardData, Device, EventItem, Room, RoomSmdIvsCounts, RoomSummary, SystemState } from '../models/dashboard';
+import type { DashboardData, Device, EventItem, Room, RoomSafety, RoomSmdIvsCounts, RoomSummary, SystemState } from '../models/dashboard';
 
 export const dashboardData: DashboardData = {
-  systemState: systemStateData as SystemState,
+  systemState: buildStaticSystemState(devicesData as Device[], eventsData as EventItem[], roomsData as Room[]),
   rooms: roomsData as Room[],
   devices: devicesData as Device[],
   events: eventsData as EventItem[],
 };
+
+function buildStaticSystemState(devices: Device[], events: EventItem[], rooms: Room[]): SystemState {
+  const smdIvsTotals = rooms.reduce<RoomSmdIvsCounts>((totals, room) => {
+    const counts = room.smdIvs ?? emptySmdIvsCounts();
+    totals.total += counts.total;
+    totals.human += counts.human;
+    totals.vehicle += counts.vehicle;
+    totals.animal += counts.animal;
+    totals.ivs += counts.ivs;
+    return totals;
+  }, emptySmdIvsCounts());
+  const fallbackSmdCount = events.filter((event) => ['human_detected', 'vehicle_detected'].includes(event.type)).length;
+  const fallbackIvsCount = events.filter((event) => ['tripwire_detected', 'intrusion_detected'].includes(event.type)).length;
+  const outlets = devices.filter(isOutletOrWallSwitchDevice);
+  const lights = devices.filter(isLightSwitchDevice);
+  const outletOnCount = outlets.filter(deviceLooksOn).length;
+  const lightOnCount = lights.filter(deviceLooksOn).length;
+  const alerts = devices.filter((device) => device.attention).length;
+  const chips = [
+    {
+      id: 'system-mode',
+      label: 'Security mode',
+      value: 'Armed',
+      icon: { category: 'system-states', key: 'armed' },
+      tone: 'green',
+      active: true,
+    },
+    {
+      id: 'system-smd',
+      label: 'SMD today',
+      value: String(smdIvsTotals.human + smdIvsTotals.vehicle + smdIvsTotals.animal || fallbackSmdCount),
+      icon: { category: 'events', key: 'human_detected' },
+      tone: 'violet',
+      active: smdIvsTotals.total > 0 || fallbackSmdCount > 0,
+    },
+    {
+      id: 'system-ivs',
+      label: 'IVS today',
+      value: String(smdIvsTotals.ivs || fallbackIvsCount),
+      icon: { category: 'events', key: 'tripwire_detected' },
+      tone: 'amber',
+      active: smdIvsTotals.ivs > 0 || fallbackIvsCount > 0,
+    },
+    {
+      id: 'system-outlets',
+      label: 'Outlets',
+      value: `${outletOnCount}/${outlets.length || 0}`,
+      icon: { category: 'devices', key: 'smart_plug' },
+      tone: outletOnCount > 0 ? 'green' : 'slate',
+      active: outlets.length > 0 && outletOnCount > 0,
+    },
+    {
+      id: 'system-lights',
+      label: 'Light switches',
+      value: `${lightOnCount}/${lights.length || 0}`,
+      icon: { category: 'devices', key: 'light_switch' },
+      tone: lightOnCount > 0 ? 'green' : 'slate',
+      active: lights.length > 0 && lightOnCount > 0,
+    },
+  ] as SystemState['chips'];
+
+  if (alerts > 0) {
+    chips.push({
+      id: 'system-alerts',
+      label: 'Alerts',
+      value: String(alerts),
+      icon: { category: 'misc', key: 'alert' },
+      tone: 'amber',
+      active: true,
+    });
+  }
+
+  return { chips };
+}
 
 export function getDefaultRoomId(data: DashboardData): string {
   return data.rooms.find((room) => room.id === 'living-room')?.id ?? data.rooms[0]?.id ?? '';
@@ -41,6 +114,7 @@ export function getRoomSummaries(data: DashboardData): Record<string, RoomSummar
       smdIvs: room.smdIvs ?? emptySmdIvsCounts(),
       dahuaCameraCount: room.dahuaCameraCount ?? 0,
       climate: room.climate,
+      safety: room.safety ?? getRoomSafety(roomEvents),
       latestEventLabel: latestEvent?.title ?? 'No recent events',
       tone: attentionCount > 0 ? 'amber' : room.statusTone,
     };
@@ -51,4 +125,39 @@ export function getRoomSummaries(data: DashboardData): Record<string, RoomSummar
 
 function emptySmdIvsCounts(): RoomSmdIvsCounts {
   return { total: 0, human: 0, vehicle: 0, animal: 0, ivs: 0 };
+}
+
+function getRoomSafety(events: EventItem[]): RoomSafety {
+  return events.reduce<RoomSafety>((safety, event) => {
+    if (event.type === 'smoke_detected' || event.type === 'fire_detected') {
+      safety.smokeHigh += 1;
+    }
+    if (event.type === 'gas_detected') {
+      safety.coHigh += 1;
+    }
+    return safety;
+  }, { smokeHigh: 0, coHigh: 0 });
+}
+
+function isOutletOrWallSwitchDevice(device: Device): boolean {
+  const text = deviceDescriptor(device);
+  if (isLightSwitchDevice(device)) {
+    return false;
+  }
+  return device.type === 'smart_plug' || /(socket|plug|outlet|wallswitch|wall switch)/.test(text);
+}
+
+function isLightSwitchDevice(device: Device): boolean {
+  return device.type === 'light_switch' || /lightswitch|light switch|\blight\b/.test(deviceDescriptor(device));
+}
+
+function deviceLooksOn(device: Device): boolean {
+  if (device.actions?.some((action) => action.service === 'turn_off')) {
+    return true;
+  }
+  return /\bon\b|active|load|w\b/.test(`${device.status} ${device.signal}`.toLowerCase());
+}
+
+function deviceDescriptor(device: Device): string {
+  return `${device.type} ${device.name} ${device.model} ${device.entityId}`.toLowerCase();
 }

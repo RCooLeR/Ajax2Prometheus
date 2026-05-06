@@ -46,9 +46,6 @@ export function DetailedDashboardView({ mode = 'standalone', initialRoomId, hass
   const roomEvents = selectedRoom ? getEventsForRoom(data, selectedRoom.id) : [];
   const selectedDevice =
     roomDevices.find((device) => device.id === selectedDeviceId) ?? null;
-  const visibleEvents = selectedDevice
-    ? roomEvents.filter((event) => event.deviceId === selectedDevice.id)
-    : roomEvents;
   const roomSummaries = getRoomSummaries(data);
 
   useEffect(() => {
@@ -87,7 +84,7 @@ export function DetailedDashboardView({ mode = 'standalone', initialRoomId, hass
           rooms={data.rooms}
           selectedRoom={selectedRoom}
           roomDevices={roomDevices}
-          roomEvents={visibleEvents}
+          roomEvents={roomEvents}
           totalRoomEvents={roomEvents.length}
           roomSummaries={roomSummaries}
           selectedDeviceId={selectedDeviceId}

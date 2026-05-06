@@ -1,5 +1,5 @@
 import { createElement, useEffect, useRef, useState } from 'react';
-import type { Device, GlowTone, IconRef, Room, RoomSummary } from '../models/dashboard';
+import type { CameraStreamProfile, Device, EventItem, GlowTone, IconRef, Room, RoomSummary } from '../models/dashboard';
 import type { HomeAssistant, HomeAssistantState } from '../ha/types';
 import { Icon } from '../components/Icon';
 import { StatusBadge } from '../components/StatusBadge';
@@ -8,19 +8,26 @@ import { getRoomImageAsset, getToneClass } from '../utils/assets';
 interface RoomHeroProps {
   room: Room;
   roomSummary: RoomSummary;
+  roomEvents: EventItem[];
   selectedDevice: Device | null;
+  streamProfile: CameraStreamProfile;
+  audioMuted: boolean;
+  audioVolume: number;
   hass?: HomeAssistant;
 }
 
-export function RoomHero({ room, roomSummary, selectedDevice, hass }: RoomHeroProps) {
+export function RoomHero({ room, roomSummary, roomEvents, selectedDevice, streamProfile, audioMuted, audioVolume, hass }: RoomHeroProps) {
   const [pendingActionId, setPendingActionId] = useState<string | null>(null);
   const [actionFeedback, setActionFeedback] = useState<string | null>(null);
   const [mediaSrc, setMediaSrc] = useState<string | null>(null);
-  const heroMedia = selectedDevice?.heroMedia;
+  const heroMedia = selectedDevice?.heroMedia ?? buildFallbackCameraMedia(selectedDevice);
   const actions = selectedDevice?.actions ?? [];
   const videoMode = heroMedia?.kind === 'stream';
   const showDahuaStats = roomSummary.dahuaCameraCount > 0;
   const climate = roomSummary.climate ?? room.climate;
+  const safety = roomSummary.safety ?? room.safety ?? { smokeHigh: 0, coHigh: 0 };
+  const smokeHigh = safety.smokeHigh || countRoomEvents(roomEvents, ['smoke_detected', 'fire_detected']);
+  const coHigh = safety.coHigh || countRoomEvents(roomEvents, ['gas_detected']);
 
   useEffect(() => {
     setPendingActionId(null);
@@ -68,6 +75,9 @@ export function RoomHero({ room, roomSummary, selectedDevice, hass }: RoomHeroPr
               key={heroMedia.entityId}
               hass={hass}
               stateObj={hass.states[heroMedia.entityId]}
+              profile={streamProfile}
+              muted={audioMuted}
+              volume={audioVolume}
             />
           ) : (
             <img
@@ -98,22 +108,16 @@ export function RoomHero({ room, roomSummary, selectedDevice, hass }: RoomHeroPr
         </div>
         <div className="room-hero__stats">
           <RoomHeroStat
-            label="Devices"
-            value={roomSummary.deviceCount}
-            icon={{ category: 'misc', key: 'info' }}
-            tone="cyan"
+            label="SMD 24h"
+            value={roomSummary.smdIvs.human + roomSummary.smdIvs.vehicle + roomSummary.smdIvs.animal}
+            icon={{ category: 'events', key: 'human_detected' }}
+            tone="violet"
           />
           <RoomHeroStat
-            label="Online"
-            value={`${roomSummary.onlineCount}/${roomSummary.deviceCount || 0}`}
-            icon={{ category: 'system-states', key: roomSummary.onlineCount === roomSummary.deviceCount ? 'online' : 'offline' }}
-            tone={roomSummary.onlineCount === roomSummary.deviceCount ? 'green' : 'amber'}
-          />
-          <RoomHeroStat
-            label="Warnings"
-            value={roomSummary.attentionCount}
-            icon={{ category: 'misc', key: roomSummary.attentionCount > 0 ? 'alert' : 'check' }}
-            tone={roomSummary.attentionCount > 0 ? 'amber' : 'green'}
+            label="IVS 24h"
+            value={roomSummary.smdIvs.ivs}
+            icon={{ category: 'events', key: 'tripwire_detected' }}
+            tone="amber"
           />
           {climate?.temperature ? (
             <RoomHeroStat
@@ -123,34 +127,20 @@ export function RoomHero({ room, roomSummary, selectedDevice, hass }: RoomHeroPr
               tone="cyan"
             />
           ) : null}
-          {climate?.humidity ? (
-            <RoomHeroStat
-              label="Humidity"
-              value={climate.humidity}
-              icon={{ category: 'sensors', key: 'humidity' }}
-              tone="cyan"
-            />
-          ) : null}
+          <RoomHeroStat
+            label="Hi smoke"
+            value={smokeHigh}
+            icon={{ category: 'sensors', key: 'smoke' }}
+            tone={smokeHigh > 0 ? 'amber' : 'green'}
+          />
+          <RoomHeroStat
+            label="Hi CO"
+            value={coHigh}
+            icon={{ category: 'sensors', key: 'gas' }}
+            tone={coHigh > 0 ? 'amber' : 'green'}
+          />
           {showDahuaStats ? (
             <>
-              <RoomHeroStat
-                label="Humans 24h"
-                value={roomSummary.smdIvs.human}
-                icon={{ category: 'events', key: 'human_detected' }}
-                tone="violet"
-              />
-              <RoomHeroStat
-                label="Vehicles 24h"
-                value={roomSummary.smdIvs.vehicle}
-                icon={{ category: 'events', key: 'vehicle_detected' }}
-                tone="cyan"
-              />
-              <RoomHeroStat
-                label="IVS 24h"
-                value={roomSummary.smdIvs.ivs}
-                icon={{ category: 'events', key: 'tripwire_detected' }}
-                tone="amber"
-              />
               {roomSummary.smdIvs.animal > 0 ? (
                 <RoomHeroStat
                   label="Animals 24h"
@@ -193,6 +183,9 @@ export function RoomHero({ room, roomSummary, selectedDevice, hass }: RoomHeroPr
 interface NativeCameraStreamProps {
   hass: HomeAssistant;
   stateObj: HomeAssistantState;
+  profile: CameraStreamProfile;
+  muted: boolean;
+  volume: number;
 }
 
 type NativeCameraStreamElement = HTMLElement & {
@@ -200,7 +193,7 @@ type NativeCameraStreamElement = HTMLElement & {
   stateObj?: HomeAssistantState;
 };
 
-function NativeCameraStream({ hass, stateObj }: NativeCameraStreamProps) {
+function NativeCameraStream({ hass, stateObj, profile, muted, volume }: NativeCameraStreamProps) {
   const streamRef = useRef<NativeCameraStreamElement | null>(null);
 
   useEffect(() => {
@@ -211,7 +204,7 @@ function NativeCameraStream({ hass, stateObj }: NativeCameraStreamProps) {
 
     const assignStreamProps = () => {
       streamElement.hass = hass;
-      streamElement.stateObj = preferFocusedCameraState(stateObj);
+      streamElement.stateObj = preferFocusedCameraState(stateObj, profile);
     };
 
     if (customElements.get('ha-camera-stream')) {
@@ -229,7 +222,7 @@ function NativeCameraStream({ hass, stateObj }: NativeCameraStreamProps) {
     return () => {
       active = false;
     };
-  }, [hass, stateObj]);
+  }, [hass, profile, stateObj]);
 
   useEffect(() => {
     const streamElement = streamRef.current;
@@ -237,18 +230,18 @@ function NativeCameraStream({ hass, stateObj }: NativeCameraStreamProps) {
       return;
     }
 
-    return forceNestedVideoObjectFit(streamElement);
-  }, [stateObj.entity_id]);
+    return forceNestedVideoObjectFit(streamElement, muted, volume);
+  }, [muted, stateObj.entity_id, volume]);
 
   return createElement('ha-camera-stream', {
     ref: streamRef,
     className: 'room-hero__media room-hero__native-stream',
-    'data-audio-muted': 'true',
-    'data-audio-volume': '1',
+    'data-audio-muted': String(muted),
+    'data-audio-volume': String(volume),
   });
 }
 
-function forceNestedVideoObjectFit(rootElement: HTMLElement): () => void {
+function forceNestedVideoObjectFit(rootElement: HTMLElement, muted: boolean, volume: number): () => void {
   const observers: MutationObserver[] = [];
   const observedRoots = new WeakSet<Node>();
   let rafId = 0;
@@ -281,7 +274,8 @@ function forceNestedVideoObjectFit(rootElement: HTMLElement): () => void {
       video.style.setProperty('object-fit', 'fill', 'important');
       video.style.setProperty('width', '100%', 'important');
       video.style.setProperty('height', '100%', 'important');
-      video.muted = true;
+      video.muted = muted;
+      video.volume = Math.min(1, Math.max(0, volume));
     });
 
     root.querySelectorAll('*').forEach((element) => {
@@ -311,10 +305,10 @@ function forceNestedVideoObjectFit(rootElement: HTMLElement): () => void {
   };
 }
 
-function preferFocusedCameraState(stateObj: HomeAssistantState): HomeAssistantState {
-  const focusedProfile = resolveFocusedVideoProfile(stateObj.attributes);
-  const profile = readBridgeProfile(stateObj.attributes, focusedProfile);
-  const streamSource = readString(profile?.stream_url) || readString(profile?.local_stream_url);
+function preferFocusedCameraState(stateObj: HomeAssistantState, profile: CameraStreamProfile): HomeAssistantState {
+  const focusedProfile = resolveFocusedVideoProfile(stateObj.attributes, profile);
+  const bridgeProfile = readBridgeProfile(stateObj.attributes, focusedProfile);
+  const streamSource = readString(bridgeProfile?.stream_url) || readString(bridgeProfile?.local_stream_url);
 
   return {
     ...stateObj,
@@ -327,8 +321,16 @@ function preferFocusedCameraState(stateObj: HomeAssistantState): HomeAssistantSt
   };
 }
 
-function resolveFocusedVideoProfile(attributes: Record<string, unknown>): string {
+function resolveFocusedVideoProfile(attributes: Record<string, unknown>, profile: CameraStreamProfile): string {
   const profiles = readRecord(attributes.bridge_profiles);
+  if (profile === 'sub') {
+    if (profiles?.stable) {
+      return 'stable';
+    }
+    if (profiles?.sub) {
+      return 'sub';
+    }
+  }
   if (profiles?.quality) {
     return 'quality';
   }
@@ -344,6 +346,11 @@ function resolveFocusedVideoProfile(attributes: Record<string, unknown>): string
   return 'quality';
 }
 
+function countRoomEvents(events: EventItem[], types: string[]): number {
+  const wanted = new Set(types);
+  return events.filter((event) => wanted.has(event.type)).length;
+}
+
 function readBridgeProfile(attributes: Record<string, unknown>, profileKey: string): Record<string, unknown> | null {
   const profiles = readRecord(attributes.bridge_profiles);
   return readRecord(profiles?.[profileKey]);
@@ -355,6 +362,20 @@ function readRecord(value: unknown): Record<string, unknown> | null {
 
 function readString(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
+}
+
+function buildFallbackCameraMedia(device: Device | null) {
+  if (!device || device.type !== 'camera' || !device.entityId.startsWith('camera.')) {
+    return undefined;
+  }
+
+  return {
+    entityId: device.entityId,
+    title: device.name,
+    kind: 'stream' as const,
+    src: `/api/camera_proxy_stream/${device.entityId}`,
+    posterSrc: `/api/camera_proxy/${device.entityId}`,
+  };
 }
 
 interface RoomHeroStatProps {

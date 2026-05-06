@@ -12,6 +12,7 @@ import type {
   IconRef,
   Room,
   RoomClimate,
+  RoomSafety,
   RoomSmdIvsCounts,
   SystemState,
 } from '../models/dashboard';
@@ -118,6 +119,7 @@ interface RoomMetrics {
   dahuaCameraCount: number;
   sensorCount: number;
   smdIvs: RoomSmdIvsCounts;
+  safety: RoomSafety;
   latestEventLabel: string;
 }
 
@@ -682,6 +684,9 @@ function buildRoomMetrics(
 
   for (const event of events) {
     const current = metrics.get(event.roomId);
+    if (current) {
+      applySafetyEvent(current.safety, event.type);
+    }
     if (current && current.latestEventLabel === 'No recent events') {
       current.latestEventLabel = event.title;
     }
@@ -708,8 +713,18 @@ function emptyRoomMetrics(): RoomMetrics {
     dahuaCameraCount: 0,
     sensorCount: 0,
     smdIvs: emptySmdIvsCounts(),
+    safety: { smokeHigh: 0, coHigh: 0 },
     latestEventLabel: 'No recent events',
   };
+}
+
+function applySafetyEvent(safety: RoomSafety, eventType: EventType): void {
+  if (eventType === 'smoke_detected' || eventType === 'fire_detected') {
+    safety.smokeHigh += 1;
+  }
+  if (eventType === 'gas_detected') {
+    safety.coHigh += 1;
+  }
 }
 
 function buildRoom(
@@ -729,6 +744,7 @@ function buildRoom(
     dahuaCameraCount: 0,
     sensorCount: 0,
     smdIvs: emptySmdIvsCounts(),
+    safety: { smokeHigh: 0, coHigh: 0 },
     latestEventLabel: 'No recent events',
   };
 
@@ -745,6 +761,7 @@ function buildRoom(
     smdIvs: counts.smdIvs,
     dahuaCameraCount: counts.dahuaCameraCount,
     climate,
+    safety: counts.safety,
   };
 }
 
@@ -754,10 +771,20 @@ function buildSystemState(
   devices: ResolvedDevice[],
   events: EventItem[],
 ): SystemState {
-  const ajaxDevices = devices.filter((device) => device.integration === 'ajax');
-  const videoDevices = devices.filter((device) => device.cameraLike);
   const alertCount = devices.filter((device) => device.attention).length;
-  const onlineCount = devices.filter((device) => device.isOnline).length;
+  const smdIvsTotals = rooms.reduce<RoomSmdIvsCounts>((totals, room) => {
+    const counts = room.smdIvs ?? emptySmdIvsCounts();
+    totals.total += counts.total;
+    totals.human += counts.human;
+    totals.vehicle += counts.vehicle;
+    totals.animal += counts.animal;
+    totals.ivs += counts.ivs;
+    return totals;
+  }, emptySmdIvsCounts());
+  const outletDevices = devices.filter(isOutletOrWallSwitchDevice);
+  const lightSwitchDevices = devices.filter(isLightSwitchDevice);
+  const outletOnCount = outletDevices.filter(deviceIsOn).length;
+  const lightSwitchOnCount = lightSwitchDevices.filter(deviceIsOn).length;
   const accountModes = Object.entries(states)
     .filter(([entityId]) => entityId.startsWith('sensor.account_') && entityId.endsWith('_mode'))
     .map(([, state]) => safeString(state.state))
@@ -777,48 +804,82 @@ function buildSystemState(
       active: true,
     },
     {
-      id: 'system-ajax',
-      label: 'Ajax devices',
-      value: String(ajaxDevices.length),
-      icon: { category: 'devices', key: 'hub' },
-      tone: 'green',
-      active: ajaxDevices.length > 0,
+      id: 'system-smd',
+      label: 'SMD today',
+      value: String(smdIvsTotals.human + smdIvsTotals.vehicle + smdIvsTotals.animal),
+      icon: { category: 'events', key: 'human_detected' },
+      tone: 'violet',
+      active: smdIvsTotals.human + smdIvsTotals.vehicle + smdIvsTotals.animal > 0,
     },
     {
-      id: 'system-video',
-      label: 'Cameras',
-      value: String(videoDevices.length),
-      icon: { category: 'devices', key: 'camera' },
-      tone: 'cyan',
-      active: videoDevices.length > 0,
+      id: 'system-ivs',
+      label: 'IVS today',
+      value: String(smdIvsTotals.ivs),
+      icon: { category: 'events', key: 'tripwire_detected' },
+      tone: 'amber',
+      active: smdIvsTotals.ivs > 0,
     },
     {
+      id: 'system-outlets',
+      label: 'Outlets',
+      value: `${outletOnCount}/${outletDevices.length || 0}`,
+      icon: { category: 'devices', key: 'smart_plug' },
+      tone: outletOnCount > 0 ? 'green' : 'slate',
+      active: outletDevices.length > 0 && outletOnCount > 0,
+    },
+    {
+      id: 'system-lights',
+      label: 'Light switches',
+      value: `${lightSwitchOnCount}/${lightSwitchDevices.length || 0}`,
+      icon: { category: 'devices', key: 'light_switch' },
+      tone: lightSwitchOnCount > 0 ? 'green' : 'slate',
+      active: lightSwitchDevices.length > 0 && lightSwitchOnCount > 0,
+    },
+  ];
+
+  if (alertCount > 0) {
+    chips.push({
       id: 'system-alerts',
       label: 'Alerts',
       value: String(alertCount),
       icon: { category: 'misc', key: 'alert' },
-      tone: alertCount > 0 ? 'amber' : 'green',
-      active: alertCount > 0,
-    },
-    {
-      id: 'system-events',
-      label: 'Recent events',
-      value: String(events.length),
-      icon: { category: 'misc', key: 'history' },
-      tone: 'violet',
-      active: events.length > 0,
-    },
-    {
-      id: 'system-online',
-      label: 'Online',
-      value: `${onlineCount}/${devices.length || 0}`,
-      icon: { category: 'system-states', key: onlineCount === devices.length ? 'online' : 'offline' },
-      tone: onlineCount === devices.length ? 'green' : 'amber',
-      active: devices.length > 0,
-    },
-  ];
+      tone: 'amber',
+      active: true,
+    });
+  }
 
   return { chips };
+}
+
+function isOutletOrWallSwitchDevice(device: ResolvedDevice): boolean {
+  const text = deviceDescriptor(device);
+  if (isLightSwitchDevice(device)) {
+    return false;
+  }
+  return device.type === 'smart_plug'
+    || device.type === 'wall_switch'
+    || /(socket|plug|outlet|wallswitch|wall switch)/.test(text);
+}
+
+function isLightSwitchDevice(device: ResolvedDevice): boolean {
+  return device.type === 'light_switch' || /lightswitch|light switch|\blight\b/.test(deviceDescriptor(device));
+}
+
+function deviceIsOn(device: ResolvedDevice): boolean {
+  if (device.actions?.some((action) => action.service === 'turn_off')) {
+    return true;
+  }
+  if (device.actions?.some((action) => action.service === 'turn_on')) {
+    return false;
+  }
+  if (device.metrics?.some((metric) => metric.label.toLowerCase().includes('switch') && metric.value.toLowerCase() === 'on')) {
+    return true;
+  }
+  return /\bon\b|active|enabled|load|w\b/.test(`${device.status} ${device.signal}`.toLowerCase());
+}
+
+function deviceDescriptor(device: ResolvedDevice): string {
+  return `${device.type} ${device.name} ${device.model} ${device.entityId}`.toLowerCase();
 }
 
 function dahuaBridgeChannelSignature(
@@ -2753,6 +2814,15 @@ function inferDeviceType(input: { name: string; model: string; entityIds: string
   if (haystack.includes('socket') || haystack.includes('plug')) {
     return 'smart_plug';
   }
+  if (haystack.includes('waterstop') || haystack.includes('water stop')) {
+    return 'waterstop';
+  }
+  if (haystack.includes('lightswitch') || haystack.includes('light switch')) {
+    return 'light_switch';
+  }
+  if (haystack.includes('wallswitch') || haystack.includes('wall switch')) {
+    return 'wall_switch';
+  }
   if (haystack.includes('thermostat')) {
     return 'thermostat';
   }
@@ -2805,6 +2875,15 @@ function iconForDevice(type: string, name: string, model: string): IconRef {
   }
   if (lowered.includes('plug') || lowered.includes('socket')) {
     return { category: 'devices', key: 'smart_plug' };
+  }
+  if (lowered.includes('waterstop') || lowered.includes('water stop')) {
+    return { category: 'devices', key: 'waterstop' };
+  }
+  if (lowered.includes('lightswitch') || lowered.includes('light switch')) {
+    return { category: 'devices', key: 'light_switch' };
+  }
+  if (lowered.includes('wallswitch') || lowered.includes('wall switch')) {
+    return { category: 'devices', key: 'wall_switch' };
   }
   if (lowered.includes('relay')) {
     return { category: 'devices', key: 'relay' };

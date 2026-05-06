@@ -59,6 +59,11 @@ export interface RoomClimate {
   humidity?: string;
 }
 
+export interface RoomSafety {
+  smokeHigh: number;
+  coHigh: number;
+}
+
 export interface Room {
   id: string;
   name: string;
@@ -72,6 +77,7 @@ export interface Room {
   smdIvs?: RoomSmdIvsCounts;
   dahuaCameraCount?: number;
   climate?: RoomClimate;
+  safety?: RoomSafety;
 }
 
 export interface DeviceHeroMedia {
@@ -90,6 +96,8 @@ export interface DeviceAction {
   service: string;
   stateLabel?: string;
 }
+
+export type CameraStreamProfile = 'main' | 'sub';
 
 export interface Device {
   id: string;
@@ -136,6 +144,7 @@ export interface RoomSummary {
   smdIvs: RoomSmdIvsCounts;
   dahuaCameraCount: number;
   climate?: RoomClimate;
+  safety: RoomSafety;
   latestEventLabel: string;
   tone: GlowTone;
 }
