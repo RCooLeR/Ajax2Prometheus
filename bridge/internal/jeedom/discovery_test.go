@@ -4,6 +4,8 @@ import (
 	"math"
 	"testing"
 	"time"
+
+	"github.com/RCooLeR/AjaxBridge/internal/devicecatalog"
 )
 
 const relayDiscoveryPayload = `{
@@ -165,5 +167,77 @@ func TestStoreApplyDiscoveryAllowsWaterStopToggleActions(t *testing.T) {
 	off := result.Device.Actions["off"]
 	if !on.Allowed || !off.Allowed {
 		t.Fatalf("WaterStop actions should be allowed: on=%#v off=%#v", on, off)
+	}
+}
+
+func TestStoreApplyDiscoveryAllowsCatalogWaterStopToggleWithoutJeedomDeviceType(t *testing.T) {
+	catalog := testCatalog(t, devicecatalog.Device{
+		Account:          "A0F80D",
+		Zone:             "12",
+		Name:             "Water valve",
+		Kind:             "WaterStop",
+		JeedomCommandIDs: []string{"174", "175"},
+	})
+	store := NewStoreWithResolver("keep_last", NewCatalogResolver(catalog, CatalogResolverConfig{}))
+	payload := []byte(`{
+	  "id":30,
+	  "name":"Water valve",
+	  "isVisible":1,
+	  "isEnable":1,
+	  "cmds":{
+	    "174":{"id":174,"logicalId":"SWITCH_ON","name":"On","type":"action","subType":"other","isVisible":1},
+	    "175":{"id":175,"logicalId":"SWITCH_OFF","name":"Off","type":"action","subType":"other","isVisible":1}
+	  }
+	}`)
+	discovery, err := ParseDiscoveryMessage("jeedom/discovery/eqLogic/30", payload, time.Unix(100, 0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	result := store.ApplyDiscovery(discovery)
+
+	if result.Device.JeedomDeviceType != "WaterStop" {
+		t.Fatalf("JeedomDeviceType = %q, want WaterStop", result.Device.JeedomDeviceType)
+	}
+	on := result.Device.Actions["on"]
+	off := result.Device.Actions["off"]
+	if on.CommandID != "174" || !on.Allowed {
+		t.Fatalf("catalog WaterStop on action = %#v", on)
+	}
+	if off.CommandID != "175" || !off.Allowed {
+		t.Fatalf("catalog WaterStop off action = %#v", off)
+	}
+}
+
+func TestStoreApplyDiscoveryAllowsHubSecurityActions(t *testing.T) {
+	payload := []byte(`{
+	  "id":40,
+	  "name":"Security hub",
+	  "configuration":{"device":"Hub"},
+	  "isVisible":1,
+	  "isEnable":1,
+	  "cmds":{
+	    "163":{"id":163,"logicalId":"ARM","name":"Armement","type":"action","subType":"other","isVisible":1},
+	    "164":{"id":164,"logicalId":"NIGHT_MODE","name":"Mode nuit","type":"action","subType":"other","isVisible":1},
+	    "165":{"id":165,"logicalId":"DISARM","name":"Desarmement","type":"action","subType":"other","isVisible":1},
+	    "167":{"id":167,"logicalId":"muteFireDetectors","name":"Arret detection incendie","type":"action","subType":"other","isVisible":1}
+	  }
+	}`)
+	discovery, err := ParseDiscoveryMessage("jeedom/discovery/eqLogic/40", payload, time.Unix(100, 0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	result := NewStore("keep_last").ApplyDiscovery(discovery)
+
+	want := map[string]string{
+		"arm":                 "163",
+		"night_mode":          "164",
+		"disarm":              "165",
+		"mute_fire_detectors": "167",
+	}
+	for actionName, commandID := range want {
+		action := result.Device.Actions[actionName]
+		if action.CommandID != commandID || !action.Allowed {
+			t.Fatalf("%s action = %#v, want command %s allowed", actionName, action, commandID)
+		}
 	}
 }

@@ -1,5 +1,6 @@
+import { createElement } from 'react';
 import type { IconRef } from '../models/dashboard';
-import { getIconAsset, getIconColor } from '../utils/assets';
+import { getIconColor, getMaterialIconName } from '../utils/assets';
 
 interface IconProps {
   icon: IconRef;
@@ -8,8 +9,8 @@ interface IconProps {
 }
 
 export function Icon({ icon, size = 42, className }: IconProps) {
-  const src = getIconAsset(icon);
   const tint = getIconColor(icon);
+  const materialIcon = getMaterialIconName(icon);
 
   return (
     <span
@@ -21,7 +22,27 @@ export function Icon({ icon, size = 42, className }: IconProps) {
       }}
       aria-hidden="true"
     >
-      {src ? <img src={src} alt="" width={size} height={size} loading="lazy" /> : null}
+      {createElement('ha-icon', { icon: materialIcon })}
+      <span className="icon__fallback">{fallbackGlyph(materialIcon)}</span>
     </span>
   );
+}
+
+function fallbackGlyph(icon: string): string {
+  if (/water|valve|leak/.test(icon)) {
+    return 'W';
+  }
+  if (/fire|smoke|alarm|alert/.test(icon)) {
+    return '!';
+  }
+  if (/battery|power|lightning|switch|socket/.test(icon)) {
+    return 'P';
+  }
+  if (/door|window|lock|shield/.test(icon)) {
+    return 'S';
+  }
+  if (/thermometer/.test(icon)) {
+    return 'T';
+  }
+  return 'i';
 }

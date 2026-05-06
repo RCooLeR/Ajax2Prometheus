@@ -115,6 +115,7 @@ export function getRoomSummaries(data: DashboardData): Record<string, RoomSummar
       dahuaCameraCount: room.dahuaCameraCount ?? 0,
       climate: room.climate,
       safety: room.safety ?? getRoomSafety(roomEvents),
+      gridPower: room.gridPower,
       latestEventLabel: latestEvent?.title ?? 'No recent events',
       tone: attentionCount > 0 ? 'amber' : room.statusTone,
     };

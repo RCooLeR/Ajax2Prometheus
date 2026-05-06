@@ -261,7 +261,20 @@ const adminHTML = `<!doctype html>
     function renderMatching() {
       const sia = document.querySelector('#siaTable tbody');
       sia.innerHTML = '';
+      accountRows().forEach(function(account) {
+        const catalog = account.catalog || {};
+        const key = 'Account ' + account.account;
+        const name = catalog.name || account.name || ('Ajax account ' + account.account);
+        const kind = catalog.kind || 'Hub';
+        const commands = csv(catalog.jeedom_command_ids || []);
+        const accountArg = JSON.stringify(account.account);
+        const action = catalog.exists
+          ? '<button class="btn btn-outline-secondary btn-sm" onclick=\'focusCatalogRow(' + accountArg + ', "")\'>Edit</button>'
+          : '<button class="btn btn-outline-primary btn-sm" onclick=\'addAccountCatalogRow(' + accountArg + ')\'>Add match row</button>';
+        sia.insertAdjacentHTML('beforeend', '<tr class="table-primary"><td class="mono">' + esc(key) + '</td><td>' + esc(name) + '</td><td>' + esc(catalog.room || '') + '</td><td>' + esc(kind) + '</td><td class="mono">' + esc(commands) + '<div class="mt-1">' + action + '</div></td></tr>');
+      });
       (model.devices || []).forEach(function(device) {
+        if (!device.zone && isAccountCatalogDevice(device)) return;
         const key = device.account + ' / zone ' + device.zone;
         sia.insertAdjacentHTML('beforeend', '<tr><td class="mono">' + esc(key) + '</td><td>' + esc(device.name) + '</td><td>' + esc(device.room) + '</td><td>' + esc(device.kind) + '</td><td class="mono">' + esc(csv(device.jeedom_command_ids)) + '</td></tr>');
       });
@@ -269,9 +282,76 @@ const adminHTML = `<!doctype html>
       jeedom.innerHTML = '';
       (model.jeedom_devices || []).forEach(function(device) {
         const commands = Object.values(device.raw_commands || {}).map(function(cmd) { return cmd.command_id + ':' + cmd.name; }).join(', ');
-        const linked = device.linked_account ? (device.linked_account + ' / zone ' + device.linked_zone) : '';
+        const linked = device.linked_account ? (device.linked_zone ? (device.linked_account + ' / zone ' + device.linked_zone) : ('Account ' + device.linked_account)) : '';
         jeedom.insertAdjacentHTML('beforeend', '<tr><td class="mono">' + esc(device.device_slug) + '</td><td>' + esc(device.device) + '</td><td>' + esc(device.jeedom_device_type || device.ha_model || '') + '</td><td class="mono">' + esc(linked) + '</td><td class="mono">' + esc(commands) + '</td></tr>');
       });
+    }
+
+    function accountRows() {
+      const rowsByAccount = {};
+      (model.devices || []).forEach(function(device) {
+        if (isAccountCatalogDevice(device)) {
+          rowsByAccount[device.account] = Object.assign({exists:true}, device);
+        }
+      });
+      (((model.state || {}).accounts) || []).forEach(function(account) {
+        if (!rowsByAccount[account.account]) {
+          rowsByAccount[account.account] = {
+            account: account.account,
+            name: 'Ajax account ' + account.account,
+            kind: 'Hub',
+            exists: false
+          };
+        }
+      });
+      return Object.keys(rowsByAccount).sort().map(function(account) {
+        return {
+          account: account,
+          name: rowsByAccount[account].name,
+          catalog: rowsByAccount[account]
+        };
+      });
+    }
+
+    function isAccountCatalogDevice(device) {
+      const kind = String(device.kind || device.device || device.name || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+      return !!device.account && !device.zone && ['account','ajaxaccount','hub','hub2','hub2plus','hubplus','hubhybrid'].includes(kind);
+    }
+
+    function addAccountCatalogRow(account) {
+      const device = {
+        account: account,
+        zone: '',
+        device: '',
+        name: 'Ajax account ' + account,
+        room: '',
+        kind: 'Hub',
+        events: [],
+        jeedom_names: [],
+        jeedom_command_ids: []
+      };
+      model.devices = model.devices || [];
+      model.devices.unshift(device);
+      renderDevices();
+      renderMatching();
+      focusCatalogRow(account, '');
+    }
+
+    function focusCatalogRow(account, zone) {
+      const trigger = document.querySelector('[data-bs-target="#devicesTab"]');
+      if (trigger) bootstrap.Tab.getOrCreateInstance(trigger).show();
+      setTimeout(function() {
+        const rows = Array.from(document.querySelectorAll('#devicesTable tbody tr'));
+        const row = rows.find(function(tr) {
+          return tr.querySelector('[data-field="account"]').value.trim() === account &&
+            tr.querySelector('[data-field="zone"]').value.trim() === zone;
+        });
+        if (!row) return;
+        row.classList.add('table-warning');
+        const target = row.querySelector('[data-field="jeedom_command_ids"]');
+        if (target) target.focus();
+        setTimeout(function() { row.classList.remove('table-warning'); }, 1600);
+      }, 120);
     }
 
     function renderNotifications() {

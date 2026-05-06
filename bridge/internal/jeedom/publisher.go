@@ -82,6 +82,9 @@ func (p *Publisher) PublishDevice(ctx context.Context, device Device) error {
 		commands := sortedCommands(device.RawCommands)
 		if device.DiscoveryDisabled {
 			for _, command := range commands {
+				if err := p.publishCommandLegacyNameDiscoveryCleanup(ctx, command, device); err != nil {
+					return err
+				}
 				if err := p.publishCommandDiscoveryCleanup(ctx, command, "jeedom_discovery_cleanup"); err != nil {
 					return err
 				}
@@ -90,12 +93,15 @@ func (p *Publisher) PublishDevice(ctx context.Context, device Device) error {
 				if err := p.publishSwitchDiscoveryCleanup(ctx, device.DeviceSlug, "jeedom_switch_discovery_cleanup"); err != nil {
 					return err
 				}
-				if err := p.publishButtonDiscoveryCleanup(ctx, device.DeviceSlug, "impulse", "jeedom_button_discovery_cleanup"); err != nil {
+				if err := p.publishKnownButtonDiscoveryCleanups(ctx, device.DeviceSlug, "jeedom_button_discovery_cleanup"); err != nil {
 					return err
 				}
 			}
 		} else {
 			for _, command := range commands {
+				if err := p.publishCommandLegacyNameDiscoveryCleanup(ctx, command, device); err != nil {
+					return err
+				}
 				if !commandDiscoverable(command, device) {
 					if err := p.publishCommandDiscoveryCleanup(ctx, command, "jeedom_merged_sia_cleanup"); err != nil {
 						return err
@@ -134,7 +140,7 @@ func (p *Publisher) PublishDevice(ctx context.Context, device Device) error {
 
 				buttonActions := sortedButtonActions(device)
 				if len(buttonActions) == 0 {
-					if err := p.publishButtonDiscoveryCleanup(ctx, device.DeviceSlug, "impulse", "jeedom_button_discovery_cleanup"); err != nil {
+					if err := p.publishKnownButtonDiscoveryCleanups(ctx, device.DeviceSlug, "jeedom_button_discovery_cleanup"); err != nil {
 						return err
 					}
 				}
@@ -189,6 +195,27 @@ func (p *Publisher) publishCommandAlternateDiscoveryCleanup(ctx context.Context,
 	return nil
 }
 
+func (p *Publisher) publishCommandLegacyNameDiscoveryCleanup(ctx context.Context, command Command, device Device) error {
+	if command.Metric == "" {
+		return nil
+	}
+	for _, objectID := range legacyCommandObjectIDs(command, device) {
+		for _, component := range commandCleanupComponents(command.Component) {
+			if component == "" {
+				continue
+			}
+			if component == command.Component && objectID == discoveryObjectID(command) {
+				continue
+			}
+			key := "jeedom_legacy_name_cleanup:" + component + "/" + objectID
+			if err := p.mqtt.PublishDiscoveryMessage(ctx, key, p.discoveryTopicFor(component, objectID), []byte{}, true); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 func (p *Publisher) publishLegacyCleanup(ctx context.Context, device Device) error {
 	if len(device.LegacyDeviceSlugs) == 0 {
 		return nil
@@ -202,7 +229,7 @@ func (p *Publisher) publishLegacyCleanup(ctx context.Context, device Device) err
 			if err := p.publishSwitchDiscoveryCleanup(ctx, legacySlug, "jeedom_legacy_switch_cleanup"); err != nil {
 				return err
 			}
-			if err := p.publishButtonDiscoveryCleanup(ctx, legacySlug, "impulse", "jeedom_legacy_button_cleanup"); err != nil {
+			if err := p.publishKnownButtonDiscoveryCleanups(ctx, legacySlug, "jeedom_legacy_button_cleanup"); err != nil {
 				return err
 			}
 		}
@@ -344,6 +371,12 @@ func alternateDiscoveryComponents(component string) []string {
 	}
 }
 
+func commandCleanupComponents(component string) []string {
+	components := []string{component}
+	components = append(components, alternateDiscoveryComponents(component)...)
+	return compactUniqueStrings(components)
+}
+
 func discoveryIdentifiers(device Device) []string {
 	if len(device.HAIdentifiers) == 0 {
 		return []string{"ajaxbridge_jeedom_" + device.DeviceSlug}
@@ -366,17 +399,26 @@ func sortedSwitchActions(device Device) []Action {
 }
 
 func sortedButtonActions(device Device) []Action {
-	if !impulseCapableDevice(device) {
+	if impulseCapableDevice(device) {
+		if impulse, ok := device.Actions["impulse"]; ok && impulse.Allowed {
+			return []Action{impulse}
+		}
+		if on, ok := device.Actions["on"]; ok && on.Allowed {
+			return []Action{on}
+		}
+		return nil
+	}
+	if !securityButtonCapableDevice(device) {
 		return nil
 	}
 
-	if impulse, ok := device.Actions["impulse"]; ok && impulse.Allowed {
-		return []Action{impulse}
+	actions := make([]Action, 0, len(securityButtonActionOrder))
+	for _, actionName := range securityButtonActionOrder {
+		if action, ok := device.Actions[actionName]; ok && action.Allowed {
+			actions = append(actions, action)
+		}
 	}
-	if on, ok := device.Actions["on"]; ok && on.Allowed {
-		return []Action{on}
-	}
-	return nil
+	return actions
 }
 
 func toggleCapableDevice(device Device) bool {
@@ -390,6 +432,27 @@ func toggleCapableDevice(device Device) bool {
 
 func impulseCapableDevice(device Device) bool {
 	return commandKey(firstNonEmpty(device.JeedomDeviceType, device.HAModel)) == "relay"
+}
+
+func securityButtonCapableDevice(device Device) bool {
+	return isHubControlDevice(firstNonEmpty(device.JeedomDeviceType, device.HAModel))
+}
+
+func isHubControlDevice(deviceType string) bool {
+	switch commandKey(deviceType) {
+	case "hub", "hub2", "hub2plus", "hub_2_plus", "hubplus", "hub_plus", "hubhybrid", "hub_hybrid":
+		return true
+	default:
+		return false
+	}
+}
+
+var securityButtonActionOrder = []string{
+	"arm",
+	"night_mode",
+	"disarm",
+	"panic",
+	"mute_fire_detectors",
 }
 
 func switchObjectID(deviceSlug string) string {
@@ -494,6 +557,70 @@ func discoveryUniqueID(command Command) string {
 	return "ajaxbridge_jeedom_" + command.DeviceSlug + "_" + Slug(command.Metric)
 }
 
+func legacyCommandObjectIDs(command Command, device Device) []string {
+	slugs := legacyCommandDeviceSlugs(command, device)
+	suffixes := legacyCommandSuffixes(command)
+	objectIDs := make([]string, 0, len(slugs)*len(suffixes))
+	for _, slug := range slugs {
+		for _, suffix := range suffixes {
+			objectIDs = append(objectIDs, slug+"_"+suffix)
+		}
+	}
+	return compactUniqueStrings(objectIDs)
+}
+
+func legacyCommandDeviceSlugs(command Command, device Device) []string {
+	return compactUniqueStrings(append(
+		[]string{
+			device.BaseSlug,
+			device.DeviceSlug,
+			Slug(device.Device),
+			Slug(command.Device),
+			Slug(command.ObjectName),
+		},
+		device.LegacyDeviceSlugs...,
+	))
+}
+
+func legacyCommandSuffixes(command Command) []string {
+	suffixes := []string{
+		Slug(command.Metric),
+		Slug(command.Name),
+		Slug(command.RawName),
+	}
+	suffixes = append(suffixes, legacyMetricAliases(command.Metric)...)
+	return compactUniqueStrings(suffixes)
+}
+
+func legacyMetricAliases(metric string) []string {
+	switch strings.ToLower(strings.TrimSpace(metric)) {
+	case "battery_percent":
+		return []string{"battery", "batterie"}
+	case "battery_state":
+		return []string{"battery_state", "etat_de_la_batterie", "etatdelabatterie"}
+	case "temperature_c":
+		return []string{"temperature"}
+	case "power_w":
+		return []string{"power", "puissance"}
+	case "current_a":
+		return []string{"current", "courant"}
+	case "voltage_v":
+		return []string{"voltage", "tension"}
+	case "energy_kwh":
+		return []string{"energy", "energie"}
+	case "external_power":
+		return []string{"external_power", "mains", "alimentation_secteur"}
+	case "signal_level", "signal_dbm":
+		return []string{"signal"}
+	case "humidity_percent":
+		return []string{"humidity", "humidite"}
+	case "grid_power":
+		return []string{"grid_power", "power", "mains"}
+	default:
+		return nil
+	}
+}
+
 func valueTemplate(command Command) string {
 	if command.Component == ComponentBinarySensor {
 		return "{{ '" + payloadOn + "' if value_json." + command.Metric + " else '" + payloadOff + "' }}"
@@ -556,6 +683,23 @@ func trimTopic(value string) string {
 	return strings.Trim(strings.TrimSpace(value), "/")
 }
 
+func compactUniqueStrings(values []string) []string {
+	seen := make(map[string]struct{}, len(values))
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		value = Slug(value)
+		if value == "" || value == "unknown" {
+			continue
+		}
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		out = append(out, value)
+	}
+	return out
+}
+
 func (p *Publisher) publishSwitchDiscoveryCleanup(ctx context.Context, deviceSlug, keyPrefix string) error {
 	return p.mqtt.PublishDiscoveryMessage(
 		ctx,
@@ -575,4 +719,13 @@ func (p *Publisher) publishButtonDiscoveryCleanup(ctx context.Context, deviceSlu
 		[]byte{},
 		true,
 	)
+}
+
+func (p *Publisher) publishKnownButtonDiscoveryCleanups(ctx context.Context, deviceSlug, keyPrefix string) error {
+	for _, actionSlug := range append([]string{"impulse", "on"}, securityButtonActionOrder...) {
+		if err := p.publishButtonDiscoveryCleanup(ctx, deviceSlug, actionSlug, keyPrefix); err != nil {
+			return err
+		}
+	}
+	return nil
 }

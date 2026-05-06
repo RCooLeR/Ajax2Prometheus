@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react';
-import type { Device, EventItem } from '../models/dashboard';
+import type { Device, DeviceActionDomain, EventItem } from '../models/dashboard';
 import type { HomeAssistant } from '../ha/types';
 import { Icon } from '../components/Icon';
-import { StatusBadge } from '../components/StatusBadge';
-import { getToneClass } from '../utils/assets';
+import { callEntityService } from '../ha/services';
+import { getDeviceImageAsset, getToneClass } from '../utils/assets';
 import { formatEventStamp } from '../utils/format';
 
 interface RoomWorkspaceSidebarProps {
@@ -81,17 +81,21 @@ interface AjaxDeviceListItemProps {
 function AjaxDeviceListItem({ device, selected, onSelect, hass }: AjaxDeviceListItemProps) {
   const [pending, setPending] = useState(false);
   const metrics = (device.metrics ?? []).filter((metric) => USEFUL_METRIC_LABELS.has(metric.label.toLowerCase()));
-  const switchAction = getSwitchAction(device);
+  const toggleAction = getToggleAction(device);
   const impulseAction = getImpulseAction(device);
+  const buttonActions = getButtonActions(device);
   const isOn = deviceLooksOn(device);
+  const toggleLabel = toggleAction?.domain === 'valve'
+    ? isOn ? 'Open' : 'Closed'
+    : isOn ? 'On' : 'Off';
 
-  async function callAction(action: { domain: 'button' | 'switch' | 'lock'; service: string; entityId: string }) {
+  async function callAction(action: { domain: DeviceActionDomain; service: string; entityId: string }) {
     if (!hass?.callService) {
       return;
     }
     setPending(true);
     try {
-      await hass.callService(action.domain, action.service, { entity_id: action.entityId });
+      await callEntityService(hass, action.domain, action.service, action.entityId);
     } finally {
       setPending(false);
     }
@@ -100,14 +104,21 @@ function AjaxDeviceListItem({ device, selected, onSelect, hass }: AjaxDeviceList
   return (
     <article className={['ajax-device-item', getToneClass(device.tone), selected ? 'ajax-device-item--selected' : ''].join(' ')}>
       <button type="button" className="ajax-device-item__main" onClick={() => onSelect(selected ? null : device.id)}>
-        <span className="ajax-device-item__icon-wrap">
-          <Icon icon={device.icon} size={34} />
+        <span className="ajax-device-item__media">
+          <img src={getDeviceImageAsset(device)} alt="" loading="lazy" />
         </span>
         <span className="ajax-device-item__copy">
           <strong>{device.name}</strong>
-          <span>{device.model}</span>
         </span>
-        <StatusBadge label={device.isOnline ? 'Online' : 'Offline'} tone={device.isOnline ? 'green' : 'red'} />
+        <span className="ajax-device-item__type-row">
+          <span
+            className={[
+              'ajax-device-item__state-dot',
+              device.isOnline ? 'ajax-device-item__state-dot--online' : 'ajax-device-item__state-dot--offline',
+            ].join(' ')}
+          />
+          <span>{displayDeviceType(device)}</span>
+        </span>
       </button>
       {metrics.length > 0 ? (
         <div className="ajax-device-item__metrics">
@@ -120,21 +131,21 @@ function AjaxDeviceListItem({ device, selected, onSelect, hass }: AjaxDeviceList
           ))}
         </div>
       ) : null}
-      {switchAction || impulseAction ? (
+      {toggleAction || impulseAction || buttonActions.length > 0 ? (
         <div className="ajax-device-item__controls">
-          {switchAction ? (
+          {toggleAction ? (
             <button
               type="button"
               className={['ajax-device-item__toggle', isOn ? 'ajax-device-item__toggle--on' : ''].join(' ')}
               role="switch"
               aria-checked={isOn}
               disabled={pending || !hass?.callService}
-              onClick={() => callAction(switchAction)}
+              onClick={() => callAction(toggleAction)}
             >
               <span className="ajax-device-item__toggle-track">
                 <span className="ajax-device-item__toggle-thumb" />
               </span>
-              <span>{isOn ? 'On' : 'Off'}</span>
+              <span>{toggleLabel}</span>
             </button>
           ) : null}
           {impulseAction ? (
@@ -149,6 +160,18 @@ function AjaxDeviceListItem({ device, selected, onSelect, hass }: AjaxDeviceList
               <Icon icon={{ category: 'devices', key: 'relay' }} size={20} />
             </button>
           ) : null}
+          {buttonActions.map((action) => (
+            <button
+              key={action.entityId}
+              type="button"
+              className={['ajax-device-item__action', actionClass(action.label)].join(' ')}
+              disabled={pending || !hass?.callService}
+              onClick={() => callAction(action)}
+            >
+              <Icon icon={iconForAction(action.label)} size={18} />
+              <span>{actionLabel(action.label)}</span>
+            </button>
+          ))}
         </div>
       ) : null}
     </article>
@@ -209,13 +232,16 @@ function normalizeEventIcon(event: EventItem) {
   return event.icon;
 }
 
-function getSwitchAction(device: Device): { domain: 'switch'; service: string; entityId: string } | null {
+function getToggleAction(device: Device): { domain: 'switch' | 'valve'; service: string; entityId: string } | null {
   if (!isSwitchControlledDevice(device)) {
     return null;
   }
-  const action = device.actions?.find((candidate) => candidate.domain === 'switch');
+  const action = device.actions?.find((candidate) => candidate.domain === 'valve' || candidate.domain === 'switch');
   if (action) {
-    return { domain: 'switch', service: action.service, entityId: action.entityId };
+    return { domain: action.domain as 'switch' | 'valve', service: action.service, entityId: action.entityId };
+  }
+  if (device.entityId.startsWith('valve.')) {
+    return { domain: 'valve', service: deviceLooksOn(device) ? 'close_valve' : 'open_valve', entityId: device.entityId };
   }
   if (device.entityId.startsWith('switch.')) {
     return { domain: 'switch', service: deviceLooksOn(device) ? 'turn_off' : 'turn_on', entityId: device.entityId };
@@ -223,7 +249,7 @@ function getSwitchAction(device: Device): { domain: 'switch'; service: string; e
   return null;
 }
 
-function getImpulseAction(device: Device): { domain: 'button' | 'switch' | 'lock'; service: string; entityId: string } | null {
+function getImpulseAction(device: Device): { domain: DeviceActionDomain; service: string; entityId: string } | null {
   if (!isImpulseRelay(device)) {
     return null;
   }
@@ -237,6 +263,21 @@ function getImpulseAction(device: Device): { domain: 'button' | 'switch' | 'lock
   return null;
 }
 
+function getButtonActions(device: Device): Array<{ domain: DeviceActionDomain; service: string; entityId: string; label: string }> {
+  if (isImpulseRelay(device)) {
+    return [];
+  }
+  return (device.actions ?? [])
+    .filter((action) => action.domain === 'button')
+    .map((action) => ({
+      domain: action.domain,
+      service: action.service,
+      entityId: action.entityId,
+      label: action.label,
+    }))
+    .sort((left, right) => actionOrder(left.label) - actionOrder(right.label) || left.label.localeCompare(right.label));
+}
+
 function isSwitchControlledDevice(device: Device): boolean {
   const text = deviceText(device);
   return !isImpulseRelay(device)
@@ -245,6 +286,69 @@ function isSwitchControlledDevice(device: Device): boolean {
       || device.type === 'light_switch'
       || device.type === 'waterstop'
       || /wallswitch|wall switch|lightswitch|light switch|waterstop|water stop|socket|plug|outlet/.test(text));
+}
+
+function actionOrder(label: string): number {
+  const normalized = normalizedActionLabel(label);
+  if (normalized.includes('arm') && !normalized.includes('disarm')) {
+    return 0;
+  }
+  if (normalized.includes('night')) {
+    return 1;
+  }
+  if (normalized.includes('disarm')) {
+    return 2;
+  }
+  if (normalized.includes('mute') || normalized.includes('fire')) {
+    return 3;
+  }
+  return 10;
+}
+
+function actionClass(label: string): string {
+  const normalized = normalizedActionLabel(label);
+  if (normalized.includes('disarm')) {
+    return 'ajax-device-item__action--safe';
+  }
+  if (normalized.includes('night')) {
+    return 'ajax-device-item__action--night';
+  }
+  if (normalized.includes('mute') || normalized.includes('fire')) {
+    return 'ajax-device-item__action--alert';
+  }
+  if (normalized.includes('arm')) {
+    return 'ajax-device-item__action--armed';
+  }
+  return '';
+}
+
+function iconForAction(label: string) {
+  const normalized = normalizedActionLabel(label);
+  if (normalized.includes('disarm')) {
+    return { category: 'system-states' as const, key: 'disarmed' };
+  }
+  if (normalized.includes('night')) {
+    return { category: 'system-states' as const, key: 'night_mode' };
+  }
+  if (normalized.includes('mute') || normalized.includes('fire')) {
+    return { category: 'sensors' as const, key: 'fire' };
+  }
+  if (normalized.includes('arm')) {
+    return { category: 'system-states' as const, key: 'armed' };
+  }
+  return { category: 'misc' as const, key: 'energy' };
+}
+
+function actionLabel(label: string): string {
+  const normalized = normalizedActionLabel(label);
+  if (normalized.includes('mute') || normalized.includes('fire')) {
+    return 'Mute fire';
+  }
+  return label;
+}
+
+function normalizedActionLabel(label: string): string {
+  return label.toLowerCase().replace(/[_-]+/g, ' ');
 }
 
 function isImpulseRelay(device: Device): boolean {
@@ -259,9 +363,32 @@ function deviceLooksOn(device: Device): boolean {
   if (device.actions?.some((action) => action.service === 'turn_on')) {
     return false;
   }
-  return /\bon\b|active|enabled|load|w\b/.test(`${device.status} ${device.signal}`.toLowerCase());
+  if (device.actions?.some((action) => action.service === 'close_valve')) {
+    return true;
+  }
+  if (device.actions?.some((action) => action.service === 'open_valve')) {
+    return false;
+  }
+  return /\bon\b|open\b|active|enabled|load|w\b/.test(`${device.status} ${device.signal}`.toLowerCase());
 }
 
 function deviceText(device: Device): string {
   return `${device.type} ${device.name} ${device.model} ${device.entityId}`.toLowerCase();
+}
+
+function displayDeviceType(device: Device): string {
+  return humanizeDeviceType(device.model || device.type);
+}
+
+function humanizeDeviceType(value: string): string {
+  const compact = value.trim();
+  if (!compact) {
+    return 'Device';
+  }
+  return compact
+    .replace(/_/g, ' ')
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }

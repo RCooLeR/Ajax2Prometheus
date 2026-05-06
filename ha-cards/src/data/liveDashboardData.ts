@@ -5,10 +5,12 @@ import type {
   DashboardMetric,
   Device,
   DeviceAction,
+  DeviceActionDomain,
   DeviceHeroMedia,
   EventItem,
   EventType,
   GlowTone,
+  GridPowerSummary,
   IconRef,
   Room,
   RoomClimate,
@@ -120,6 +122,7 @@ interface RoomMetrics {
   sensorCount: number;
   smdIvs: RoomSmdIvsCounts;
   safety: RoomSafety;
+  gridPower: GridPowerSummary;
   latestEventLabel: string;
 }
 
@@ -137,6 +140,10 @@ interface AjaxDeviceMetricContext {
   tamperActive: boolean;
   troubleActive: boolean;
   activeSignals: string[];
+}
+
+interface DeviceMetricOptions {
+  calculatePowerFromVoltageCurrent?: boolean;
 }
 
 interface ClimateSample {
@@ -368,7 +375,7 @@ function buildAjaxDevices(
   const output: ResolvedDevice[] = [];
 
   for (const deviceEntry of devices) {
-    if (!isAjaxDevice(deviceEntry) || isAjaxAccountDevice(deviceEntry) || isLegacyAjax2PrometheusDevice(deviceEntry)) {
+    if (!isAjaxDevice(deviceEntry) || isLegacyAjax2PrometheusDevice(deviceEntry) || isAjaxAppDevice(deviceEntry)) {
       continue;
     }
 
@@ -380,6 +387,11 @@ function buildAjaxDevices(
     const linkedEntities = (entitiesByDeviceId.get(deviceEntry.id) ?? []).filter(
       (entry) => !isLegacyAjax2PrometheusEntity(entry),
     );
+    const actionEntries = linkedEntities.filter((entry) => isActionableEntity(entry));
+    const accountDevice = isAjaxAccountDevice(deviceEntry);
+    if (accountDevice && actionEntries.length === 0) {
+      continue;
+    }
     const roomId = resolvedAreaByDeviceId.get(deviceEntry.id);
     if (!roomId || linkedEntities.length === 0) {
       continue;
@@ -392,7 +404,6 @@ function buildAjaxDevices(
     const alarmActive = isOn(firstEntityState(linkedEntities, states, '_alarm_active'));
     const tamperActive = isOn(firstEntityState(linkedEntities, states, '_tamper_active'));
     const troubleActive = isOn(firstEntityState(linkedEntities, states, '_trouble_active'));
-    const actionEntries = linkedEntities.filter((entry) => isActionableEntity(entry));
     const activeSignals = linkedEntities
       .filter((entry) => signalNameFromEntityId(entry.entity_id) !== null)
       .filter((entry) => isOn(states[entry.entity_id]))
@@ -415,29 +426,34 @@ function buildAjaxDevices(
     const sourceLabel = displayName(deviceEntry, linkedEntities);
     const type = inferDeviceType({
       name: sourceLabel,
-      model: safeString(deviceEntry.model),
+      model: accountDevice ? 'Hub' : safeString(deviceEntry.model),
       entityIds: linkedEntities.map((entry) => entry.entity_id),
     });
     const eventType = mapSignalToEventType(alarmSignal || lastSignal, alarmActive, offline);
     const actions = buildDeviceActions(actionEntries, states);
-    const metrics = buildDeviceMetrics(linkedEntities, states, {
-      lastEventName,
-      lastEventAt,
-      lastSignal,
-      alarmSignal,
-      alarmActive,
-      tamperActive,
-      troubleActive,
-      activeSignals,
-    });
+    const metrics = buildDeviceMetrics(
+      linkedEntities,
+      states,
+      {
+        lastEventName,
+        lastEventAt,
+        lastSignal,
+        alarmSignal,
+        alarmActive,
+        tamperActive,
+        troubleActive,
+        activeSignals,
+      },
+      { calculatePowerFromVoltageCurrent: type === 'wall_switch' },
+    );
 
     output.push({
       id: deviceEntry.id,
       roomId,
       type,
       name: sourceLabel,
-      model: safeString(deviceEntry.model) || humanizeSlug(type),
-      icon: iconForDevice(type, sourceLabel, safeString(deviceEntry.model)),
+      model: accountDevice ? 'Hub' : safeString(deviceEntry.model) || humanizeSlug(type),
+      icon: iconForDevice(type, sourceLabel, accountDevice ? 'Hub' : safeString(deviceEntry.model)),
       tone: toneFromSeverity(severity),
       status: headline,
       connectivity: offline ? 'Offline' : 'Online',
@@ -577,9 +593,10 @@ function buildGenericIntegrationDevice(
   const offlineEntry = online ? undefined : entityEntries.find((entry) => isOfflineState(states[entry.entity_id]));
   const activeEntry = alertEntry ?? primary ?? offlineEntry;
   const activeState = states[activeEntry.entity_id];
+  const resolvedModel = resolveIntegrationModel(model, entityEntries, states, integration);
   const type = inferDeviceType({
     name,
-    model,
+    model: resolvedModel,
     entityIds: classificationEntries.map((entry) => entry.entity_id),
   });
   const timelineEntries =
@@ -597,15 +614,15 @@ function buildGenericIntegrationDevice(
   const actions = type === 'camera' ? undefined : buildDeviceActions(actionEntries, states);
   const metrics = buildDeviceMetrics(entityEntries, states);
 
-  debugDahuaCandidate(name, model, entityEntries, states, activeEntry, activeState);
+  debugDahuaCandidate(name, resolvedModel, entityEntries, states, activeEntry, activeState);
 
   return {
     id,
     roomId,
     type,
     name,
-    model,
-    icon: iconForDevice(type, name, model),
+    model: resolvedModel,
+    icon: iconForDevice(type, name, resolvedModel),
     tone: toneFromSeverity(severity),
     status: attention ? description : 'Nominal',
     connectivity: online ? 'Online' : 'Offline',
@@ -627,6 +644,73 @@ function buildGenericIntegrationDevice(
     sensorLike: type !== 'camera',
     severity,
   };
+}
+
+function resolveIntegrationModel(
+  fallbackModel: string,
+  entityEntries: HomeAssistantEntityEntry[],
+  states: Record<string, HomeAssistantState>,
+  integration: string,
+): string {
+  if (integration !== 'dahua') {
+    return fallbackModel;
+  }
+
+  return (
+    readDahuaDirectIpcModel(entityEntries, states) ||
+    readFirstEntityAttribute(entityEntries, states, [
+      'direct_ipc_model',
+      'bridge_device_model',
+      'bridge_model',
+      'model',
+      'device_model',
+    ]) || fallbackModel
+  );
+}
+
+function readDahuaDirectIpcModel(
+  entityEntries: HomeAssistantEntityEntry[],
+  states: Record<string, HomeAssistantState>,
+): string {
+  for (const entry of entityEntries) {
+    const state = states[entry.entity_id];
+    if (!state || isOfflineState(state)) {
+      continue;
+    }
+    const text = [
+      entry.entity_id,
+      entry.name,
+      entry.original_name,
+      state.attributes.friendly_name,
+    ].map(safeString).join(' ').toLowerCase();
+    if (!/(^|[\s._-])direct[\s._-]*ipc[\s._-]*model($|[\s._-])/.test(text)) {
+      continue;
+    }
+    const model = safeString(state.state);
+    if (model && !['unknown', 'unavailable', 'none'].includes(model.toLowerCase())) {
+      return model;
+    }
+  }
+
+  return '';
+}
+
+function readFirstEntityAttribute(
+  entityEntries: HomeAssistantEntityEntry[],
+  states: Record<string, HomeAssistantState>,
+  attributeNames: string[],
+): string {
+  for (const entry of entityEntries) {
+    const attributes = states[entry.entity_id]?.attributes ?? {};
+    for (const attributeName of attributeNames) {
+      const value = safeString(attributes[attributeName]);
+      if (value) {
+        return value;
+      }
+    }
+  }
+
+  return '';
 }
 
 function buildEvents(devices: ResolvedDevice[]): EventItem[] {
@@ -679,6 +763,8 @@ function buildRoomMetrics(
     current.cameraCount += device.cameraLike ? 1 : 0;
     current.dahuaCameraCount += device.integration === 'dahua' && device.cameraLike ? 1 : 0;
     current.sensorCount += device.sensorLike ? 1 : 0;
+    applyDeviceSafetyCapability(current.safety, device);
+    applyDeviceGridPower(current.gridPower, device);
     metrics.set(device.roomId, current);
   }
 
@@ -713,9 +799,66 @@ function emptyRoomMetrics(): RoomMetrics {
     dahuaCameraCount: 0,
     sensorCount: 0,
     smdIvs: emptySmdIvsCounts(),
-    safety: { smokeHigh: 0, coHigh: 0 },
+    safety: emptyRoomSafety(),
+    gridPower: emptyGridPowerSummary(),
     latestEventLabel: 'No recent events',
   };
+}
+
+function emptyRoomSafety(): RoomSafety {
+  return { smokeHigh: 0, coHigh: 0, smokeCapable: 0, coCapable: 0 };
+}
+
+function emptyGridPowerSummary(): GridPowerSummary {
+  return { known: 0, online: 0, outage: 0 };
+}
+
+function applyDeviceGridPower(summary: GridPowerSummary, device: ResolvedDevice): void {
+  const state = readGridPowerState(device);
+  if (state === null) {
+    return;
+  }
+  summary.known += 1;
+  if (state) {
+    summary.online += 1;
+  } else {
+    summary.outage += 1;
+  }
+}
+
+function applyDeviceSafetyCapability(safety: RoomSafety, device: ResolvedDevice): void {
+  if (deviceMeasuresSmoke(device)) {
+    safety.smokeCapable = (safety.smokeCapable ?? 0) + 1;
+  }
+  if (deviceMeasuresCo(device)) {
+    safety.coCapable = (safety.coCapable ?? 0) + 1;
+  }
+}
+
+function deviceMeasuresSmoke(device: ResolvedDevice): boolean {
+  const text = safetyCapabilityText(device);
+  return (
+    device.type === 'smoke_detector' ||
+    device.type === 'fire_detector' ||
+    /fire[\s._-]*protect/.test(text) ||
+    /(^|[\s._-])smoke($|[\s._-])/.test(text)
+  );
+}
+
+function deviceMeasuresCo(device: ResolvedDevice): boolean {
+  const text = safetyCapabilityText(device);
+  return (
+    /life[\s._-]*quality/.test(text) ||
+    /fire[\s._-]*protect[\s._-]*(2[\s._-]*)?plus/.test(text) ||
+    /(^|[\s._-])(co|co2|carbon|gas|gas_or_co)($|[\s._-])/.test(text)
+  );
+}
+
+function safetyCapabilityText(device: ResolvedDevice): string {
+  const metricText = (device.metrics ?? [])
+    .map((metric) => `${metric.id} ${metric.label}`)
+    .join(' ');
+  return `${device.type} ${device.name} ${device.model} ${device.entityId} ${metricText}`.toLowerCase();
 }
 
 function applySafetyEvent(safety: RoomSafety, eventType: EventType): void {
@@ -744,7 +887,8 @@ function buildRoom(
     dahuaCameraCount: 0,
     sensorCount: 0,
     smdIvs: emptySmdIvsCounts(),
-    safety: { smokeHigh: 0, coHigh: 0 },
+    safety: emptyRoomSafety(),
+    gridPower: emptyGridPowerSummary(),
     latestEventLabel: 'No recent events',
   };
 
@@ -762,6 +906,7 @@ function buildRoom(
     dahuaCameraCount: counts.dahuaCameraCount,
     climate,
     safety: counts.safety,
+    gridPower: counts.gridPower.known > 0 ? { ...counts.gridPower } : undefined,
   };
 }
 
@@ -785,6 +930,7 @@ function buildSystemState(
   const lightSwitchDevices = devices.filter(isLightSwitchDevice);
   const outletOnCount = outletDevices.filter(deviceIsOn).length;
   const lightSwitchOnCount = lightSwitchDevices.filter(deviceIsOn).length;
+  const gridPower = summarizeGridPower(devices);
   const accountModes = Object.entries(states)
     .filter(([entityId]) => entityId.startsWith('sensor.account_') && entityId.endsWith('_mode'))
     .map(([, state]) => safeString(state.state))
@@ -802,6 +948,18 @@ function buildSystemState(
       icon: { category: 'system-states', key: alarmActive ? 'alarm_active' : armed ? 'armed' : 'disarmed' },
       tone: alarmActive ? 'red' : armed ? 'amber' : 'green',
       active: true,
+    },
+    {
+      id: 'system-grid-power',
+      label: 'Grid power',
+      value: gridPower.known > 0
+        ? gridPower.outage > 0
+          ? `${gridPower.outage} outage`
+          : `${gridPower.online}/${gridPower.known} OK`
+        : 'Unknown',
+      icon: { category: 'system-states', key: gridPower.outage > 0 ? 'power_loss' : 'grid_power' },
+      tone: gridPower.outage > 0 ? 'red' : gridPower.known > 0 ? 'green' : 'slate',
+      active: gridPower.known > 0,
     },
     {
       id: 'system-smd',
@@ -876,6 +1034,41 @@ function deviceIsOn(device: ResolvedDevice): boolean {
     return true;
   }
   return /\bon\b|active|enabled|load|w\b/.test(`${device.status} ${device.signal}`.toLowerCase());
+}
+
+function summarizeGridPower(devices: ResolvedDevice[]): GridPowerSummary {
+  return devices.reduce<GridPowerSummary>((summary, device) => {
+    applyDeviceGridPower(summary, device);
+    return summary;
+  }, emptyGridPowerSummary());
+}
+
+function readGridPowerState(device: Pick<Device, 'type' | 'name' | 'model' | 'metrics'>): boolean | null {
+  if (!isGridPowerDetector(device)) {
+    return null;
+  }
+
+  const metric = (device.metrics ?? []).find((candidate) => {
+    const label = candidate.label.toLowerCase();
+    return label.includes('grid power') || label === 'power';
+  });
+  if (!metric) {
+    return null;
+  }
+
+  const value = metric.value.toLowerCase();
+  if (/\bmains\b|\bon\b|\bok\b|online|restored|available/.test(value)) {
+    return true;
+  }
+  if (/off|lost|outage|unavailable|offline|fail/.test(value)) {
+    return false;
+  }
+  return null;
+}
+
+function isGridPowerDetector(device: Pick<Device, 'type' | 'name' | 'model'>): boolean {
+  const text = `${device.type} ${device.name} ${device.model}`.toLowerCase();
+  return /(^|[\s_-])transmitter($|[\s_-])|transmitter_jeweller|superior_transmitter/.test(text);
 }
 
 function deviceDescriptor(device: ResolvedDevice): string {
@@ -1212,6 +1405,11 @@ function isAjaxAccountDevice(deviceEntry: HomeAssistantDeviceEntry): boolean {
   return safeString(deviceEntry.model).toLowerCase().includes('account') || extractIdentifiers(deviceEntry).some((value) => value.startsWith('ajaxbridge_account_'));
 }
 
+function isAjaxAppDevice(deviceEntry: HomeAssistantDeviceEntry): boolean {
+  const model = safeString(deviceEntry.model).toLowerCase();
+  return model === 'app' || model === 'ajax app' || model === 'mobile app';
+}
+
 function extractAjaxAccount(deviceEntry: HomeAssistantDeviceEntry): string | null {
   for (const identifier of extractIdentifiers(deviceEntry)) {
     if (identifier.startsWith('ajaxbridge_account_')) {
@@ -1370,7 +1568,7 @@ function isHeroMediaEntity(entry: HomeAssistantEntityEntry): boolean {
 
 function isActionableEntity(entry: HomeAssistantEntityEntry): boolean {
   const domain = entityDomain(entry.entity_id);
-  return domain === 'button' || domain === 'switch' || domain === 'lock';
+  return domain === 'button' || domain === 'switch' || domain === 'lock' || domain === 'valve';
 }
 
 function buildHeroMedia(
@@ -1439,7 +1637,7 @@ function buildDeviceAction(
   state?: HomeAssistantState,
 ): DeviceAction | null {
   const domain = entityDomain(entry.entity_id);
-  if (domain !== 'button' && domain !== 'switch' && domain !== 'lock') {
+  if (domain !== 'button' && domain !== 'switch' && domain !== 'lock' && domain !== 'valve') {
     return null;
   }
 
@@ -1501,13 +1699,16 @@ function actionLabel(
       if (entityDomain(entry.entity_id) === 'switch') {
         return safeString(state?.state).toLowerCase() === 'on' ? 'Turn off' : 'Turn on';
       }
+      if (entityDomain(entry.entity_id) === 'valve') {
+        return safeString(state?.state).toLowerCase() === 'open' ? 'Close' : 'Open';
+      }
       return entityDisplayName(entry, state);
     }
   }
 }
 
 function actionService(
-  domain: 'button' | 'switch' | 'lock',
+  domain: DeviceActionDomain,
   state: HomeAssistantState | undefined,
   semantic: 'open_door' | 'hang_up' | 'answer' | 'mute' | 'generic',
 ): string {
@@ -1516,6 +1717,9 @@ function actionService(
   }
   if (domain === 'lock') {
     return safeString(state?.state).toLowerCase() === 'unlocked' && semantic === 'generic' ? 'lock' : 'unlock';
+  }
+  if (domain === 'valve') {
+    return safeString(state?.state).toLowerCase() === 'open' ? 'close_valve' : 'open_valve';
   }
   if (semantic !== 'generic') {
     return 'turn_on';
@@ -1548,6 +1752,7 @@ function buildDeviceMetrics(
   entries: HomeAssistantEntityEntry[],
   states: Record<string, HomeAssistantState>,
   ajaxContext?: AjaxDeviceMetricContext,
+  options: DeviceMetricOptions = {},
 ): DashboardMetric[] | undefined {
   const candidates: MetricCandidate[] = [];
 
@@ -1562,12 +1767,104 @@ function buildDeviceMetrics(
     }
   }
 
-  const metrics = dedupeMetrics(candidates)
+  const sourceMetrics = options.calculatePowerFromVoltageCurrent
+    ? candidates.filter((candidate) => candidate.kind !== 'power')
+    : candidates;
+  if (options.calculatePowerFromVoltageCurrent) {
+    const calculatedPower = calculatedPowerMetric(entries, states);
+    if (calculatedPower) {
+      sourceMetrics.push(calculatedPower);
+    }
+  }
+
+  const metrics = dedupeMetrics(sourceMetrics)
     .sort((left, right) => left.priority - right.priority || left.label.localeCompare(right.label))
     .slice(0, 8)
     .map(({ kind: _kind, priority: _priority, ...metric }) => metric);
 
   return metrics.length > 0 ? metrics : undefined;
+}
+
+function calculatedPowerMetric(
+  entries: HomeAssistantEntityEntry[],
+  states: Record<string, HomeAssistantState>,
+): MetricCandidate | null {
+  const voltage = readNumericMetric(entries, states, 'voltage');
+  const current = readNumericMetric(entries, states, 'current');
+  if (!voltage || !current) {
+    return null;
+  }
+
+  const volts = normalizeVoltageToVolts(voltage.value, voltage.unit);
+  const amps = normalizeCurrentToAmps(current.value, current.unit);
+  if (volts === null || amps === null) {
+    return null;
+  }
+
+  return {
+    id: `metric:calculated_power:${voltage.entityId}:${current.entityId}`,
+    kind: 'power',
+    label: 'Power',
+    value: formatMetricNumber(volts * amps, 'W', volts * amps >= 100 ? 0 : 1),
+    icon: { category: 'misc', key: 'energy' },
+    tone: 'cyan',
+    priority: 40,
+  };
+}
+
+function readNumericMetric(
+  entries: HomeAssistantEntityEntry[],
+  states: Record<string, HomeAssistantState>,
+  kind: 'voltage' | 'current',
+): { entityId: string; value: number; unit: string } | null {
+  for (const entry of entries) {
+    const state = states[entry.entity_id];
+    if (!state || isIgnoredMetricState(state)) {
+      continue;
+    }
+
+    const deviceClass = safeString(state.attributes.device_class).toLowerCase();
+    const text = entityDescriptorText(entry, state);
+    const matches = kind === 'voltage'
+      ? deviceClass === 'voltage' || matchesMetricName(text, ['voltage_v', 'tension'])
+      : deviceClass === 'current' || matchesMetricName(text, ['current_a', 'courant']);
+    if (!matches) {
+      continue;
+    }
+
+    const value = parseStateNumber(state);
+    if (value !== null) {
+      return {
+        entityId: entry.entity_id,
+        value,
+        unit: safeString(state.attributes.unit_of_measurement),
+      };
+    }
+  }
+
+  return null;
+}
+
+function normalizeVoltageToVolts(value: number, unit: string): number | null {
+  const normalizedUnit = unit.trim().toLowerCase();
+  if (!normalizedUnit || normalizedUnit === 'v') {
+    return value;
+  }
+  if (normalizedUnit === 'mv') {
+    return value / 1000;
+  }
+  return null;
+}
+
+function normalizeCurrentToAmps(value: number, unit: string): number | null {
+  const normalizedUnit = unit.trim().toLowerCase();
+  if (!normalizedUnit || normalizedUnit === 'a') {
+    return value;
+  }
+  if (normalizedUnit === 'ma') {
+    return value / 1000;
+  }
+  return null;
 }
 
 function ajaxContextMetrics(context: AjaxDeviceMetricContext): MetricCandidate[] {
@@ -1867,10 +2164,11 @@ function binaryMetricCandidate(
   }
 
   if (deviceClass === 'power' || matchesMetricName(text, ['external_power', 'mainspower', 'power'])) {
+    const gridPower = matchesMetricName(text, ['grid_power']) || text.includes('grid power');
     return {
       id: `metric:${entry.entity_id}`,
-      kind: 'external_power',
-      label: 'Power',
+      kind: gridPower ? 'grid_power' : 'external_power',
+      label: gridPower ? 'Grid power' : 'Power',
       value: active ? 'Mains' : humanizeHomeAssistantState(state),
       icon: { category: 'misc', key: 'energy' },
       tone: active ? 'green' : 'amber',
@@ -2772,6 +3070,11 @@ function buildRoomSummary(metrics: RoomMetrics): string {
     `${metrics.deviceCount} devices`,
     metrics.cameraCount > 0 ? `${metrics.cameraCount} cameras` : '',
     metrics.sensorCount > 0 ? `${metrics.sensorCount} sensors` : '',
+    metrics.gridPower.known > 0
+      ? metrics.gridPower.outage > 0
+        ? `${metrics.gridPower.outage} grid outage`
+        : 'Grid OK'
+      : '',
   ].filter(Boolean);
 
   return parts.join(' · ') || 'No linked devices';
@@ -2801,6 +3104,12 @@ function inferDeviceType(input: { name: string; model: string; entityIds: string
   }
   if (haystack.includes('hub')) {
     return 'hub';
+  }
+  if (haystack.includes('multitransmitter') || haystack.includes('multi transmitter')) {
+    return 'multitransmitter';
+  }
+  if (haystack.includes('transmitter')) {
+    return 'transmitter';
   }
   if (haystack.includes('rex') || haystack.includes('repeater')) {
     return 'repeater';
@@ -2863,6 +3172,12 @@ function iconForDevice(type: string, name: string, model: string): IconRef {
   }
   if (lowered.includes('hub')) {
     return { category: 'devices', key: 'hub' };
+  }
+  if (lowered.includes('multitransmitter') || lowered.includes('multi transmitter')) {
+    return { category: 'devices', key: 'multitransmitter' };
+  }
+  if (lowered.includes('transmitter')) {
+    return { category: 'devices', key: 'transmitter' };
   }
   if (lowered.includes('repeater') || lowered.includes('rex')) {
     return { category: 'devices', key: 'repeater' };

@@ -177,3 +177,197 @@ func TestStoreKeepsWallSwitchVoltageUnscaled(t *testing.T) {
 		t.Fatalf("voltage_v = %#v, want 238", got)
 	}
 }
+
+func TestStoreDerivesWallSwitchStateFromEventCode(t *testing.T) {
+	catalog := testCatalog(t, devicecatalog.Device{
+		Account:          "A0F80D",
+		Zone:             "8",
+		Name:             "Server power",
+		Kind:             "WallSwitch",
+		JeedomCommandIDs: []string{"204"},
+	})
+	store := NewStoreWithResolver("keep_last", NewCatalogResolver(catalog, CatalogResolverConfig{}))
+
+	on := store.Apply(Event{
+		Topic:       "jeedom/cmd/event/204",
+		CommandID:   "204",
+		DeviceName:  "Server power",
+		CommandName: "Code evenement",
+		Type:        "info",
+		Subtype:     "string",
+		Value:       json.RawMessage(`"M_1F_37"`),
+		ReceivedAt:  time.Unix(100, 0),
+	})
+	if got := on.Device.Values["state"]; got != true {
+		t.Fatalf("state after M_1F_37 = %#v, want true", got)
+	}
+	if got := on.Device.Values["event_code"]; got != "M_1F_37" {
+		t.Fatalf("event_code = %#v, want M_1F_37", got)
+	}
+
+	off := store.Apply(Event{
+		Topic:       "jeedom/cmd/event/204",
+		CommandID:   "204",
+		DeviceName:  "Server power",
+		CommandName: "Code evenement",
+		Type:        "info",
+		Subtype:     "string",
+		Value:       json.RawMessage(`"M_1F_46"`),
+		ReceivedAt:  time.Unix(101, 0),
+	})
+	if got := off.Device.Values["state"]; got != false {
+		t.Fatalf("state after M_1F_46 = %#v, want false", got)
+	}
+}
+
+func TestStoreDoesNotDeriveRelayStateFromWallSwitchEventCode(t *testing.T) {
+	catalog := testCatalog(t, devicecatalog.Device{
+		Account:          "A0F80D",
+		Zone:             "6",
+		Name:             "Garage relay",
+		Kind:             "Relay",
+		JeedomCommandIDs: []string{"205"},
+	})
+	store := NewStoreWithResolver("keep_last", NewCatalogResolver(catalog, CatalogResolverConfig{}))
+
+	result := store.Apply(Event{
+		Topic:       "jeedom/cmd/event/205",
+		CommandID:   "205",
+		DeviceName:  "Garage relay",
+		CommandName: "Code evenement",
+		Type:        "info",
+		Subtype:     "string",
+		Value:       json.RawMessage(`"M_1F_37"`),
+		ReceivedAt:  time.Unix(100, 0),
+	})
+	if _, ok := result.Device.Values["state"]; ok {
+		t.Fatalf("relay state = %#v, want no derived state", result.Device.Values["state"])
+	}
+}
+
+func TestStoreDerivesWaterStopStateFromEventCode(t *testing.T) {
+	catalog := testCatalog(t, devicecatalog.Device{
+		Account:          "A0F80D",
+		Zone:             "12",
+		Name:             "Water valve",
+		Kind:             "WaterStop",
+		JeedomCommandIDs: []string{"206"},
+	})
+	store := NewStoreWithResolver("keep_last", NewCatalogResolver(catalog, CatalogResolverConfig{}))
+
+	open := store.Apply(Event{
+		Topic:       "jeedom/cmd/event/206",
+		CommandID:   "206",
+		DeviceName:  "Water valve",
+		CommandName: "Code evenement",
+		Type:        "info",
+		Subtype:     "string",
+		Value:       json.RawMessage(`"M_48_37"`),
+		ReceivedAt:  time.Unix(100, 0),
+	})
+	if got := open.Device.Values["state"]; got != true {
+		t.Fatalf("state after M_48_37 = %#v, want true", got)
+	}
+	if got := open.Device.Values["event_code"]; got != "M_48_37" {
+		t.Fatalf("event_code = %#v, want M_48_37", got)
+	}
+
+	closed := store.Apply(Event{
+		Topic:       "jeedom/cmd/event/206",
+		CommandID:   "206",
+		DeviceName:  "Water valve",
+		CommandName: "Code evenement",
+		Type:        "info",
+		Subtype:     "string",
+		Value:       json.RawMessage(`"M_48_46"`),
+		ReceivedAt:  time.Unix(101, 0),
+	})
+	if got := closed.Device.Values["state"]; got != false {
+		t.Fatalf("state after M_48_46 = %#v, want false", got)
+	}
+}
+
+func TestStoreDoesNotDeriveWaterStopStateFromCommonEvent(t *testing.T) {
+	catalog := testCatalog(t, devicecatalog.Device{
+		Account:          "A0F80D",
+		Zone:             "12",
+		Name:             "Water valve",
+		Kind:             "WaterStop",
+		JeedomCommandIDs: []string{"207"},
+	})
+	store := NewStoreWithResolver("keep_last", NewCatalogResolver(catalog, CatalogResolverConfig{}))
+
+	result := store.Apply(Event{
+		Topic:       "jeedom/cmd/event/207",
+		CommandID:   "207",
+		DeviceName:  "Water valve",
+		CommandName: "Evenement",
+		Type:        "info",
+		Subtype:     "string",
+		Value:       json.RawMessage(`"COMMON"`),
+		ReceivedAt:  time.Unix(100, 0),
+	})
+	if _, ok := result.Device.Values["state"]; ok {
+		t.Fatalf("state after COMMON event = %#v, want no derived state", result.Device.Values["state"])
+	}
+}
+
+func TestStoreDerivesTransmitterGridPowerFromEventCode(t *testing.T) {
+	catalog := testCatalog(t, devicecatalog.Device{
+		Account:          "A0F80D",
+		Zone:             "14",
+		Name:             "Grid detector",
+		Kind:             "Transmitter",
+		JeedomCommandIDs: []string{"208"},
+	})
+	store := NewStoreWithResolver("keep_last", NewCatalogResolver(catalog, CatalogResolverConfig{}))
+
+	result := store.Apply(Event{
+		Topic:       "jeedom/cmd/event/208",
+		CommandID:   "208",
+		DeviceName:  "Grid detector",
+		CommandName: "Code evenement",
+		Type:        "info",
+		Subtype:     "string",
+		Value:       json.RawMessage(`"M_11_40"`),
+		ReceivedAt:  time.Unix(100, 0),
+	})
+	if got := result.Device.Values["grid_power"]; got != true {
+		t.Fatalf("grid_power after M_11_40 = %#v, want true", got)
+	}
+	if _, ok := result.Device.Values["state"]; ok {
+		t.Fatalf("state after M_11_40 = %#v, want no switch state", result.Device.Values["state"])
+	}
+	command := result.Device.RawCommands["grid_power"]
+	if command.Metric != "grid_power" || command.Component != ComponentBinarySensor || command.DeviceClass != "power" {
+		t.Fatalf("synthetic grid power command = %#v", command)
+	}
+	if command.Value != true {
+		t.Fatalf("synthetic grid power command value = %#v, want true", command.Value)
+	}
+}
+
+func TestStoreDoesNotDeriveMultiTransmitterGridPowerFromTransmitterEventCode(t *testing.T) {
+	catalog := testCatalog(t, devicecatalog.Device{
+		Account:          "A0F80D",
+		Zone:             "15",
+		Name:             "Multi input",
+		Kind:             "MultiTransmitter",
+		JeedomCommandIDs: []string{"209"},
+	})
+	store := NewStoreWithResolver("keep_last", NewCatalogResolver(catalog, CatalogResolverConfig{}))
+
+	result := store.Apply(Event{
+		Topic:       "jeedom/cmd/event/209",
+		CommandID:   "209",
+		DeviceName:  "Multi input",
+		CommandName: "Code evenement",
+		Type:        "info",
+		Subtype:     "string",
+		Value:       json.RawMessage(`"M_11_40"`),
+		ReceivedAt:  time.Unix(100, 0),
+	})
+	if _, ok := result.Device.Values["grid_power"]; ok {
+		t.Fatalf("multitransmitter grid_power = %#v, want no derived value", result.Device.Values["grid_power"])
+	}
+}

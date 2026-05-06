@@ -34,6 +34,12 @@ export function RoomListItem({ room, summary, selected, onSelect }: RoomListItem
         <span className="room-list-item__summary">{summary.latestEventLabel}</span>
       </span>
       <span className="room-list-item__meta">
+        {summary.gridPower && summary.gridPower.known > 0 ? (
+          <StatusBadge
+            label={summary.gridPower.outage > 0 ? `${summary.gridPower.outage} grid outage` : 'Grid OK'}
+            tone={summary.gridPower.outage > 0 ? 'red' : 'green'}
+          />
+        ) : null}
         <StatusBadge
           label={summary.attentionCount > 0 ? `${summary.attentionCount} alert` : `${summary.onlineCount}/${summary.deviceCount} online`}
           tone={summary.attentionCount > 0 ? 'amber' : 'green'}

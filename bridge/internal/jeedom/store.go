@@ -1,6 +1,7 @@
 package jeedom
 
 import (
+	"fmt"
 	"sort"
 	"strings"
 	"sync"
@@ -259,6 +260,7 @@ func (s *Store) Apply(evt Event) ApplyResult {
 			command.Value = value
 			command.LastValueAt = now
 			result.UpdatedValue = true
+			applyDerivedValuesFromEventCode(mapping, device, value, now)
 		}
 		if number, ok := numericValue(value); ok {
 			result.NumericValue = number
@@ -325,7 +327,7 @@ func (s *Store) ApplyDiscovery(discovery Discovery) ApplyDiscoveryResult {
 	device.DiscoveryDisabled = identity.DiscoveryDisabled
 	device.JeedomID = discovery.EqLogicID
 	device.JeedomLogicalID = discovery.LogicalID
-	device.JeedomDeviceType = firstNonEmpty(discovery.DeviceType, discovery.ApplyDevice)
+	device.JeedomDeviceType = firstNonEmpty(discovery.DeviceType, discovery.ApplyDevice, identity.HAModel)
 	device.JeedomEnabled = discovery.Enabled
 	device.JeedomVisible = discovery.Visible
 	if discovery.EqLogicID != "" {
@@ -381,6 +383,7 @@ func (s *Store) ApplyDiscovery(discovery Discovery) ApplyDiscoveryResult {
 				command.Value = value
 				command.LastValueAt = now
 				command.EmptyValue = false
+				applyDerivedValuesFromEventCode(mapping, device, value, now)
 			}
 		}
 		device.RawCommands[info.CommandID] = command
@@ -393,7 +396,7 @@ func (s *Store) ApplyDiscovery(discovery Discovery) ApplyDiscoveryResult {
 		if actionName == "" {
 			actionName = "cmd_" + actionCommand.CommandID
 		}
-		allowed, denyReason := controlAllowed(discovery, actionCommand, actionName)
+		allowed, denyReason := controlAllowed(device.JeedomDeviceType, actionName)
 		action := Action{
 			Action:         actionName,
 			CommandID:      actionCommand.CommandID,
@@ -535,6 +538,98 @@ func mappedValue(evt Event, mapping Mapping, deviceType string) (any, bool) {
 		return BoolRawValue(evt.Value)
 	default:
 		return StringRawValue(evt.Value)
+	}
+}
+
+func applyDerivedValuesFromEventCode(mapping Mapping, device *Device, value any, now time.Time) {
+	if device == nil {
+		return
+	}
+	if state, ok := derivedStateFromEventCode(mapping, *device, value); ok {
+		device.Values["state"] = state
+	}
+	if gridPower, ok := derivedGridPowerFromEventCode(mapping, *device, value); ok {
+		device.Values["grid_power"] = gridPower
+		ensureSyntheticGridPowerCommand(device, gridPower, now)
+	}
+}
+
+func derivedStateFromEventCode(mapping Mapping, device Device, value any) (bool, bool) {
+	if mapping.Metric != "event_code" {
+		return false, false
+	}
+
+	eventCode := strings.ToUpper(strings.TrimSpace(fmt.Sprint(value)))
+	if isWallSwitchDevice(device) {
+		switch eventCode {
+		case "M_1F_37":
+			return true, true
+		case "M_1F_46":
+			return false, true
+		}
+	}
+	if isWaterStopDevice(device) {
+		switch eventCode {
+		case "M_48_37":
+			return true, true
+		case "M_48_46":
+			return false, true
+		}
+	}
+	return false, false
+}
+
+func derivedGridPowerFromEventCode(mapping Mapping, device Device, value any) (bool, bool) {
+	if mapping.Metric != "event_code" || !isTransmitterDevice(device) {
+		return false, false
+	}
+	switch strings.ToUpper(strings.TrimSpace(fmt.Sprint(value))) {
+	case "M_11_40":
+		return true, true
+	default:
+		return false, false
+	}
+}
+
+func ensureSyntheticGridPowerCommand(device *Device, value bool, now time.Time) {
+	const metric = "grid_power"
+	command := device.RawCommands[metric]
+	command.Device = device.Device
+	command.DeviceSlug = device.DeviceSlug
+	command.Name = "Grid power"
+	command.RawName = "Grid power"
+	command.Metric = metric
+	command.Component = ComponentBinarySensor
+	command.Type = "info"
+	command.Subtype = "binary"
+	command.DeviceClass = "power"
+	command.LastUpdate = now
+	command.LastValueAt = now
+	command.Value = value
+	command.EmptyValue = false
+	device.RawCommands[metric] = command
+}
+
+func isWallSwitchDevice(device Device) bool {
+	switch commandKey(firstNonEmpty(device.JeedomDeviceType, device.HAModel)) {
+	case "wallswitch":
+		return true
+	default:
+		return false
+	}
+}
+
+func isTransmitterDevice(device Device) bool {
+	deviceType := commandKey(firstNonEmpty(device.JeedomDeviceType, device.HAModel))
+	return strings.Contains(deviceType, "transmitter") && !strings.Contains(deviceType, "multitransmitter")
+}
+
+func isWaterStopDevice(device Device) bool {
+	switch commandKey(firstNonEmpty(device.JeedomDeviceType, device.HAModel)) {
+	case "waterstop", "valve":
+		return true
+	default:
+		return false
 	}
 }
 
@@ -950,6 +1045,8 @@ func normalizeDiscoveryAction(command DiscoveryCommand) string {
 		return "disarm"
 	case "PANIC":
 		return "panic"
+	case "MUTEFIREDETECTORS", "MUTE_FIRE_DETECTORS":
+		return "mute_fire_detectors"
 	}
 	switch commandKey(command.Name) {
 	case "on":
@@ -986,8 +1083,8 @@ func NormalizeControlAction(action string) string {
 	}
 }
 
-func controlAllowed(discovery Discovery, command DiscoveryCommand, action string) (bool, string) {
-	deviceType := commandKey(firstNonEmpty(discovery.DeviceType, discovery.ApplyDevice))
+func controlAllowed(deviceType, action string) (bool, string) {
+	deviceType = commandKey(deviceType)
 	if action == "impulse" {
 		if deviceType == "relay" {
 			return true, ""
@@ -995,14 +1092,26 @@ func controlAllowed(discovery Discovery, command DiscoveryCommand, action string
 		return false, "only relay impulse controls are allowlisted"
 	}
 	if action != "on" && action != "off" {
-		return false, "only on/off device controls are allowlisted"
+		if isHubControlDevice(deviceType) && isSecurityButtonAction(action) {
+			return true, ""
+		}
+		return false, "only on/off, relay impulse, and hub security controls are allowlisted"
 	}
 	switch deviceType {
 	case "relay", "socket", "wallswitch", "lightswitch", "outlet", "waterstop":
 		return true, ""
-	case "hub", "hub_2_plus", "hub2plus", "hub_plus", "hubplus":
+	case "hub", "hub_2_plus", "hub2plus", "hub_plus", "hubplus", "hubhybrid", "hub_hybrid":
 		return false, "hub/security controls are blocked by default"
 	default:
 		return false, "device type is not allowlisted for Jeedom control"
 	}
+}
+
+func isSecurityButtonAction(action string) bool {
+	for _, allowed := range securityButtonActionOrder {
+		if action == allowed {
+			return true
+		}
+	}
+	return false
 }

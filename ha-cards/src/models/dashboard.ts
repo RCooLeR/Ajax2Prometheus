@@ -22,8 +22,6 @@ export interface IconRef {
 }
 
 export interface IconRegistryEntry {
-  svg: string;
-  png?: string;
   color: string;
 }
 
@@ -62,6 +60,14 @@ export interface RoomClimate {
 export interface RoomSafety {
   smokeHigh: number;
   coHigh: number;
+  smokeCapable?: number;
+  coCapable?: number;
+}
+
+export interface GridPowerSummary {
+  known: number;
+  online: number;
+  outage: number;
 }
 
 export interface Room {
@@ -78,6 +84,7 @@ export interface Room {
   dahuaCameraCount?: number;
   climate?: RoomClimate;
   safety?: RoomSafety;
+  gridPower?: GridPowerSummary;
 }
 
 export interface DeviceHeroMedia {
@@ -92,10 +99,12 @@ export interface DeviceAction {
   id: string;
   entityId: string;
   label: string;
-  domain: 'button' | 'switch' | 'lock';
+  domain: DeviceActionDomain;
   service: string;
   stateLabel?: string;
 }
+
+export type DeviceActionDomain = 'button' | 'switch' | 'lock' | 'valve';
 
 export type CameraStreamProfile = 'main' | 'sub';
 
@@ -145,6 +154,7 @@ export interface RoomSummary {
   dahuaCameraCount: number;
   climate?: RoomClimate;
   safety: RoomSafety;
+  gridPower?: GridPowerSummary;
   latestEventLabel: string;
   tone: GlowTone;
 }

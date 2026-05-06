@@ -221,6 +221,46 @@ func TestPublishDevicePublishesToggleForOutletAndImpulseForRelay(t *testing.T) {
 	}
 }
 
+func TestPublishDevicePublishesHubSecurityButtons(t *testing.T) {
+	mqtt := &recordingMQTT{}
+	publisher := NewPublisher(PublisherConfig{
+		StateTopicPrefix: "ajaxbridge/jeedom",
+		Discovery:        true,
+		DiscoveryPrefix:  "homeassistant",
+		DiscoveryNode:    "ajaxbridge",
+		RetainDiscovery:  true,
+		Controls:         true,
+	}, mqtt)
+
+	hub := Device{
+		Source:           Source,
+		Device:           "Security hub",
+		DeviceSlug:       "security_hub",
+		JeedomDeviceType: "Hub",
+		Values:           map[string]any{},
+		RawCommands:      map[string]Command{},
+		Actions: map[string]Action{
+			"arm":                 {Action: "arm", CommandID: "163", DeviceSlug: "security_hub", Name: "Arm", Allowed: true},
+			"night_mode":          {Action: "night_mode", CommandID: "164", DeviceSlug: "security_hub", Name: "Night mode", Allowed: true},
+			"disarm":              {Action: "disarm", CommandID: "165", DeviceSlug: "security_hub", Name: "Disarm", Allowed: true},
+			"mute_fire_detectors": {Action: "mute_fire_detectors", CommandID: "167", DeviceSlug: "security_hub", Name: "Mute fire detectors", Allowed: true},
+		},
+	}
+	if err := publisher.PublishDevice(context.Background(), hub); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, actionSlug := range []string{"arm", "night_mode", "disarm", "mute_fire_detectors"} {
+		topic := "homeassistant/button/ajaxbridge/jeedom_control_security_hub_" + actionSlug + "/config"
+		if got := mqtt.discovery[topic]; got == "" {
+			t.Fatalf("hub %s button discovery missing at %s", actionSlug, topic)
+		}
+	}
+	if got := mqtt.discovery["homeassistant/switch/ajaxbridge/jeedom_control_security_hub/config"]; got != "" {
+		t.Fatalf("hub switch discovery = %q, want cleanup/empty", got)
+	}
+}
+
 func TestPublishDeviceClearsLegacyUnlinkedSwitchAndState(t *testing.T) {
 	mqtt := &recordingMQTT{}
 	publisher := NewPublisher(PublisherConfig{
@@ -307,6 +347,75 @@ func TestPublishDeviceCleansSIAMergedDuplicateCommands(t *testing.T) {
 	}
 	if got := mqtt.discovery["homeassistant/binary_sensor/ajaxbridge/jeedom_cmd_136/config"]; got != "" {
 		t.Fatalf("stale Jeedom temperature binary discovery = %q, want retained cleanup", got)
+	}
+}
+
+func TestPublishDeviceCleansLegacyNameBasedDiscoveryForAllSensorTypes(t *testing.T) {
+	mqtt := &recordingMQTT{}
+	publisher := NewPublisher(PublisherConfig{
+		StateTopicPrefix: "ajaxbridge/jeedom",
+		Discovery:        true,
+		DiscoveryPrefix:  "homeassistant",
+		DiscoveryNode:    "ajaxbridge",
+		RetainDiscovery:  true,
+	}, mqtt)
+
+	device := Device{
+		Source:            Source,
+		Device:            "Ajax account A0F80D",
+		DeviceSlug:        "account_a0f80d",
+		BaseSlug:          "budinok",
+		LegacyDeviceSlugs: []string{"budinok"},
+		LinkedSource:      "sia",
+		LinkedAccount:     "A0F80D",
+		HAIdentifiers:     []string{"ajaxbridge_account_A0F80D"},
+		Values:            map[string]any{},
+		RawCommands: map[string]Command{
+			"10": {
+				CommandID:  "10",
+				ObjectName: "Zahidna 20",
+				Device:     "Будинок",
+				DeviceSlug: "account_a0f80d",
+				Name:       "Battery",
+				RawName:    "Batterie",
+				Metric:     "battery_percent",
+				Component:  ComponentSensor,
+			},
+			"11": {
+				CommandID:  "11",
+				ObjectName: "Zahidna 20",
+				Device:     "Будинок",
+				DeviceSlug: "account_a0f80d",
+				Name:       "External power",
+				RawName:    "Alimentation secteur",
+				Metric:     "external_power",
+				Component:  ComponentBinarySensor,
+			},
+		},
+	}
+
+	if err := publisher.PublishDevice(context.Background(), device); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, topic := range []string{
+		"homeassistant/sensor/ajaxbridge/budinok_battery/config",
+		"homeassistant/binary_sensor/ajaxbridge/budinok_battery/config",
+		"homeassistant/binary_sensor/ajaxbridge/budinok_external_power/config",
+		"homeassistant/sensor/ajaxbridge/budinok_external_power/config",
+	} {
+		if got := mqtt.discovery[topic]; got != "" {
+			t.Fatalf("legacy topic %s cleanup payload = %q, want empty", topic, got)
+		}
+		if _, ok := mqtt.discovery[topic]; !ok {
+			t.Fatalf("missing legacy cleanup for %s: %#v", topic, mqtt.discovery)
+		}
+	}
+	if got := mqtt.discovery["homeassistant/sensor/ajaxbridge/jeedom_cmd_10/config"]; got == "" {
+		t.Fatalf("current battery discovery missing")
+	}
+	if got := mqtt.discovery["homeassistant/binary_sensor/ajaxbridge/jeedom_cmd_11/config"]; got != "" {
+		t.Fatalf("SIA-owned external power command should be cleaned by command id, got %q", got)
 	}
 }
 

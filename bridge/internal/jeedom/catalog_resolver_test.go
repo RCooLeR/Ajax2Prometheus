@@ -56,6 +56,28 @@ func TestCatalogResolverLinksConfiguredAccountName(t *testing.T) {
 	}
 }
 
+func TestCatalogResolverLinksAccountCatalogRowByCommandID(t *testing.T) {
+	catalog := testCatalog(t, devicecatalog.Device{
+		Account:          "A0F80D",
+		Name:             "Ajax hub",
+		Kind:             "Hub",
+		JeedomCommandIDs: []string{"163", "164", "165", "167"},
+	})
+	resolver := NewCatalogResolver(catalog, CatalogResolverConfig{})
+
+	identity := resolver.Resolve(Event{CommandID: "163", DeviceName: "Ajax hub", CommandName: "Armement"}, MappingFor(Event{CommandName: "Armement"}))
+
+	if identity.LinkedAccount != "A0F80D" || identity.LinkedZone != "" {
+		t.Fatalf("identity = %#v", identity)
+	}
+	if identity.DeviceSlug != "account_a0f80d" {
+		t.Fatalf("DeviceSlug = %q, want account_a0f80d", identity.DeviceSlug)
+	}
+	if len(identity.HAIdentifiers) != 1 || identity.HAIdentifiers[0] != "ajaxbridge_account_A0F80D" {
+		t.Fatalf("HAIdentifiers = %#v", identity.HAIdentifiers)
+	}
+}
+
 func TestCatalogResolverLinksHubDiscoveryToSingleAccount(t *testing.T) {
 	catalog := testCatalog(t, devicecatalog.Device{Account: "A0F80D", Zone: "1", Name: "Relay"})
 	resolver := NewCatalogResolver(catalog, CatalogResolverConfig{})

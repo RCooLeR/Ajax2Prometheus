@@ -1,8 +1,9 @@
 import { createElement, useEffect, useRef, useState } from 'react';
-import type { CameraStreamProfile, Device, EventItem, GlowTone, IconRef, Room, RoomSummary } from '../models/dashboard';
+import type { CameraStreamProfile, Device, DeviceActionDomain, EventItem, GlowTone, IconRef, Room, RoomSummary } from '../models/dashboard';
 import type { HomeAssistant, HomeAssistantState } from '../ha/types';
 import { Icon } from '../components/Icon';
 import { StatusBadge } from '../components/StatusBadge';
+import { callEntityService } from '../ha/services';
 import { getRoomImageAsset, getToneClass } from '../utils/assets';
 
 interface RoomHeroProps {
@@ -25,9 +26,11 @@ export function RoomHero({ room, roomSummary, roomEvents, selectedDevice, stream
   const videoMode = heroMedia?.kind === 'stream';
   const showDahuaStats = roomSummary.dahuaCameraCount > 0;
   const climate = roomSummary.climate ?? room.climate;
-  const safety = roomSummary.safety ?? room.safety ?? { smokeHigh: 0, coHigh: 0 };
-  const smokeHigh = safety.smokeHigh || countRoomEvents(roomEvents, ['smoke_detected', 'fire_detected']);
-  const coHigh = safety.coHigh || countRoomEvents(roomEvents, ['gas_detected']);
+  const safety = roomSummary.safety ?? room.safety ?? { smokeHigh: 0, coHigh: 0, smokeCapable: 0, coCapable: 0 };
+  const hasSmokeSensor = (safety.smokeCapable ?? 0) > 0;
+  const hasCoSensor = (safety.coCapable ?? 0) > 0;
+  const smokeHigh = hasSmokeSensor ? safety.smokeHigh || countRoomEvents(roomEvents, ['smoke_detected', 'fire_detected']) : 0;
+  const coHigh = hasCoSensor ? safety.coHigh || countRoomEvents(roomEvents, ['gas_detected']) : 0;
 
   useEffect(() => {
     setPendingActionId(null);
@@ -38,7 +41,7 @@ export function RoomHero({ room, roomSummary, roomEvents, selectedDevice, stream
     setMediaSrc(heroMedia?.src ?? null);
   }, [heroMedia?.entityId, heroMedia?.src]);
 
-  async function handleAction(actionId: string, domain: string, service: string, entityId: string) {
+  async function handleAction(actionId: string, domain: DeviceActionDomain, service: string, entityId: string) {
     if (!hass?.callService) {
       setActionFeedback('Home Assistant service API unavailable');
       return;
@@ -49,7 +52,7 @@ export function RoomHero({ room, roomSummary, roomEvents, selectedDevice, stream
 
     try {
       console.debug('[ajaxbridge] calling Home Assistant service', { domain, service, entityId });
-      await hass.callService(domain, service, { entity_id: entityId });
+      await callEntityService(hass, domain, service, entityId);
       setActionFeedback(`Sent ${domain}.${service}`);
     } catch {
       setActionFeedback('Action failed');
@@ -127,18 +130,22 @@ export function RoomHero({ room, roomSummary, roomEvents, selectedDevice, stream
               tone="cyan"
             />
           ) : null}
-          <RoomHeroStat
-            label="Hi smoke"
-            value={smokeHigh}
-            icon={{ category: 'sensors', key: 'smoke' }}
-            tone={smokeHigh > 0 ? 'amber' : 'green'}
-          />
-          <RoomHeroStat
-            label="Hi CO"
-            value={coHigh}
-            icon={{ category: 'sensors', key: 'gas' }}
-            tone={coHigh > 0 ? 'amber' : 'green'}
-          />
+          {hasSmokeSensor ? (
+            <RoomHeroStat
+              label="Hi smoke"
+              value={smokeHigh}
+              icon={{ category: 'sensors', key: 'smoke' }}
+              tone={smokeHigh > 0 ? 'amber' : 'green'}
+            />
+          ) : null}
+          {hasCoSensor ? (
+            <RoomHeroStat
+              label="Hi CO"
+              value={coHigh}
+              icon={{ category: 'sensors', key: 'gas' }}
+              tone={coHigh > 0 ? 'amber' : 'green'}
+            />
+          ) : null}
           {showDahuaStats ? (
             <>
               {roomSummary.smdIvs.animal > 0 ? (
@@ -242,67 +249,177 @@ function NativeCameraStream({ hass, stateObj, profile, muted, volume }: NativeCa
 }
 
 function forceNestedVideoObjectFit(rootElement: HTMLElement, muted: boolean, volume: number): () => void {
-  const observers: MutationObserver[] = [];
-  const observedRoots = new WeakSet<Node>();
-  let rafId = 0;
-  let cleanupTimer = 0;
+  let pollTimer = 0;
   let active = true;
 
-  const scheduleApply = () => {
-    window.cancelAnimationFrame(rafId);
-    rafId = window.requestAnimationFrame(apply);
+  const stopPolling = () => {
+    if (pollTimer !== 0) {
+      window.clearInterval(pollTimer);
+      pollTimer = 0;
+    }
   };
 
-  const observeRoot = (root: Node & ParentNode) => {
-    if (!active || observedRoots.has(root)) {
-      return;
+  const visit = (root: Node & ParentNode, visited = new WeakSet<Node>()): boolean => {
+    if (visited.has(root)) {
+      return false;
+    }
+    visited.add(root);
+
+    let foundVideo = false;
+    injectCameraFitStyle(root);
+    if (root instanceof HTMLElement) {
+      configureCameraContainer(root);
+      configureCameraPlayerElement(root, muted, volume);
     }
 
-    observedRoots.add(root);
-    const observer = new MutationObserver(scheduleApply);
-    observer.observe(root, {
-      childList: true,
-      subtree: true,
-    });
-    observers.push(observer);
-  };
+    getDeepElements(root).forEach((element) => {
+      if (element instanceof HTMLElement) {
+        if (isCameraContainerElement(element)) {
+          configureCameraContainer(element);
+        }
+        configureCameraPlayerElement(element, muted, volume);
+      }
 
-  const visit = (root: Node & ParentNode) => {
-    observeRoot(root);
+      if (element instanceof HTMLVideoElement) {
+        foundVideo = true;
+        configureCameraVideo(element, muted, volume);
+      }
 
-    root.querySelectorAll('video').forEach((video) => {
-      video.style.setProperty('object-fit', 'fill', 'important');
-      video.style.setProperty('width', '100%', 'important');
-      video.style.setProperty('height', '100%', 'important');
-      video.muted = muted;
-      video.volume = Math.min(1, Math.max(0, volume));
-    });
+      if (element instanceof HTMLSlotElement) {
+        element.assignedElements({ flatten: true }).forEach((assigned) => {
+          if (assigned instanceof HTMLElement) {
+            foundVideo = visit(assigned, visited) || foundVideo;
+          }
+        });
+      }
 
-    root.querySelectorAll('*').forEach((element) => {
       const shadowRoot = element.shadowRoot;
       if (shadowRoot) {
-        visit(shadowRoot);
+        foundVideo = visit(shadowRoot, visited) || foundVideo;
       }
     });
+
+    return foundVideo;
   };
 
   function apply() {
     if (!active) {
-      return;
+      return false;
     }
 
-    visit(rootElement);
+    return visit(rootElement);
   }
 
-  apply();
-  cleanupTimer = window.setInterval(scheduleApply, 500);
+  if (!apply()) {
+    pollTimer = window.setInterval(() => {
+      if (apply()) {
+        stopPolling();
+      }
+    }, 250);
+  }
 
   return () => {
     active = false;
-    window.cancelAnimationFrame(rafId);
-    window.clearInterval(cleanupTimer);
-    observers.forEach((observer) => observer.disconnect());
+    stopPolling();
   };
+}
+
+const CAMERA_FIT_STYLE_ID = 'ajaxbridge-camera-fit-style';
+const CAMERA_CONTAINER_SELECTOR = 'ha-camera-stream, ha-web-rtc-player, ha-hls-player, .player, .video, .container';
+
+function getDeepElements(root: Node & ParentNode): Element[] {
+  const elements: Element[] = [];
+  if (root instanceof Element) {
+    elements.push(root);
+  }
+  root.querySelectorAll('*').forEach((element) => elements.push(element));
+  return elements;
+}
+
+function isCameraContainerElement(element: HTMLElement): boolean {
+  return element.matches(CAMERA_CONTAINER_SELECTOR);
+}
+
+function injectCameraFitStyle(root: Node & ParentNode) {
+  if (!(root instanceof ShadowRoot) || root.getElementById(CAMERA_FIT_STYLE_ID)) {
+    return;
+  }
+
+  const style = document.createElement('style');
+  style.id = CAMERA_FIT_STYLE_ID;
+  style.textContent = `
+    video,
+    ha-hls-player,
+    ha-web-rtc-player,
+    ha-camera-stream,
+    .player,
+    .video,
+    .container {
+      width: 100% !important;
+      height: 100% !important;
+      min-width: 100% !important;
+      min-height: 100% !important;
+      object-fit: fill !important;
+    }
+  `;
+  root.appendChild(style);
+}
+
+function configureCameraContainer(element: HTMLElement) {
+  element.style.setProperty('display', 'block', 'important');
+  element.style.setProperty('width', '100%', 'important');
+  element.style.setProperty('height', '100%', 'important');
+  element.style.setProperty('min-width', '100%', 'important');
+  element.style.setProperty('min-height', '100%', 'important');
+  element.style.setProperty('overflow', 'hidden', 'important');
+}
+
+function configureCameraPlayerElement(element: HTMLElement, muted: boolean, volume: number) {
+  if (!isCameraContainerElement(element)) {
+    return;
+  }
+  const normalizedVolume = Math.min(1, Math.max(0, volume));
+  element.toggleAttribute('muted', muted);
+  element.setAttribute('autoplay', '');
+  element.setAttribute('playsinline', '');
+  try {
+    const player = element as HTMLElement & {
+      muted?: boolean;
+      defaultMuted?: boolean;
+      volume?: number;
+      video?: HTMLVideoElement;
+      media?: HTMLVideoElement;
+    };
+    player.muted = muted;
+    player.defaultMuted = muted;
+    player.volume = muted ? 0 : normalizedVolume;
+    if (player.video instanceof HTMLVideoElement) {
+      configureCameraVideo(player.video, muted, volume);
+    }
+    if (player.media instanceof HTMLVideoElement) {
+      configureCameraVideo(player.media, muted, volume);
+    }
+  } catch {
+    // HA custom elements may expose read-only media properties.
+  }
+}
+
+function configureCameraVideo(video: HTMLVideoElement, muted: boolean, volume: number) {
+  const normalizedVolume = Math.min(1, Math.max(0, volume));
+  video.autoplay = true;
+  video.playsInline = true;
+  video.setAttribute('autoplay', '');
+  video.setAttribute('playsinline', '');
+  video.toggleAttribute('muted', muted);
+  video.style.setProperty('object-fit', 'fill', 'important');
+  video.style.setProperty('width', '100%', 'important');
+  video.style.setProperty('height', '100%', 'important');
+  video.style.setProperty('min-width', '100%', 'important');
+  video.style.setProperty('min-height', '100%', 'important');
+  video.style.setProperty('display', 'block', 'important');
+  video.muted = muted;
+  video.defaultMuted = muted;
+  video.volume = muted ? 0 : normalizedVolume;
 }
 
 function preferFocusedCameraState(stateObj: HomeAssistantState, profile: CameraStreamProfile): HomeAssistantState {

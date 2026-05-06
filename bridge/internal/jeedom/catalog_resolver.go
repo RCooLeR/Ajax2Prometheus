@@ -128,6 +128,20 @@ func identityForCatalogDevice(device devicecatalog.Device) DeviceIdentity {
 	name := RepairText(device.Name)
 	room := RepairText(device.Room)
 	kind := strings.TrimSpace(device.Kind)
+	if isCatalogAccountDevice(device) {
+		account := strings.TrimSpace(device.Account)
+		return DeviceIdentity{
+			DeviceSlug:     "account_" + Slug(account),
+			DeviceName:     firstNonEmpty(name, "Ajax account "+account),
+			BaseSlug:       "account_" + Slug(account),
+			HAIdentifiers:  []string{"ajaxbridge_account_" + account},
+			HAManufacturer: "Ajax Systems",
+			HAModel:        firstNonEmpty(kind, "Ajax account"),
+			SuggestedArea:  room,
+			LinkedSource:   "sia",
+			LinkedAccount:  account,
+		}
+	}
 	return DeviceIdentity{
 		DeviceSlug:     "sia_" + Slug(device.Account) + "_zone_" + Slug(device.Zone),
 		DeviceName:     firstNonEmpty(name, "Ajax zone "+device.Zone),
@@ -139,6 +153,18 @@ func identityForCatalogDevice(device devicecatalog.Device) DeviceIdentity {
 		LinkedSource:   "sia",
 		LinkedAccount:  device.Account,
 		LinkedZone:     device.Zone,
+	}
+}
+
+func isCatalogAccountDevice(device devicecatalog.Device) bool {
+	if strings.TrimSpace(device.Account) == "" || strings.TrimSpace(device.Zone) != "" {
+		return false
+	}
+	switch commandKey(firstNonEmpty(device.Kind, device.Device, device.Name)) {
+	case "account", "ajaxaccount", "hub", "hub2", "hub2plus", "hub_2_plus", "hubplus", "hub_plus", "hubhybrid", "hub_hybrid":
+		return true
+	default:
+		return false
 	}
 }
 
