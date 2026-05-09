@@ -180,6 +180,22 @@ func (p *Publisher) Enabled() bool {
 }
 
 func (p *Publisher) Connect(ctx context.Context) error {
+	token := p.connect()
+	if token == nil {
+		return nil
+	}
+	return p.wait(ctx, token)
+}
+
+func (p *Publisher) ConnectAsync(ctx context.Context) {
+	token := p.connect()
+	if token == nil {
+		return
+	}
+	go p.observeConnect(ctx, token)
+}
+
+func (p *Publisher) connect() paho.Token {
 	if !p.Enabled() {
 		return nil
 	}
@@ -207,7 +223,19 @@ func (p *Publisher) Connect(ctx context.Context) error {
 	}
 
 	p.client = paho.NewClient(opts)
-	return p.wait(ctx, p.client.Connect())
+	return p.client.Connect()
+}
+
+func (p *Publisher) observeConnect(ctx context.Context, token paho.Token) {
+	err := p.wait(ctx, token)
+	switch {
+	case err == nil:
+		return
+	case errors.Is(err, context.Canceled):
+		return
+	default:
+		p.log.Warn().Err(err).Str("broker", p.cfg.Broker).Msg("MQTT initial connect pending; continuing startup")
+	}
 }
 
 func (p *Publisher) Close() {

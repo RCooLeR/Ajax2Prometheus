@@ -97,9 +97,7 @@ func Run(parent context.Context, cfg config.Config, log zerolog.Logger) error {
 			Timeout:         cfg.MQTTTimeout,
 			Retain:          cfg.MQTTRetain,
 		}, log.With().Str("component", "mqtt").Logger())
-		if err := mqttPublisher.Connect(ctx); err != nil {
-			log.Warn().Err(err).Str("broker", cfg.MQTTBroker).Msg("MQTT connect failed; continuing without blocking SIA")
-		}
+		mqttPublisher.ConnectAsync(ctx)
 		mqttQueue = make(chan hamqtt.Update, 1)
 		defer mqttPublisher.Close()
 	}
