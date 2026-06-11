@@ -39,6 +39,7 @@ ENV AJAXBRIDGE_SIA_ADDR=:8099
 ENV AJAXBRIDGE_LOG_PRETTY=false
 ENV AJAXBRIDGE_DEVICES_PATH=/data/devices.json
 ENV AJAXBRIDGE_NOTIFICATIONS_PATH=/data/notifications.json
+ENV AJAXBRIDGE_JEEDOM_STORE_PATH=/data/jeedom.json
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 CMD ["/app/ajaxbridge", "healthcheck"]
 

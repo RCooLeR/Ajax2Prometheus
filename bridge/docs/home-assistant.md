@@ -647,7 +647,7 @@ Duplicate devices:
 - Do not delete SIA signal entities just to solve Jeedom duplication. Linked Jeedom commands that duplicate SIA security/status values are cleaned automatically; the SIA entity remains authoritative.
 - AjaxBridge also publishes retained cleanup for old SIA discovery object id formats, including old `ajax2prometheus` topics, no-account zone ids such as `zone_13_alarm_signal`, and old signal ids such as `zone_a0f80d_13_firmware`.
 - Devices shown as manufacturer `Ajax via Jeedom` and model `Jeedom MQTT Bridge` are unlinked Jeedom discovery entries. If the same physical device also exists as `Ajax Systems`, clear old retained discovery and republish linked discovery.
-- Restart AjaxBridge, then force Jeedom MQTT Manager to republish eqLogic discovery or wait for Jeedom events so linked discovery is republished with the SIA device identifier.
+- Restart AjaxBridge. If `AJAXBRIDGE_JEEDOM_STORE_PATH` points at persisted storage such as `/data/jeedom.json`, AjaxBridge reloads the last Jeedom command cache and republishes linked discovery/state automatically. Force Jeedom MQTT Manager to republish eqLogic discovery only if the cache is empty or stale.
 - Reload or restart Home Assistant MQTT after stale retained topics are cleared.
 - If the duplicate is the same SIA entity with a Home Assistant suffix such as `_2`, clear stale retained MQTT discovery with Mosquitto clients, then reload or restart Home Assistant MQTT.
 
@@ -693,4 +693,4 @@ Numeric Jeedom values missing:
 
 - Confirm `/jeedom/devices` contains `values.temperature_c`, `values.power_w`, `values.current_a`, or `values.voltage_v` for the expected device.
 - Confirm `/jeedom/commands` contains the matching Jeedom command ids and that those ids are listed in `data/devices.json` under `jeedom_command_ids`.
-- Force Jeedom MQTT Manager to republish eqLogic discovery and command events after changing mappings.
+- If `data/jeedom.json` is empty or stale, force Jeedom MQTT Manager to republish eqLogic discovery and command events after changing mappings.

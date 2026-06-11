@@ -46,6 +46,7 @@ type Publisher struct {
 	accountPlans    map[string]accountPlan
 	zonePlans       map[string]zonePlan
 	subscriptions   map[string]MessageHandler
+	connectHandlers []func(context.Context)
 }
 
 type Update struct {
@@ -217,6 +218,7 @@ func (p *Publisher) connect() paho.Token {
 		token.WaitTimeout(p.cfg.Timeout)
 		p.resubscribe(client)
 		p.log.Info().Str("broker", p.cfg.Broker).Msg("MQTT connected")
+		p.notifyConnected()
 	}
 	opts.OnConnectionLost = func(_ paho.Client, err error) {
 		p.log.Warn().Err(err).Str("broker", p.cfg.Broker).Msg("MQTT connection lost")
@@ -302,6 +304,19 @@ func (p *Publisher) Subscribe(ctx context.Context, topic string, handler Message
 		return nil
 	}
 	return p.wait(ctx, p.client.Subscribe(topic, 1, wrapMessageHandler(handler)))
+}
+
+func (p *Publisher) AddConnectHandler(handler func(context.Context)) {
+	if p == nil || handler == nil {
+		return
+	}
+	p.mu.Lock()
+	p.connectHandlers = append(p.connectHandlers, handler)
+	connected := p.client != nil && p.client.IsConnectionOpen()
+	p.mu.Unlock()
+	if connected {
+		go handler(context.Background())
+	}
 }
 
 func (p *Publisher) PublishStateMessage(ctx context.Context, topic string, payload []byte, retain bool) error {
@@ -452,6 +467,15 @@ func (p *Publisher) resubscribe(client paho.Client) {
 		if err := token.Error(); err != nil {
 			p.log.Warn().Err(err).Str("topic", topic).Msg("MQTT subscription failed")
 		}
+	}
+}
+
+func (p *Publisher) notifyConnected() {
+	p.mu.Lock()
+	handlers := append([]func(context.Context){}, p.connectHandlers...)
+	p.mu.Unlock()
+	for _, handler := range handlers {
+		go handler(context.Background())
 	}
 }
 

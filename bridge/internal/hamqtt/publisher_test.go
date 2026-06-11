@@ -1,6 +1,7 @@
 package hamqtt
 
 import (
+	"context"
 	"encoding/json"
 	"strings"
 	"testing"
@@ -472,6 +473,36 @@ func TestPublishSnapshotDoesNotCleanCurrentDiscoveryNode(t *testing.T) {
 	}
 	if payload := client.payloadForTopic(topic); stringValue(payload) == "" {
 		t.Fatalf("current discovery topic %q was incorrectly cleaned up", topic)
+	}
+}
+
+func TestConnectHandlerRunsOnReconnectAndImmediateRegistration(t *testing.T) {
+	publisher := New(Config{
+		Broker:      "tcp://mqtt.local:1883",
+		ClientID:    "ajaxbridge",
+		TopicPrefix: "ajaxbridge",
+		Timeout:     time.Second,
+	}, zerologNop())
+	first := make(chan struct{}, 1)
+	publisher.AddConnectHandler(func(_ context.Context) {
+		first <- struct{}{}
+	})
+	publisher.notifyConnected()
+	select {
+	case <-first:
+	case <-time.After(time.Second):
+		t.Fatal("connect handler did not run on reconnect notification")
+	}
+
+	publisher.client = &stubClient{open: true}
+	second := make(chan struct{}, 1)
+	publisher.AddConnectHandler(func(_ context.Context) {
+		second <- struct{}{}
+	})
+	select {
+	case <-second:
+	case <-time.After(time.Second):
+		t.Fatal("connect handler did not run when registered after connection")
 	}
 }
 

@@ -48,6 +48,8 @@ dockers_v2:
     ids:
       - ajaxbridge
     dockerfile: bridge/Dockerfile.goreleaser
+    extra_files:
+      - bridge/logo.png
     images:
       - rcooler/ajax2prometheus
       - rcooler/ajax-bridge

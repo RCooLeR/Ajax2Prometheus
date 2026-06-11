@@ -42,6 +42,9 @@ func TestFromEnvUsesJeedomDefaults(t *testing.T) {
 	if cfg.JeedomEmptyValuePolicy != "keep_last" {
 		t.Fatalf("JeedomEmptyValuePolicy = %q, want keep_last", cfg.JeedomEmptyValuePolicy)
 	}
+	if cfg.JeedomStorePath != "data/jeedom.json" {
+		t.Fatalf("JeedomStorePath = %q, want default", cfg.JeedomStorePath)
+	}
 	if cfg.JeedomSampleDir != "" {
 		t.Fatalf("JeedomSampleDir = %q, want empty production default", cfg.JeedomSampleDir)
 	}

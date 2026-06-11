@@ -67,6 +67,8 @@ type Config struct {
 	JeedomEmptyValuePolicy string
 	JeedomRetainState      bool
 	JeedomRetainDiscovery  bool
+	// JeedomStorePath persists discovered Jeedom commands and last values across bridge restarts.
+	JeedomStorePath string
 	// JeedomSampleDir captures raw MQTT samples for debugging. Empty disables capture for production.
 	JeedomSampleDir string
 	// JeedomDiscoverUnlinked should stay false to avoid duplicate Home Assistant devices.
@@ -124,6 +126,7 @@ func FromEnv() Config {
 		JeedomEmptyValuePolicy: envString("keep_last", "AJAXBRIDGE_JEEDOM_EMPTY_VALUE_POLICY"),
 		JeedomRetainState:      envBool(true, "AJAXBRIDGE_JEEDOM_RETAIN_STATE"),
 		JeedomRetainDiscovery:  envBool(true, "AJAXBRIDGE_JEEDOM_RETAIN_DISCOVERY"),
+		JeedomStorePath:        envString("data/jeedom.json", "AJAXBRIDGE_JEEDOM_STORE_PATH"),
 		JeedomSampleDir:        envString("", "AJAXBRIDGE_JEEDOM_SAMPLE_DIR"),
 		JeedomDiscoverUnlinked: envBool(false, "AJAXBRIDGE_JEEDOM_DISCOVER_UNLINKED"),
 		JeedomAccountNames:     envCSV("AJAXBRIDGE_JEEDOM_ACCOUNT_NAMES"),

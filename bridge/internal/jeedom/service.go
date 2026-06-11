@@ -128,6 +128,7 @@ func (s *Service) HandleMessage(ctx context.Context, topic string, payload []byt
 			return
 		}
 		result := s.store.ApplyDiscovery(discovery)
+		s.persist(ctx, "persist Jeedom MQTT discovery")
 		if s.publisher != nil {
 			if err := s.publisher.PublishDevice(ctx, result.Device); err != nil {
 				s.log.Debug().Err(err).Str("device", result.Device.DeviceSlug).Msg("publish Jeedom MQTT discovery state")
@@ -150,6 +151,9 @@ func (s *Service) HandleMessage(ctx context.Context, topic string, payload []byt
 	}
 
 	result := s.store.Apply(evt)
+	if result.UpdatedValue {
+		s.persist(ctx, "persist Jeedom MQTT state")
+	}
 	if result.EmptyValue && s.metrics != nil {
 		s.metrics.ObserveJeedomEmptyValue()
 	}
@@ -164,6 +168,15 @@ func (s *Service) HandleMessage(ctx context.Context, topic string, payload []byt
 		if err := s.publisher.PublishDevice(ctx, result.Device); err != nil {
 			s.log.Debug().Err(err).Str("device", result.Device.DeviceSlug).Msg("publish Jeedom MQTT state")
 		}
+	}
+}
+
+func (s *Service) persist(ctx context.Context, message string) {
+	if s == nil || s.store == nil {
+		return
+	}
+	if err := s.store.Save(ctx); err != nil {
+		s.log.Warn().Err(err).Msg(message)
 	}
 }
 

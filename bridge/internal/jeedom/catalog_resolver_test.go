@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/RCooLeR/AjaxBridge/internal/devicecatalog"
 )
@@ -95,6 +96,56 @@ func TestCatalogResolverLinksHubDiscoveryToSingleAccount(t *testing.T) {
 	}
 	if len(identity.HAIdentifiers) != 1 || identity.HAIdentifiers[0] != "ajaxbridge_account_A0F80D" {
 		t.Fatalf("HAIdentifiers = %#v", identity.HAIdentifiers)
+	}
+}
+
+func TestStoreReconcileResolverRelinksExistingDiscoveryDevices(t *testing.T) {
+	store := NewStore("keep_last")
+	discovery, err := ParseDiscoveryMessage("jeedom/discovery/eqLogic/42", []byte(`{
+	  "id":42,
+	  "name":"Хатинка Двер.",
+	  "configuration":{"device":"DoorProtectPlus"},
+	  "isVisible":1,
+	  "isEnable":1,
+	  "cmds":{
+	    "322":{"id":322,"name":"Etat","type":"info","subType":"string","isVisible":1},
+	    "328":{"id":328,"name":"Température","type":"info","subType":"numeric","unite":"°C","isVisible":1,"currentValue":21},
+	    "331":{"id":331,"logicalId":"SWITCH_ON","name":"On","type":"action","subType":"other","isVisible":1}
+	  }
+	}`), time.Unix(100, 0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	initial := store.ApplyDiscovery(discovery)
+	if initial.Device.DeviceSlug != "khatynka_dver" {
+		t.Fatalf("initial slug = %q, want khatynka_dver", initial.Device.DeviceSlug)
+	}
+
+	catalog := testCatalog(t, devicecatalog.Device{
+		Account:          "A0F80D",
+		Zone:             "18",
+		Name:             "Хатинка Двері",
+		Room:             "Хатинка",
+		Kind:             "DoorProtectPlus",
+		JeedomCommandIDs: []string{"322", "328", "331"},
+	})
+	devices := store.ReconcileResolver(NewCatalogResolver(catalog, CatalogResolverConfig{}))
+
+	if _, ok := store.Device("khatynka_dver"); ok {
+		t.Fatal("legacy local Jeedom device still exists after reconciliation")
+	}
+	device, ok := store.Device("sia_a0f80d_zone_18")
+	if !ok {
+		t.Fatal("missing relinked SIA device")
+	}
+	if device.LinkedZone != "18" || device.HAModel != "DoorProtectPlus" {
+		t.Fatalf("relinked device = %#v", device)
+	}
+	if command := device.RawCommands["328"]; command.DeviceSlug != "sia_a0f80d_zone_18" {
+		t.Fatalf("command was not moved to SIA device: %#v", command)
+	}
+	if len(devices) != 1 {
+		t.Fatalf("devices = %#v, want exactly one relinked device", devices)
 	}
 }
 

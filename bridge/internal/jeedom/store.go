@@ -19,8 +19,10 @@ const (
 
 type Store struct {
 	mu         sync.RWMutex
+	saveMu     sync.Mutex
 	policy     EmptyValuePolicy
 	resolver   IdentityResolver
+	path       string
 	devices    map[string]*Device
 	commands   map[string]string
 	eqLogics   map[string]string
@@ -430,6 +432,38 @@ func (s *Store) ApplyDiscovery(discovery Discovery) ApplyDiscoveryResult {
 	return ApplyDiscoveryResult{Device: copyDevice(*device), Actions: actions}
 }
 
+func (s *Store) ReconcileResolver(resolver IdentityResolver) []Device {
+	if s == nil {
+		return nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.resolver = resolver
+	if resolver == nil {
+		return s.devicesLocked()
+	}
+
+	slugs := make([]string, 0, len(s.devices))
+	for slug := range s.devices {
+		slugs = append(slugs, slug)
+	}
+	sort.Strings(slugs)
+	for _, slug := range slugs {
+		device := s.devices[slug]
+		if device == nil {
+			continue
+		}
+		identity := s.reconciledIdentityLocked(*device, resolver)
+		if identity.DeviceSlug == "" {
+			continue
+		}
+		s.mergeDeviceIntoIdentityLocked(slug, identity)
+	}
+	s.rebuildIndexesLocked()
+	return s.devicesLocked()
+}
+
 func (s *Store) identityFor(evt Event, mapping Mapping) DeviceIdentity {
 	baseSlug := Slug(evt.DeviceName)
 	identity := DeviceIdentity{
@@ -467,6 +501,182 @@ func (s *Store) identityFor(evt Event, mapping Mapping) DeviceIdentity {
 		resolved.HAModel = identity.HAModel
 	}
 	return resolved
+}
+
+func (s *Store) reconciledIdentityLocked(device Device, resolver IdentityResolver) DeviceIdentity {
+	fallback := DeviceIdentity{
+		DeviceSlug:        device.DeviceSlug,
+		DeviceName:        device.Device,
+		BaseSlug:          device.BaseSlug,
+		HAIdentifiers:     append([]string(nil), device.HAIdentifiers...),
+		HAManufacturer:    device.HAManufacturer,
+		HAModel:           firstNonEmpty(device.JeedomDeviceType, device.HAModel),
+		SuggestedArea:     device.SuggestedArea,
+		LegacyDeviceSlugs: append([]string(nil), device.LegacyDeviceSlugs...),
+		LinkedSource:      device.LinkedSource,
+		LinkedAccount:     device.LinkedAccount,
+		LinkedZone:        device.LinkedZone,
+		DiscoveryDisabled: device.DiscoveryDisabled,
+	}
+	if discoveryResolver, ok := resolver.(DiscoveryIdentityResolver); ok {
+		discovery := Discovery{
+			EqLogicID:    device.JeedomID,
+			Name:         device.Device,
+			LogicalID:    device.JeedomLogicalID,
+			ObjectName:   device.ObjectName,
+			DeviceType:   firstNonEmpty(device.JeedomDeviceType, device.HAModel),
+			ApplyDevice:  firstNonEmpty(device.JeedomDeviceType, device.HAModel),
+			InfoCommands: make(map[string]DiscoveryCommand, len(device.RawCommands)),
+			Actions:      make(map[string]DiscoveryCommand, len(device.Actions)),
+		}
+		for commandID, command := range device.RawCommands {
+			discovery.InfoCommands[commandID] = DiscoveryCommand{
+				CommandID: commandID,
+				Name:      firstNonEmpty(command.RawName, command.Name),
+				Type:      command.Type,
+				Subtype:   command.Subtype,
+				Unit:      command.Unit,
+			}
+		}
+		for actionName, action := range device.Actions {
+			discovery.Actions[action.CommandID] = DiscoveryCommand{
+				CommandID: action.CommandID,
+				Name:      firstNonEmpty(action.RawName, action.Name, actionName),
+				Type:      "action",
+				Subtype:   action.Subtype,
+				LogicalID: action.LogicalID,
+			}
+		}
+		return mergeIdentity(fallback, discoveryResolver.ResolveDiscovery(discovery))
+	}
+
+	commandIDs := make([]string, 0, len(device.RawCommands)+len(device.Actions))
+	for commandID := range device.RawCommands {
+		commandIDs = append(commandIDs, commandID)
+	}
+	for _, action := range device.Actions {
+		if action.CommandID != "" {
+			commandIDs = append(commandIDs, action.CommandID)
+		}
+	}
+	sort.Strings(commandIDs)
+	for _, commandID := range commandIDs {
+		command := device.RawCommands[commandID]
+		resolved := resolver.Resolve(Event{
+			CommandID:   commandID,
+			ObjectName:  device.ObjectName,
+			DeviceName:  device.Device,
+			CommandName: firstNonEmpty(command.RawName, command.Name),
+			Type:        command.Type,
+			Subtype:     command.Subtype,
+			Unit:        command.Unit,
+		}, Mapping{})
+		if resolved.DeviceSlug != "" {
+			return mergeIdentity(fallback, resolved)
+		}
+	}
+	return fallback
+}
+
+func (s *Store) mergeDeviceIntoIdentityLocked(sourceSlug string, identity DeviceIdentity) {
+	source := s.devices[sourceSlug]
+	if source == nil || identity.DeviceSlug == "" {
+		return
+	}
+	target := s.devices[identity.DeviceSlug]
+	if target == nil {
+		target = &Device{
+			Source:      Source,
+			DeviceSlug:  identity.DeviceSlug,
+			Values:      make(map[string]any),
+			RawCommands: make(map[string]Command),
+			Actions:     make(map[string]Action),
+		}
+		s.devices[identity.DeviceSlug] = target
+	}
+	if target.Values == nil {
+		target.Values = make(map[string]any)
+	}
+	if target.RawCommands == nil {
+		target.RawCommands = make(map[string]Command)
+	}
+	if target.Actions == nil {
+		target.Actions = make(map[string]Action)
+	}
+
+	for key, value := range source.Values {
+		target.Values[key] = value
+	}
+	for commandID, command := range source.RawCommands {
+		command.DeviceSlug = identity.DeviceSlug
+		command.Device = firstNonEmpty(identity.DeviceName, source.Device, command.Device)
+		target.RawCommands[commandID] = command
+	}
+	for actionName, action := range source.Actions {
+		action.DeviceSlug = identity.DeviceSlug
+		action.Device = firstNonEmpty(identity.DeviceName, source.Device, action.Device)
+		action.DeviceType = firstNonEmpty(identity.HAModel, source.JeedomDeviceType, source.HAModel, action.DeviceType)
+		target.Actions[actionName] = action
+	}
+
+	target.Source = Source
+	target.DeviceSlug = identity.DeviceSlug
+	target.Device = firstNonEmpty(identity.DeviceName, target.Device, source.Device)
+	target.BaseSlug = firstNonEmpty(identity.BaseSlug, target.BaseSlug, source.BaseSlug)
+	target.ObjectName = firstNonEmpty(source.ObjectName, target.ObjectName)
+	if source.LastUpdate.After(target.LastUpdate) {
+		target.LastUpdate = source.LastUpdate
+	}
+	target.HAIdentifiers = append([]string(nil), identity.HAIdentifiers...)
+	target.HAManufacturer = firstNonEmpty(identity.HAManufacturer, target.HAManufacturer, source.HAManufacturer)
+	target.HAModel = firstNonEmpty(identity.HAModel, target.HAModel, source.HAModel)
+	target.SuggestedArea = firstNonEmpty(identity.SuggestedArea, target.SuggestedArea, source.SuggestedArea)
+	target.LegacyDeviceSlugs = mergeStringLists(target.LegacyDeviceSlugs, source.LegacyDeviceSlugs)
+	if sourceSlug != identity.DeviceSlug {
+		target.LegacyDeviceSlugs = mergeStringLists(target.LegacyDeviceSlugs, []string{sourceSlug})
+	}
+	target.LegacyDeviceSlugs = mergeStringLists(target.LegacyDeviceSlugs, identity.LegacyDeviceSlugs)
+	target.LinkedSource = identity.LinkedSource
+	target.LinkedAccount = identity.LinkedAccount
+	target.LinkedZone = identity.LinkedZone
+	target.DiscoveryDisabled = identity.DiscoveryDisabled
+	target.JeedomID = firstNonEmpty(source.JeedomID, target.JeedomID)
+	target.JeedomLogicalID = firstNonEmpty(source.JeedomLogicalID, target.JeedomLogicalID)
+	target.JeedomDeviceType = firstNonEmpty(source.JeedomDeviceType, identity.HAModel, target.JeedomDeviceType)
+	target.JeedomEnabled = source.JeedomEnabled || target.JeedomEnabled
+	target.JeedomVisible = source.JeedomVisible || target.JeedomVisible
+
+	if sourceSlug != identity.DeviceSlug {
+		delete(s.devices, sourceSlug)
+	}
+}
+
+func (s *Store) rebuildIndexesLocked() {
+	s.commands = make(map[string]string)
+	s.eqLogics = make(map[string]string)
+	s.baseGroups = make(map[string][]string)
+	for slug, device := range s.devices {
+		if device == nil {
+			continue
+		}
+		device.DeviceSlug = slug
+		if device.BaseSlug != "" && !containsString(s.baseGroups[device.BaseSlug], slug) {
+			s.baseGroups[device.BaseSlug] = append(s.baseGroups[device.BaseSlug], slug)
+		}
+		if device.JeedomID != "" {
+			s.eqLogics[device.JeedomID] = slug
+		}
+		for commandID, command := range device.RawCommands {
+			command.DeviceSlug = slug
+			command.Device = firstNonEmpty(device.Device, command.Device)
+			device.RawCommands[commandID] = command
+			s.commands[commandID] = slug
+		}
+		for actionName, action := range device.Actions {
+			device.Actions[actionName] = actionForDevice(action, device)
+		}
+		sort.Strings(s.baseGroups[device.BaseSlug])
+	}
 }
 
 func (s *Store) identityForDiscovery(discovery Discovery) DeviceIdentity {
@@ -672,6 +882,10 @@ func (s *Store) Devices() []Device {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
+	return s.devicesLocked()
+}
+
+func (s *Store) devicesLocked() []Device {
 	devices := make([]Device, 0, len(s.devices))
 	for _, device := range s.devices {
 		devices = append(devices, copyDevice(*device))

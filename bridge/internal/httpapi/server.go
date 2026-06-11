@@ -20,6 +20,8 @@ import (
 	"github.com/rs/zerolog"
 )
 
+const jsonContentType = "application/json; charset=utf-8"
+
 type Server struct {
 	addr             string
 	state            *state.Engine
@@ -95,7 +97,7 @@ func (s *Server) ready(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) currentState(w http.ResponseWriter, _ *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Type", jsonContentType)
 	_ = json.NewEncoder(w).Encode(s.state.Snapshot())
 }
 
@@ -108,12 +110,12 @@ func (s *Server) events(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Type", jsonContentType)
 	_ = json.NewEncoder(w).Encode(s.store.ListEvents(limit))
 }
 
 func (s *Server) devicesJSON(w http.ResponseWriter, _ *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Type", jsonContentType)
 	_ = json.NewEncoder(w).Encode(s.devices.Devices())
 }
 
@@ -124,7 +126,7 @@ func (s *Server) admin(w http.ResponseWriter, _ *http.Request) {
 
 func (s *Server) logo(w http.ResponseWriter, r *http.Request) {
 	for _, path := range []string{"logo.png", "bridge/logo.png", "/app/logo.png"} {
-		if _, err := os.Stat(path); err == nil {
+		if info, err := os.Stat(path); err == nil && !info.IsDir() {
 			http.ServeFile(w, r, path)
 			return
 		}
@@ -203,7 +205,7 @@ func (s *Server) adminNotificationHistory(w http.ResponseWriter, r *http.Request
 }
 
 func (s *Server) jeedomDevices(w http.ResponseWriter, _ *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Type", jsonContentType)
 	_ = json.NewEncoder(w).Encode(s.jeedom.Devices())
 }
 
@@ -214,17 +216,17 @@ func (s *Server) jeedomDevice(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Type", jsonContentType)
 	_ = json.NewEncoder(w).Encode(device)
 }
 
 func (s *Server) jeedomCommands(w http.ResponseWriter, _ *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Type", jsonContentType)
 	_ = json.NewEncoder(w).Encode(s.jeedom.Commands())
 }
 
 func (s *Server) jeedomActions(w http.ResponseWriter, _ *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Type", jsonContentType)
 	_ = json.NewEncoder(w).Encode(s.jeedom.Actions())
 }
 
@@ -235,7 +237,7 @@ func (s *Server) jeedomControlAudit(w http.ResponseWriter, r *http.Request) {
 			limit = parsed
 		}
 	}
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Type", jsonContentType)
 	_ = json.NewEncoder(w).Encode(s.jeedom.ControlAudit(limit))
 }
 
@@ -266,7 +268,7 @@ func (s *Server) jeedomControl(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, jeedom.ErrActionDenied):
 			status = http.StatusForbidden
 		}
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", jsonContentType)
 		w.WriteHeader(status)
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"error":  err.Error(),
@@ -274,7 +276,7 @@ func (s *Server) jeedomControl(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Type", jsonContentType)
 	_ = json.NewEncoder(w).Encode(result)
 }
 
@@ -300,6 +302,6 @@ func (s *Server) notificationHistory(limit int) []notifications.Delivery {
 }
 
 func writeJSON(w http.ResponseWriter, value any) {
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Type", jsonContentType)
 	_ = json.NewEncoder(w).Encode(value)
 }

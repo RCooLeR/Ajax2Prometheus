@@ -72,6 +72,7 @@ go build ./cmd/ajaxbridge
 | `AJAXBRIDGE_MQTT_TOPIC_PREFIX` | `ajaxbridge` | MQTT state prefix. |
 | `AJAXBRIDGE_MQTT_DISCOVERY` | `true` | Publish Home Assistant discovery when MQTT is enabled. |
 | `AJAXBRIDGE_JEEDOM_ENABLED` | `false` | Enable Jeedom MQTT input. |
+| `AJAXBRIDGE_JEEDOM_STORE_PATH` | `data/jeedom.json` | Persist discovered Jeedom commands and last values so HA discovery/state can be republished after bridge restarts. |
 | `AJAXBRIDGE_FORWARD_ADDR` | empty | Optional comma-separated raw SIA forward targets. |
 | `AJAXBRIDGE_NOTIFICATIONS_PATH` | `data/notifications.json` | Notification channel/rule config path. |
 
@@ -103,6 +104,7 @@ Legacy `AJAX2PROM_*` variables are still accepted as compatibility aliases.
 | Path | Purpose |
 | --- | --- |
 | `data/devices.json` | Optional catalog with stable names, rooms, kinds, SIA zones, Jeedom aliases, and Jeedom command ids. |
+| `data/jeedom.json` | Optional Jeedom command/value cache used to restore MQTT discovery and retained state after bridge restarts. |
 | `data/notifications.json` | Notification channels and rules. |
 | `tmp-jeedom/*.json` | Optional raw Jeedom MQTT sample envelopes when `AJAXBRIDGE_JEEDOM_SAMPLE_DIR` is set. Disabled by default for production. |
 

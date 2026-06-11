@@ -41,6 +41,8 @@ type App struct {
 	mqtt      *hamqtt.Publisher
 	mqttQueue chan hamqtt.Update
 	notifier  *notifications.Manager
+	jeedom    *jeedom.Store
+	jeedomPub *jeedom.Publisher
 }
 
 func Run(parent context.Context, cfg config.Config, log zerolog.Logger) error {
@@ -114,12 +116,22 @@ func Run(parent context.Context, cfg config.Config, log zerolog.Logger) error {
 
 	var jeedomStore *jeedom.Store
 	var jeedomController *jeedom.Controller
+	var jeedomPublisher *jeedom.Publisher
 	if cfg.JeedomEnabled {
-		jeedomStore = jeedom.NewStoreWithResolver(cfg.JeedomEmptyValuePolicy, jeedom.NewCatalogResolver(devices, jeedom.CatalogResolverConfig{
+		resolver := jeedom.NewCatalogResolver(devices, jeedom.CatalogResolverConfig{
 			Account:          cfg.Account,
 			AccountNames:     cfg.JeedomAccountNames,
 			DiscoverUnlinked: cfg.JeedomDiscoverUnlinked,
-		}))
+		})
+		jeedomStore, err = jeedom.LoadStore(ctx, cfg.JeedomStorePath, cfg.JeedomEmptyValuePolicy, resolver)
+		if err != nil {
+			log.Warn().Err(err).Str("path", cfg.JeedomStorePath).Msg("Jeedom cache not loaded; starting empty")
+			jeedomStore = jeedom.NewStoreWithResolver(cfg.JeedomEmptyValuePolicy, resolver)
+			jeedomStore.SetPath(cfg.JeedomStorePath)
+		} else if cfg.JeedomStorePath != "" {
+			log.Info().Str("path", cfg.JeedomStorePath).Int("devices", len(jeedomStore.Devices())).Msg("Jeedom cache loaded")
+		}
+		jeedomStore.ReconcileResolver(resolver)
 		if mqttPublisher != nil {
 			jeedomController = jeedom.NewController(jeedom.ControllerConfig{
 				Enabled:              cfg.JeedomControlsEnabled,
@@ -127,6 +139,15 @@ func Run(parent context.Context, cfg config.Config, log zerolog.Logger) error {
 				JeedomSetTopicPrefix: cfg.JeedomSetTopicPrefix,
 				CommandPayload:       cfg.JeedomControlPayload,
 			}, jeedomStore, mqttPublisher, log.With().Str("component", "jeedom_control").Logger())
+			jeedomPublisher = jeedom.NewPublisher(jeedom.PublisherConfig{
+				StateTopicPrefix: cfg.JeedomStateTopicPrefix,
+				Discovery:        cfg.JeedomDiscovery,
+				DiscoveryPrefix:  cfg.MQTTDiscoveryPrefix,
+				DiscoveryNode:    cfg.MQTTTopicPrefix,
+				RetainState:      cfg.JeedomRetainState,
+				RetainDiscovery:  cfg.JeedomRetainDiscovery,
+				Controls:         cfg.JeedomControlsEnabled,
+			}, mqttPublisher)
 		}
 	}
 
@@ -143,10 +164,17 @@ func Run(parent context.Context, cfg config.Config, log zerolog.Logger) error {
 		mqtt:      mqttPublisher,
 		mqttQueue: mqttQueue,
 		notifier:  notifier,
+		jeedom:    jeedomStore,
+		jeedomPub: jeedomPublisher,
 	}
 	notificationObserver := notificationObserver{app: application}
 	if jeedomController != nil {
 		jeedomController.SetObserver(notificationObserver)
+	}
+	if application.mqtt != nil {
+		application.mqtt.AddConnectHandler(func(context.Context) {
+			application.publishRetainedMQTT(ctx)
+		})
 	}
 
 	httpServer := httpapi.New(
@@ -164,15 +192,6 @@ func Run(parent context.Context, cfg config.Config, log zerolog.Logger) error {
 	siaServer := sia.NewServer(cfg.SIAListenAddr, cfg.ReadTimeout, application.handleSIAFrame, log.With().Str("component", "sia").Logger())
 
 	if cfg.JeedomEnabled && mqttPublisher != nil {
-		jeedomPublisher := jeedom.NewPublisher(jeedom.PublisherConfig{
-			StateTopicPrefix: cfg.JeedomStateTopicPrefix,
-			Discovery:        cfg.JeedomDiscovery,
-			DiscoveryPrefix:  cfg.MQTTDiscoveryPrefix,
-			DiscoveryNode:    cfg.MQTTTopicPrefix,
-			RetainState:      cfg.JeedomRetainState,
-			RetainDiscovery:  cfg.JeedomRetainDiscovery,
-			Controls:         cfg.JeedomControlsEnabled,
-		}, mqttPublisher)
 		jeedomService := jeedom.NewService(
 			jeedom.ServiceConfig{EventTopic: cfg.JeedomEventTopic, DiscoveryTopic: cfg.JeedomDiscoveryTopic, SetTopicPrefix: cfg.JeedomSetTopicPrefix},
 			jeedomStore,
@@ -253,8 +272,57 @@ func (o notificationObserver) ObserveJeedomControl(ctx context.Context, result j
 }
 
 func (a *App) handleCatalogChanged(snapshot state.Snapshot) {
+	if a.jeedom != nil {
+		resolver := jeedom.NewCatalogResolver(a.devices, jeedom.CatalogResolverConfig{
+			Account:          a.cfg.Account,
+			AccountNames:     a.cfg.JeedomAccountNames,
+			DiscoverUnlinked: a.cfg.JeedomDiscoverUnlinked,
+		})
+		devices := a.jeedom.ReconcileResolver(resolver)
+		if err := a.jeedom.Save(context.Background()); err != nil {
+			a.log.Warn().Err(err).Msg("persist Jeedom cache after catalog change")
+		}
+		if a.jeedomPub != nil {
+			ctx, cancel := context.WithTimeout(context.Background(), a.cfg.MQTTTimeout)
+			defer cancel()
+			for _, device := range devices {
+				if err := a.jeedomPub.PublishDevice(ctx, device); err != nil {
+					a.log.Debug().Err(err).Str("device", device.DeviceSlug).Msg("publish Jeedom device after catalog change")
+				}
+			}
+		}
+	}
 	a.metrics.SetSnapshot(snapshot)
 	a.enqueueMQTTUpdate(hamqtt.Update{Accounts: snapshot.Accounts, Zones: snapshot.Zones})
+}
+
+func (a *App) publishRetainedMQTT(ctx context.Context) {
+	if a == nil || a.mqtt == nil {
+		return
+	}
+	snapshot := a.state.Snapshot()
+	if err := a.mqtt.PublishUpdate(ctx, hamqtt.Update{Accounts: snapshot.Accounts, Zones: snapshot.Zones}); err != nil {
+		a.log.Debug().Err(err).Msg("publish retained MQTT snapshot")
+	}
+	a.publishJeedomDevices(ctx, a.storedJeedomDevices(), "publish retained Jeedom MQTT state")
+}
+
+func (a *App) storedJeedomDevices() []jeedom.Device {
+	if a == nil || a.jeedom == nil {
+		return nil
+	}
+	return a.jeedom.Devices()
+}
+
+func (a *App) publishJeedomDevices(ctx context.Context, devices []jeedom.Device, message string) {
+	if a == nil || a.jeedomPub == nil {
+		return
+	}
+	for _, device := range devices {
+		if err := a.jeedomPub.PublishDevice(ctx, device); err != nil {
+			a.log.Debug().Err(err).Str("device", device.DeviceSlug).Msg(message)
+		}
+	}
 }
 
 func (a *App) handleSIAFrame(ctx context.Context, raw []byte, remoteAddr string) ([]byte, error) {

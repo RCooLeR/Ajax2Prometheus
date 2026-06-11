@@ -107,6 +107,7 @@ environment:
   AJAXBRIDGE_JEEDOM_STATE_TOPIC_PREFIX: "ajaxbridge/jeedom"
   AJAXBRIDGE_JEEDOM_DISCOVERY: "true"
   AJAXBRIDGE_JEEDOM_EMPTY_VALUE_POLICY: "keep_last"
+  AJAXBRIDGE_JEEDOM_STORE_PATH: "/data/jeedom.json"
   # Optional debugging only. Leave unset in production.
   # AJAXBRIDGE_JEEDOM_SAMPLE_DIR: "/data/tmp-jeedom"
   AJAXBRIDGE_JEEDOM_DISCOVER_UNLINKED: "false"
@@ -128,12 +129,25 @@ Variables:
 | `AJAXBRIDGE_JEEDOM_EMPTY_VALUE_POLICY` | `keep_last` | `keep_last` or `unknown`. |
 | `AJAXBRIDGE_JEEDOM_RETAIN_STATE` | `true` | Retain normalized Jeedom state messages. |
 | `AJAXBRIDGE_JEEDOM_RETAIN_DISCOVERY` | `true` | Retain Jeedom HA discovery configs. |
+| `AJAXBRIDGE_JEEDOM_STORE_PATH` | `data/jeedom.json` | Persists discovered Jeedom commands and last values so AjaxBridge can republish HA discovery/state after restart without forcing Jeedom MQTT discovery again. Empty keeps Jeedom data in memory only. |
 | `AJAXBRIDGE_JEEDOM_SAMPLE_DIR` | empty | Raw Jeedom MQTT sample capture directory. Empty disables capture. Leave empty in production. |
 | `AJAXBRIDGE_JEEDOM_DISCOVER_UNLINKED` | `false` | Publish HA discovery for Jeedom devices not linked to SIA catalog devices. |
 | `AJAXBRIDGE_JEEDOM_ACCOUNT_NAMES` | empty | Jeedom names that represent the SIA account/hub device. |
 | `AJAXBRIDGE_JEEDOM_CONTROLS_ENABLED` | `false` | Enable allowlisted toggles and relay impulse controls. |
 | `AJAXBRIDGE_JEEDOM_SET_TOPIC_PREFIX` | `jeedom/cmd/set` | Jeedom action topic prefix. |
 | `AJAXBRIDGE_JEEDOM_CONTROL_PAYLOAD` | `1` | Payload sent to Jeedom action topics. |
+
+## Restart Behavior
+
+AjaxBridge keeps the normalized Jeedom mirror in memory while it runs and, by default, persists that mirror to `data/jeedom.json`. The file contains discovered Jeedom devices, command metadata, action metadata, and the latest normalized values.
+
+On startup, AjaxBridge loads this cache before subscribing to Jeedom MQTT topics. On every MQTT broker connect or reconnect, it republishes:
+
+- retained Ajax/SIA account and zone discovery/state
+- retained Jeedom Home Assistant discovery configs
+- retained Jeedom state payloads, including measurements such as temperature, power, current, voltage, battery, humidity, and energy
+
+That means a normal bridge restart should not require forcing Jeedom MQTT Manager to resend eqLogic discovery. Force Jeedom discovery only when `data/jeedom.json` is missing, empty, stale, or you have changed Jeedom equipment/commands and want the bridge to learn the new command list immediately.
 
 ## Expected Jeedom Event Payload
 

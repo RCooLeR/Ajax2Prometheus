@@ -11,7 +11,7 @@ The bridge is built around two inputs:
 - SIA DC-09 from Ajax as the authoritative security source.
 - Optional Jeedom MQTT for device metrics, allowlisted toggles, and relay impulse controls.
 
-No database is required. Runtime state is kept in memory, and the optional device catalog lives in `data/devices.json`.
+No database is required. Runtime SIA state is kept in memory, the optional device catalog lives in `data/devices.json`, and the optional Jeedom mirror cache lives in `data/jeedom.json`.
 
 For your current production setup, use [docker-compose.production.yml](./docker-compose.production.yml). It uses account `A0F80D`, MQTT broker `tcp://192.168.100.100:1883`, the local `./data` catalog, Jeedom MQTT input, and allowlisted Jeedom controls.
 
