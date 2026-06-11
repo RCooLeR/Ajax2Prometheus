@@ -108,6 +108,15 @@ Legacy `AJAX2PROM_*` variables are still accepted as compatibility aliases.
 | `data/notifications.json` | Notification channels and rules. |
 | `tmp-jeedom/*.json` | Optional raw Jeedom MQTT sample envelopes when `AJAXBRIDGE_JEEDOM_SAMPLE_DIR` is set. Disabled by default for production. |
 
+## CI
+
+Every pushed branch and pull request runs the `ci` GitHub Actions workflow:
+
+- `bridge`: sets up Go from `bridge/go.mod`, then runs `go vet ./...` and `go test ./...` from the bridge module.
+- `ha-cards`: installs with `npm ci`, then runs `npm run check` and `npm run build`.
+
+Release packaging remains in the tag-only `release` workflow.
+
 ## Recommended Setup Order
 
 1. Run AjaxBridge with SIA only and confirm `/state` receives Ajax events.

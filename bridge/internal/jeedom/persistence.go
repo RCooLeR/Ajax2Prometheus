@@ -100,6 +100,8 @@ func decodePersistedDevices(data []byte) ([]Device, error) {
 	if len(data) == 0 {
 		return nil, nil
 	}
+	// Accept a bare device array as a forwards-compatible escape hatch for
+	// hand-edited caches and early development builds.
 	if len(data) > 0 && data[0] == '[' {
 		var devices []Device
 		if err := json.Unmarshal(data, &devices); err != nil {

@@ -1,6 +1,8 @@
 package jeedom
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -67,6 +69,33 @@ func TestLoadStoreAcceptsMissingFileAsEmptyCache(t *testing.T) {
 	}
 	if got := len(store.Devices()); got != 0 {
 		t.Fatalf("devices = %d, want empty cache", got)
+	}
+}
+
+func TestLoadStoreAcceptsLegacyDeviceArray(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "jeedom.json")
+	if err := os.WriteFile(path, []byte(`[{
+	  "source":"jeedom",
+	  "device":"Server power",
+	  "device_slug":"server_power",
+	  "values":{"temperature_c":18.6},
+	  "raw_commands":{
+	    "57":{"command_id":"57","device":"Server power","device_slug":"server_power","name":"Temperature","metric":"temperature_c","component":"sensor","type":"info","subtype":"numeric","unit":"°C"}
+	  }
+	}]`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	store, err := LoadStore(t.Context(), path, "keep_last", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	device, ok := store.Device("server_power")
+	if !ok {
+		t.Fatal("missing device loaded from legacy array")
+	}
+	if got := device.RawCommands["57"].Metric; got != "temperature_c" {
+		t.Fatalf("metric = %q, want temperature_c", got)
 	}
 }
 

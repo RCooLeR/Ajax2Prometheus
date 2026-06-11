@@ -300,6 +300,8 @@ func (a *App) publishRetainedMQTT(ctx context.Context) {
 	if a == nil || a.mqtt == nil {
 		return
 	}
+	// MQTT retained messages can disappear after broker maintenance, so every
+	// connect/reconnect republishes the last known SIA and Jeedom surfaces.
 	snapshot := a.state.Snapshot()
 	if err := a.mqtt.PublishUpdate(ctx, hamqtt.Update{Accounts: snapshot.Accounts, Zones: snapshot.Zones}); err != nil {
 		a.log.Debug().Err(err).Msg("publish retained MQTT snapshot")
