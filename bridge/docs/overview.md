@@ -36,10 +36,10 @@ From `bridge/`:
 docker compose up -d
 ```
 
-For the current production setup with the collected `data/devices.json`, Jeedom enabled, and MQTT broker `tcp://192.168.100.100:1883`:
+For production, keep host-specific values in an untracked override or private compose file. The tracked compose file is the safe baseline; production data belongs in `./data` so it is not committed but still survives restarts:
 
 ```bash
-docker compose -f docker-compose.production.yml up -d
+docker compose -f docker-compose.yml -f docker-compose.override.yml up -d
 ```
 
 Check the service:

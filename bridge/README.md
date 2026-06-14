@@ -13,7 +13,7 @@ The bridge is built around two inputs:
 
 No database is required. Runtime SIA state is kept in memory, the optional device catalog lives in `data/devices.json`, and the optional Jeedom mirror cache lives in `data/jeedom.json`.
 
-For your current production setup, use [docker-compose.production.yml](./docker-compose.production.yml). It uses account `A0F80D`, MQTT broker `tcp://192.168.100.100:1883`, the local `./data` catalog, Jeedom MQTT input, and allowlisted Jeedom controls.
+Use [docker-compose.yml](./docker-compose.yml) as the tracked baseline and keep site-specific production overrides private, for example in an untracked `docker-compose.production.yml` or `docker-compose.override.yml`. Production data should stay under `./data` so the device catalog, notifications, and Jeedom cache survive container restarts.
 
 CI runs on every pushed branch and pull request. It verifies the Go bridge with `go vet` and `go test`, and verifies the Home Assistant cards with TypeScript check plus production build.
 
@@ -31,6 +31,7 @@ AjaxBridge is an unofficial DIY open-source project for compatibility and integr
 - [Notifications](./docs/notifications.md)
 - [Admin panel](./docs/admin.md)
 - [Home Assistant integration and technical guide](./docs/home-assistant.md)
+- [Runtime contracts](./docs/contracts.md)
 - [Home Assistant card package](../ha-cards/README.md)
 - [Disclaimer and trademark notice](../NOTICE)
 

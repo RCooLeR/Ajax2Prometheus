@@ -1,12 +1,12 @@
 module github.com/RCooLeR/AjaxBridge
 
-go 1.26.2
+go 1.26.4
 
 require (
 	github.com/eclipse/paho.mqtt.golang v1.5.1
-	github.com/go-chi/chi/v5 v5.2.5
+	github.com/go-chi/chi/v5 v5.3.0
 	github.com/prometheus/client_golang v1.23.2
-	github.com/rs/zerolog v1.35.0
+	github.com/rs/zerolog v1.35.1
 	github.com/urfave/cli/v2 v2.27.7
 )
 

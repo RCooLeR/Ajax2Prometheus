@@ -1,5 +1,5 @@
 # --- Stage 1: Build the Go binary ---
-FROM --platform=$BUILDPLATFORM golang:1.26.2-alpine AS builder
+FROM --platform=$BUILDPLATFORM golang:1.26.4-alpine3.24 AS builder
 
 ARG TARGETOS
 ARG TARGETARCH
@@ -18,7 +18,7 @@ COPY . .
 RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -trimpath -ldflags="-s -w" -o /out/ajaxbridge ./cmd/ajaxbridge
 
 # --- Stage 2: Create a lightweight image with the binary only ---
-FROM alpine:3.23
+FROM alpine:3.24
 
 # Add CA certs for HTTPS support
 RUN apk upgrade --no-cache && apk add --no-cache ca-certificates

@@ -31,3 +31,7 @@
 ## Home Assistant
 
 - [Home Assistant integration and technical guide](./home-assistant.md): MQTT Discovery setup, created devices, naming rules, sensors, commands, topics, payloads, dashboard/card guidance, and troubleshooting.
+
+## Runtime Contracts
+
+- [Runtime contracts](./contracts.md): stable HTTP, MQTT, and Home Assistant discovery surfaces that dashboards and automations depend on.

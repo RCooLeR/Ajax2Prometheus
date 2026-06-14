@@ -253,6 +253,62 @@ func TestDiscoveryIncludesStateTopicAsJSONAttributesTopic(t *testing.T) {
 	}
 }
 
+func TestZoneDiscoveryPayloadKeepsStableHAContract(t *testing.T) {
+	client := &stubClient{open: true}
+	publisher := New(Config{
+		Broker:          "tcp://mqtt.local:1883",
+		ClientID:        "ajaxbridge",
+		TopicPrefix:     "ajaxbridge",
+		Discovery:       true,
+		DiscoveryPrefix: "homeassistant",
+		Timeout:         time.Second,
+		Retain:          true,
+	}, zerologNop())
+	publisher.client = client
+
+	if err := publisher.PublishUpdate(t.Context(), Update{
+		Zones: []state.Zone{{
+			Account:      "A0F80D",
+			Zone:         "8",
+			DeviceName:   "Server room detector",
+			Kind:         "FireProtect",
+			Room:         "Server Room",
+			DeviceEvents: []string{"fire"},
+		}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	topic := "homeassistant/binary_sensor/ajaxbridge/zone_a0f80d_8_alarm_active/config"
+	raw, ok := client.payloadForTopic(topic).([]byte)
+	if !ok {
+		t.Fatalf("discovery payload for %s = %#v, want []byte", topic, client.payloadForTopic(topic))
+	}
+	var cfg discoveryConfig
+	if err := json.Unmarshal(raw, &cfg); err != nil {
+		t.Fatal(err)
+	}
+
+	if cfg.UniqueID != "ajaxbridge_zone_a0f80d_8_alarm_active" {
+		t.Fatalf("UniqueID = %q", cfg.UniqueID)
+	}
+	if cfg.StateTopic != "ajaxbridge/accounts/A0F80D/zones/8/state" {
+		t.Fatalf("StateTopic = %q", cfg.StateTopic)
+	}
+	if cfg.JSONAttributesTopic != cfg.StateTopic {
+		t.Fatalf("JSONAttributesTopic = %q, want state topic", cfg.JSONAttributesTopic)
+	}
+	if cfg.ValueTemplate != "{{ 'ON' if value_json.alarm_active else 'OFF' }}" {
+		t.Fatalf("ValueTemplate = %q", cfg.ValueTemplate)
+	}
+	if cfg.Device.Name != "Server room detector" || cfg.Device.Model != "FireProtect" || cfg.Device.SuggestedArea != "Server Room" {
+		t.Fatalf("device metadata = %#v", cfg.Device)
+	}
+	if len(cfg.Device.Identifiers) != 1 || cfg.Device.Identifiers[0] != "ajaxbridge_A0F80D_zone_8" {
+		t.Fatalf("device identifiers = %#v", cfg.Device.Identifiers)
+	}
+}
+
 func TestPublishUpdateRefreshesZoneDiscoveryWhenSignalSetChanges(t *testing.T) {
 	client := &stubClient{open: true}
 	publisher := New(Config{
