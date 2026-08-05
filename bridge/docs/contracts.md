@@ -16,11 +16,16 @@ JSON field names are snake_case and should remain stable because the admin UI, H
 Default state topics use the `ajaxbridge` prefix:
 
 - `ajaxbridge/accounts/{account}/state`
+- `ajaxbridge/accounts/{account}/attributes`
 - `ajaxbridge/accounts/{account}/zones/{zone}/state`
+- `ajaxbridge/accounts/{account}/zones/{zone}/attributes`
 - `ajaxbridge/jeedom/devices/{device_slug}/state`
+- `ajaxbridge/jeedom/devices/{device_slug}/attributes`
 - `ajaxbridge/status`
 
-State messages are retained when MQTT retain is enabled. On MQTT reconnect, AjaxBridge resets its publish caches and republishes retained SIA state plus cached Jeedom discovery/state so Home Assistant can recover without resubmitting Jeedom discovery.
+State messages are retained when MQTT retain is enabled. Attribute messages are always retained because they contain only stable device metadata used by Home Assistant entities. Dynamic state payloads keep their existing fields and topics for direct MQTT consumers, but Home Assistant discovery does not import those payloads wholesale as entity attributes.
+
+On MQTT reconnect, AjaxBridge resets its publish caches and republishes retained SIA state plus cached Jeedom discovery/state and metadata so Home Assistant can recover without resubmitting Jeedom discovery.
 
 ## Home Assistant Discovery
 
@@ -43,3 +48,5 @@ The Home Assistant cards consume Home Assistant device/entity registries and sta
 - Jeedom devices: `ajaxbridge_jeedom_{device_slug}` unless linked to a SIA identifier
 
 Card-facing models live in `ha-cards/src/models/dashboard.ts`; keep those TypeScript shapes in sync with any bridge output or Home Assistant discovery changes.
+
+Home Assistant cards should use the dedicated entity states for dynamic values. Compact entity attributes retain stable identity and classification fields such as `account`, `zone`, `kind`, `device_slug`, and `jeedom_device_type`. Full Jeedom command/action details remain available through HTTP JSON and the unchanged MQTT `/state` payload.

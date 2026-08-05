@@ -41,7 +41,7 @@ type Publisher struct {
 	client          paho.Client
 	log             zerolog.Logger
 	mu              sync.Mutex
-	discovered      map[string]struct{}
+	discovered      map[string]string
 	publishedStates map[string]string
 	accountPlans    map[string]accountPlan
 	zonePlans       map[string]zonePlan
@@ -57,16 +57,18 @@ type Update struct {
 type MessageHandler = func(topic string, payload []byte)
 
 type accountPlan struct {
-	stateTopic string
-	cleanup    []discoveryMessage
-	discovery  []discoveryMessage
+	stateTopic      string
+	attributesTopic string
+	cleanup         []discoveryMessage
+	discovery       []discoveryMessage
 }
 
 type zonePlan struct {
-	signature  string
-	stateTopic string
-	cleanup    []discoveryMessage
-	discovery  []discoveryMessage
+	signature       string
+	stateTopic      string
+	attributesTopic string
+	cleanup         []discoveryMessage
+	discovery       []discoveryMessage
 }
 
 type discoveryMessage struct {
@@ -157,6 +159,22 @@ type accountPayload struct {
 	LastPingUnix   int64  `json:"last_ping_unix"`
 }
 
+type accountAttributesPayload struct {
+	Account string `json:"account"`
+}
+
+type zoneAttributesPayload struct {
+	Account      string   `json:"account"`
+	Partition    string   `json:"partition"`
+	Group        string   `json:"group"`
+	Zone         string   `json:"zone"`
+	Device       string   `json:"device"`
+	DeviceName   string   `json:"device_name"`
+	Room         string   `json:"room"`
+	Kind         string   `json:"kind"`
+	DeviceEvents []string `json:"device_events"`
+}
+
 func New(cfg Config, log zerolog.Logger) *Publisher {
 	cfg.Broker = strings.TrimSpace(cfg.Broker)
 	cfg.ClientID = fallback(strings.TrimSpace(cfg.ClientID), "ajaxbridge")
@@ -168,7 +186,7 @@ func New(cfg Config, log zerolog.Logger) *Publisher {
 	return &Publisher{
 		cfg:             cfg,
 		log:             log,
-		discovered:      make(map[string]struct{}),
+		discovered:      make(map[string]string),
 		publishedStates: make(map[string]string),
 		accountPlans:    make(map[string]accountPlan),
 		zonePlans:       make(map[string]zonePlan),
@@ -371,7 +389,14 @@ func (p *Publisher) publishAccount(ctx context.Context, account state.Account) e
 	if err != nil {
 		return err
 	}
-	return p.publishState(ctx, plan.stateTopic, payload, p.cfg.Retain)
+	if err := p.publishState(ctx, plan.stateTopic, payload, p.cfg.Retain); err != nil {
+		return err
+	}
+	attributes, err := json.Marshal(accountAttributes(account))
+	if err != nil {
+		return err
+	}
+	return p.publishState(ctx, plan.attributesTopic, attributes, true)
 }
 
 func (p *Publisher) publishZone(ctx context.Context, zone state.Zone) error {
@@ -395,15 +420,22 @@ func (p *Publisher) publishZone(ctx context.Context, zone state.Zone) error {
 	if err != nil {
 		return err
 	}
-	return p.publishState(ctx, plan.stateTopic, payload, p.cfg.Retain)
+	if err := p.publishState(ctx, plan.stateTopic, payload, p.cfg.Retain); err != nil {
+		return err
+	}
+	attributes, err := json.Marshal(zoneAttributes(zone))
+	if err != nil {
+		return err
+	}
+	return p.publishState(ctx, plan.attributesTopic, attributes, true)
 }
 
 func (p *Publisher) publishDiscoveryMessage(ctx context.Context, message discoveryMessage) error {
-	if !p.markDiscoveredPending(message.key) {
+	if !p.markDiscoveredPending(message.topic, message.payload) {
 		return nil
 	}
 	if err := p.publish(ctx, message.topic, message.payload, true); err != nil {
-		p.clearDiscovered(message.key)
+		p.clearDiscovered(message.topic)
 		return err
 	}
 	return nil
@@ -446,7 +478,7 @@ func (p *Publisher) wait(ctx context.Context, token paho.Token) error {
 func (p *Publisher) resetCaches() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	p.discovered = make(map[string]struct{})
+	p.discovered = make(map[string]string)
 	p.publishedStates = make(map[string]string)
 }
 
@@ -479,20 +511,21 @@ func (p *Publisher) notifyConnected() {
 	}
 }
 
-func (p *Publisher) markDiscoveredPending(key string) bool {
+func (p *Publisher) markDiscoveredPending(topic string, payload []byte) bool {
+	payloadValue := string(payload)
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	if _, ok := p.discovered[key]; ok {
+	if cached, ok := p.discovered[topic]; ok && cached == payloadValue {
 		return false
 	}
-	p.discovered[key] = struct{}{}
+	p.discovered[topic] = payloadValue
 	return true
 }
 
-func (p *Publisher) clearDiscovered(key string) {
+func (p *Publisher) clearDiscovered(topic string) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	delete(p.discovered, key)
+	delete(p.discovered, topic)
 }
 
 func (p *Publisher) shouldPublishState(topic string, payload []byte) bool {
@@ -524,6 +557,7 @@ func (p *Publisher) accountPlanFor(account state.Account) (accountPlan, error) {
 	discovery, err := p.buildDiscoveryMessages(
 		accountEntities(account.Account),
 		p.accountStateTopic(account.Account),
+		p.accountAttributesTopic(account.Account),
 		accountDevice(account),
 		p.discoveryNode(),
 	)
@@ -531,9 +565,10 @@ func (p *Publisher) accountPlanFor(account state.Account) (accountPlan, error) {
 		return accountPlan{}, err
 	}
 	plan = accountPlan{
-		stateTopic: p.accountStateTopic(account.Account),
-		cleanup:    p.legacyCleanupMessages(accountEntities(account.Account)),
-		discovery:  discovery,
+		stateTopic:      p.accountStateTopic(account.Account),
+		attributesTopic: p.accountAttributesTopic(account.Account),
+		cleanup:         p.legacyCleanupMessages(accountEntities(account.Account)),
+		discovery:       discovery,
 	}
 
 	p.mu.Lock()
@@ -561,6 +596,7 @@ func (p *Publisher) zonePlanFor(zone state.Zone) (zonePlan, error) {
 	discovery, err := p.buildDiscoveryMessages(
 		entities,
 		p.zoneStateTopic(zone.Account, zone.Zone),
+		p.zoneAttributesTopic(zone.Account, zone.Zone),
 		zoneDevice(zone),
 		p.discoveryNode(),
 	)
@@ -568,10 +604,11 @@ func (p *Publisher) zonePlanFor(zone state.Zone) (zonePlan, error) {
 		return zonePlan{}, err
 	}
 	plan = zonePlan{
-		signature:  signature,
-		stateTopic: p.zoneStateTopic(zone.Account, zone.Zone),
-		cleanup:    p.zoneCleanupMessages(zone, entities),
-		discovery:  discovery,
+		signature:       signature,
+		stateTopic:      p.zoneStateTopic(zone.Account, zone.Zone),
+		attributesTopic: p.zoneAttributesTopic(zone.Account, zone.Zone),
+		cleanup:         p.zoneCleanupMessages(zone, entities),
+		discovery:       discovery,
 	}
 
 	p.mu.Lock()
@@ -585,7 +622,7 @@ func (p *Publisher) zonePlanFor(zone state.Zone) (zonePlan, error) {
 	return plan, nil
 }
 
-func (p *Publisher) buildDiscoveryMessages(entities []entity, stateTopic string, device deviceInfo, node string) ([]discoveryMessage, error) {
+func (p *Publisher) buildDiscoveryMessages(entities []entity, stateTopic, attributesTopic string, device deviceInfo, node string) ([]discoveryMessage, error) {
 	messages := make([]discoveryMessage, 0, len(entities))
 	for _, ent := range entities {
 		cfg := discoveryConfig{
@@ -599,7 +636,7 @@ func (p *Publisher) buildDiscoveryMessages(entities []entity, stateTopic string,
 			DeviceClass:         ent.DeviceClass,
 			EntityCategory:      ent.EntityCategory,
 			Icon:                ent.Icon,
-			JSONAttributesTopic: stateTopic,
+			JSONAttributesTopic: attributesTopic,
 			Device:              device,
 		}
 		if ent.Binary {
@@ -768,8 +805,16 @@ func (p *Publisher) accountStateTopic(account string) string {
 	return p.cfg.TopicPrefix + "/accounts/" + topicPart(account) + "/state"
 }
 
+func (p *Publisher) accountAttributesTopic(account string) string {
+	return p.cfg.TopicPrefix + "/accounts/" + topicPart(account) + "/attributes"
+}
+
 func (p *Publisher) zoneStateTopic(account, zone string) string {
 	return p.cfg.TopicPrefix + "/accounts/" + topicPart(account) + "/zones/" + topicPart(zone) + "/state"
+}
+
+func (p *Publisher) zoneAttributesTopic(account, zone string) string {
+	return p.cfg.TopicPrefix + "/accounts/" + topicPart(account) + "/zones/" + topicPart(zone) + "/attributes"
 }
 
 func (p *Publisher) discoveryTopic(component, node, objectID string) string {
@@ -971,6 +1016,24 @@ func accountState(account state.Account) accountPayload {
 		LastEventUnix:  unixTime(account.LastEventAt),
 		LastPingAt:     mqttTime(account.LastPingAt),
 		LastPingUnix:   unixTime(account.LastPingAt),
+	}
+}
+
+func accountAttributes(account state.Account) accountAttributesPayload {
+	return accountAttributesPayload{Account: account.Account}
+}
+
+func zoneAttributes(zone state.Zone) zoneAttributesPayload {
+	return zoneAttributesPayload{
+		Account:      zone.Account,
+		Partition:    zone.Partition,
+		Group:        zone.Group,
+		Zone:         zone.Zone,
+		Device:       fallback(zone.Device, zone.Zone),
+		DeviceName:   zone.DeviceName,
+		Room:         zone.Room,
+		Kind:         zone.Kind,
+		DeviceEvents: append([]string(nil), zone.DeviceEvents...),
 	}
 }
 

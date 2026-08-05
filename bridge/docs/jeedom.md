@@ -237,6 +237,25 @@ Example:
 }
 ```
 
+The full `/state` payload is kept unchanged for MQTT consumers and debugging. Home Assistant entities no longer copy it wholesale into every entity. Their `json_attributes_topic` points to a compact retained metadata payload:
+
+```text
+ajaxbridge/jeedom/devices/<device_slug>/attributes
+```
+
+```json
+{
+  "source": "jeedom",
+  "object": "None",
+  "device": "Server power",
+  "device_slug": "sia_a0f80d_zone_8",
+  "jeedom_id": "7",
+  "jeedom_device_type": "WallSwitch"
+}
+```
+
+This preserves card and automation fields used for stable device identity and classification while excluding volatile `raw_commands`, `actions`, values, and timestamps from Home Assistant entity attributes. Full command/action metadata remains available from the HTTP endpoints and `/state`.
+
 ## French To English Translation
 
 Known Jeedom command labels are translated to English before being exposed to Home Assistant discovery, Prometheus labels, and debug JSON. The original label remains in `raw_name`.

@@ -63,6 +63,7 @@ type Engine struct {
 	devices      *devicecatalog.Catalog
 	accounts     map[string]*Account
 	zones        map[string]*Zone
+	directAlarms map[string]bool
 }
 
 func NewEngine(offlineGrace time.Duration, devices *devicecatalog.Catalog) *Engine {
@@ -71,6 +72,7 @@ func NewEngine(offlineGrace time.Duration, devices *devicecatalog.Catalog) *Engi
 		devices:      devices,
 		accounts:     make(map[string]*Account),
 		zones:        make(map[string]*Zone),
+		directAlarms: make(map[string]bool),
 	}
 	engine.seedCatalogDevices()
 	return engine
@@ -93,9 +95,15 @@ func (e *Engine) Apply(evt event.Normalized) Snapshot {
 
 	switch evt.EventClass {
 	case event.ClassAlarm:
-		account.AlarmActive = true
+		if evt.Zone == "" {
+			e.directAlarms[account.Account] = true
+			account.AlarmActive = true
+		}
 	case event.ClassRestore:
 		applyAccountRestore(account, evt)
+		if evt.Zone == "" {
+			e.directAlarms[account.Account] = false
+		}
 	case event.ClassArm:
 		account.Armed = true
 		account.NightMode = false
@@ -112,7 +120,7 @@ func (e *Engine) Apply(evt event.Normalized) Snapshot {
 			account.Armed = false
 			account.NightMode = false
 			account.PartiallyArmed = false
-			account.AlarmActive = false
+			e.directAlarms[account.Account] = false
 		}
 	case event.ClassTamper:
 		account.TamperActive = true
@@ -144,6 +152,13 @@ func (e *Engine) Apply(evt event.Normalized) Snapshot {
 		case event.ClassTrouble:
 			zone.TroubleActive = true
 			zone.setSignal(evt.Signal, true)
+			if evt.EventAction == "device_bypassed" {
+				clearZoneAlarm(zone)
+			}
+		case event.ClassCommon:
+			if evt.EventAction == "turned_off" {
+				clearZoneAlarm(zone)
+			}
 		case event.ClassArm:
 			zone.setSignal("arming", true)
 			zone.setSignal("night_mode", false)
@@ -160,6 +175,7 @@ func (e *Engine) Apply(evt event.Normalized) Snapshot {
 			}
 		}
 	}
+	e.refreshAccountAlarmLocked(evt.Account)
 
 	e.refreshOnlineLocked(time.Now().UTC())
 	return e.snapshotLocked()
@@ -237,6 +253,23 @@ func (e *Engine) refreshOnlineLocked(now time.Time) {
 			account.Mode = "disarmed"
 		}
 	}
+}
+
+func (e *Engine) refreshAccountAlarmLocked(accountID string) {
+	account := e.accounts[accountID]
+	if account == nil {
+		return
+	}
+	active := e.directAlarms[accountID]
+	if !active {
+		for _, zone := range e.zones {
+			if zone.Account == accountID && zone.AlarmActive {
+				active = true
+				break
+			}
+		}
+	}
+	account.AlarmActive = active
 }
 
 func (e *Engine) snapshotLocked() Snapshot {
@@ -348,14 +381,22 @@ func applyZoneRestore(zone *Zone, evt event.Normalized) {
 		zone.TroubleActive = false
 		zone.setSignal(evt.Signal, false)
 	default:
-		zone.AlarmActive = false
-		zone.AlarmSignal = ""
-		zone.AlarmAction = ""
-		zone.AlarmEventCode = ""
-		zone.AlarmEventName = ""
-		zone.AlarmStartedAt = time.Time{}
+		clearZoneAlarm(zone)
 		zone.setSignal(evt.Signal, false)
 	}
+}
+
+func clearZoneAlarm(zone *Zone) {
+	if zone == nil {
+		return
+	}
+	zone.setSignal(zone.AlarmSignal, false)
+	zone.AlarmActive = false
+	zone.AlarmSignal = ""
+	zone.AlarmAction = ""
+	zone.AlarmEventCode = ""
+	zone.AlarmEventName = ""
+	zone.AlarmStartedAt = time.Time{}
 }
 
 func (z *Zone) ensureSignalMap() {

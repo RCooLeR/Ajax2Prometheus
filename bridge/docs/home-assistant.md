@@ -314,7 +314,13 @@ Entities:
 | `sensor` | `last_event_at` | `Last event time` | `value_json.last_event_at` |
 | `sensor` | `last_ping_at` | `Last ping time` | `value_json.last_ping_at` |
 
-All account entities include the full account state payload as JSON attributes.
+Account entities receive stable metadata from:
+
+```text
+ajaxbridge/accounts/<account>/attributes
+```
+
+The attributes payload contains only `account`. Dynamic state and timestamps remain available as dedicated entities and in the unchanged `/state` MQTT payload, so routine state messages do not force attribute updates for every account entity.
 
 ## Zone Entities
 
@@ -426,7 +432,13 @@ Signal presentation:
 | `arming` | `Arming` | `mdi:shield-lock` |
 | `night_mode` | `Night mode` | `mdi:weather-night` |
 
-All zone entities include the full zone state payload as JSON attributes.
+Zone entities receive stable metadata from:
+
+```text
+ajaxbridge/accounts/<account>/zones/<zone>/attributes
+```
+
+The compact attributes payload contains `account`, `partition`, `group`, `zone`, `device`, `device_name`, `room`, `kind`, and `device_events`. Alarm state, active signals, and timestamps remain in the unchanged `/state` payload and their dedicated Home Assistant entities.
 
 ## Jeedom Entities
 
@@ -450,6 +462,12 @@ State topic:
 
 ```text
 ajaxbridge/jeedom/devices/<device_slug>/state
+```
+
+Stable attributes topic:
+
+```text
+ajaxbridge/jeedom/devices/<device_slug>/attributes
 ```
 
 Value templates:
@@ -569,7 +587,7 @@ Recommended card anchors:
 | Controllable outlet/switch | `switch.jeedom_control_<device_slug>` or the final HA entity id |
 | Relay impulse | `button.jeedom_control_<device_slug>_impulse` or the final HA entity id |
 
-Because Home Assistant entity ids can be renamed, custom cards should let the user configure anchor entity ids. Read the full JSON payload from entity attributes for rich UI.
+Because Home Assistant entity ids can be renamed, custom cards should let the user configure anchor entity ids. Read dynamic values from their dedicated entities. Compact attributes remain available for stable device classification (`kind`, `device_slug`, and `jeedom_device_type`); use the AjaxBridge HTTP API or MQTT `/state` topic for full debug data.
 
 Stable keys:
 

@@ -1102,6 +1102,25 @@ func StatePayload(device Device) map[string]any {
 	return payload
 }
 
+func AttributesPayload(device Device) map[string]any {
+	payload := map[string]any{
+		"source":      Source,
+		"object":      device.ObjectName,
+		"device":      device.Device,
+		"device_slug": device.DeviceSlug,
+	}
+	if device.JeedomID != "" {
+		payload["jeedom_id"] = device.JeedomID
+	}
+	if device.JeedomLogicalID != "" {
+		payload["jeedom_logical_id"] = device.JeedomLogicalID
+	}
+	if device.JeedomDeviceType != "" {
+		payload["jeedom_device_type"] = device.JeedomDeviceType
+	}
+	return payload
+}
+
 func copyDevice(device Device) Device {
 	device.Values = copyAnyMap(device.Values)
 	device.RawCommands = copyCommands(device.RawCommands)

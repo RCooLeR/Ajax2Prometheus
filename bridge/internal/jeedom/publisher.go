@@ -162,7 +162,14 @@ func (p *Publisher) PublishDevice(ctx context.Context, device Device) error {
 	if err != nil {
 		return err
 	}
-	return p.mqtt.PublishStateMessage(ctx, stateTopic, payload, p.cfg.RetainState)
+	if err := p.mqtt.PublishStateMessage(ctx, stateTopic, payload, p.cfg.RetainState); err != nil {
+		return err
+	}
+	attributes, err := json.Marshal(AttributesPayload(device))
+	if err != nil {
+		return err
+	}
+	return p.mqtt.PublishStateMessage(ctx, p.AttributesTopic(device.DeviceSlug), attributes, true)
 }
 
 func (p *Publisher) publishCommandDiscoveryCleanup(ctx context.Context, command Command, prefix string) error {
@@ -236,12 +243,19 @@ func (p *Publisher) publishLegacyCleanup(ctx context.Context, device Device) err
 		if err := p.mqtt.PublishStateMessage(ctx, p.StateTopic(legacySlug), []byte{}, true); err != nil {
 			return err
 		}
+		if err := p.mqtt.PublishStateMessage(ctx, p.AttributesTopic(legacySlug), []byte{}, true); err != nil {
+			return err
+		}
 	}
 	return nil
 }
 
 func (p *Publisher) StateTopic(deviceSlug string) string {
 	return p.cfg.StateTopicPrefix + "/devices/" + Slug(deviceSlug) + "/state"
+}
+
+func (p *Publisher) AttributesTopic(deviceSlug string) string {
+	return p.cfg.StateTopicPrefix + "/devices/" + Slug(deviceSlug) + "/attributes"
 }
 
 func (p *Publisher) CommandTopic(deviceSlug string) string {
@@ -254,6 +268,7 @@ func (p *Publisher) BuildDiscovery(command Command, device Device) (string, []by
 	}
 
 	stateTopic := p.StateTopic(device.DeviceSlug)
+	attributesTopic := p.AttributesTopic(device.DeviceSlug)
 	cfg := DiscoveryConfig{
 		Name:                firstNonEmpty(commandName(command), titleName(command.Metric)),
 		UniqueID:            discoveryUniqueID(command),
@@ -263,7 +278,7 @@ func (p *Publisher) BuildDiscovery(command Command, device Device) (string, []by
 		DeviceClass:         command.DeviceClass,
 		StateClass:          command.StateClass,
 		EntityCategory:      command.EntityCategory,
-		JSONAttributesTopic: stateTopic,
+		JSONAttributesTopic: attributesTopic,
 		Device: DiscoveryDevice{
 			Identifiers:  discoveryIdentifiers(device),
 			Name:         device.Device,
@@ -290,6 +305,7 @@ func (p *Publisher) BuildDiscovery(command Command, device Device) (string, []by
 
 func (p *Publisher) BuildSwitchDiscovery(action Action, device Device) (string, []byte, error) {
 	stateTopic := p.StateTopic(device.DeviceSlug)
+	attributesTopic := p.AttributesTopic(device.DeviceSlug)
 	optimistic := action.StateCommandID == ""
 	cfg := DiscoveryConfig{
 		Name:                "Control",
@@ -298,7 +314,7 @@ func (p *Publisher) BuildSwitchDiscovery(action Action, device Device) (string, 
 		PayloadOn:           payloadOn,
 		PayloadOff:          payloadOff,
 		Optimistic:          &optimistic,
-		JSONAttributesTopic: stateTopic,
+		JSONAttributesTopic: attributesTopic,
 		Device: DiscoveryDevice{
 			Identifiers:  discoveryIdentifiers(device),
 			Name:         device.Device,
@@ -325,13 +341,12 @@ func (p *Publisher) BuildSwitchDiscovery(action Action, device Device) (string, 
 }
 
 func (p *Publisher) BuildButtonDiscovery(action Action, device Device) (string, []byte, error) {
-	stateTopic := p.StateTopic(device.DeviceSlug)
 	cfg := DiscoveryConfig{
 		Name:                buttonControlName(action, device),
 		UniqueID:            "ajaxbridge_jeedom_control_" + Slug(device.DeviceSlug) + "_" + buttonActionSlug(action, device),
 		CommandTopic:        p.CommandTopic(device.DeviceSlug),
 		PayloadPress:        controlPayload(action.Action),
-		JSONAttributesTopic: stateTopic,
+		JSONAttributesTopic: p.AttributesTopic(device.DeviceSlug),
 		Device: DiscoveryDevice{
 			Identifiers:  discoveryIdentifiers(device),
 			Name:         device.Device,

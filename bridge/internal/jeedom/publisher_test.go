@@ -55,6 +55,9 @@ func TestDiscoveryPayloadUsesStableCommandIDAndDeviceIdentifier(t *testing.T) {
 	if payload.StateTopic != "ajaxbridge/jeedom/devices/serverna/state" {
 		t.Fatalf("state_topic = %q", payload.StateTopic)
 	}
+	if payload.JSONAttributesTopic != "ajaxbridge/jeedom/devices/serverna/attributes" {
+		t.Fatalf("json_attributes_topic = %q", payload.JSONAttributesTopic)
+	}
 }
 
 func TestSwitchDiscoveryUsesBridgeCommandTopic(t *testing.T) {
@@ -92,6 +95,9 @@ func TestSwitchDiscoveryUsesBridgeCommandTopic(t *testing.T) {
 	}
 	if payload.StateTopic != "ajaxbridge/jeedom/devices/server_outlet/state" {
 		t.Fatalf("state_topic = %q", payload.StateTopic)
+	}
+	if payload.JSONAttributesTopic != "ajaxbridge/jeedom/devices/server_outlet/attributes" {
+		t.Fatalf("json_attributes_topic = %q", payload.JSONAttributesTopic)
 	}
 	if payload.Optimistic == nil || *payload.Optimistic {
 		t.Fatalf("optimistic = %#v, want false", payload.Optimistic)
@@ -292,6 +298,9 @@ func TestPublishDeviceClearsLegacyUnlinkedSwitchAndState(t *testing.T) {
 	if got := mqtt.state["ajaxbridge/jeedom/devices/serverna/state"]; got != "" {
 		t.Fatalf("legacy state cleanup payload = %q, want empty", got)
 	}
+	if got := mqtt.state["ajaxbridge/jeedom/devices/serverna/attributes"]; got != "" {
+		t.Fatalf("legacy attributes cleanup payload = %q, want empty", got)
+	}
 }
 
 func TestPublishDeviceCleansSIAMergedDuplicateCommands(t *testing.T) {
@@ -454,6 +463,64 @@ func TestPublishDeviceKeepsControlStateForLinkedSIADevice(t *testing.T) {
 
 	if got := mqtt.discovery["homeassistant/binary_sensor/ajaxbridge/jeedom_cmd_52/config"]; got == "" {
 		t.Fatalf("Jeedom control state discovery should stay for linked SIA device")
+	}
+}
+
+func TestPublishDeviceSeparatesStableAttributesFromFullState(t *testing.T) {
+	mqtt := &recordingMQTT{}
+	publisher := NewPublisher(PublisherConfig{
+		StateTopicPrefix: "ajaxbridge/jeedom",
+		RetainState:      true,
+	}, mqtt)
+	device := Device{
+		Source:           Source,
+		ObjectName:       "House",
+		Device:           "Server power",
+		DeviceSlug:       "sia_a0f80d_zone_8",
+		JeedomID:         "7",
+		JeedomLogicalID:  "30E81A2B",
+		JeedomDeviceType: "WallSwitch",
+		LastUpdate:       time.Unix(100, 0),
+		Values:           map[string]any{"power_w": 120.5, "state": true},
+		RawCommands: map[string]Command{
+			"56": {
+				CommandID:  "56",
+				Metric:     "power_w",
+				Value:      120.5,
+				LastUpdate: time.Unix(100, 0),
+			},
+		},
+		Actions: map[string]Action{
+			"on": {Action: "on", CommandID: "58", Allowed: true},
+		},
+	}
+
+	if err := publisher.PublishDevice(context.Background(), device); err != nil {
+		t.Fatal(err)
+	}
+
+	var statePayload map[string]any
+	if err := json.Unmarshal([]byte(mqtt.state["ajaxbridge/jeedom/devices/sia_a0f80d_zone_8/state"]), &statePayload); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := statePayload["raw_commands"]; !ok {
+		t.Fatalf("existing MQTT state contract lost raw_commands: %#v", statePayload)
+	}
+	if _, ok := statePayload["last_update"]; !ok {
+		t.Fatalf("existing MQTT state contract lost last_update: %#v", statePayload)
+	}
+
+	var attributes map[string]any
+	if err := json.Unmarshal([]byte(mqtt.state["ajaxbridge/jeedom/devices/sia_a0f80d_zone_8/attributes"]), &attributes); err != nil {
+		t.Fatal(err)
+	}
+	if got := attributes["jeedom_device_type"]; got != "WallSwitch" {
+		t.Fatalf("jeedom_device_type = %#v, want WallSwitch", got)
+	}
+	for _, volatile := range []string{"raw_commands", "actions", "last_update", "last_value_at", "power_w", "state"} {
+		if _, ok := attributes[volatile]; ok {
+			t.Fatalf("volatile field %q leaked into stable attributes: %#v", volatile, attributes)
+		}
 	}
 }
 

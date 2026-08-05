@@ -110,6 +110,42 @@ ajax_zone_alarm_active{account="0001",alarm_action="none",alarm_signal="none",de
 	}
 }
 
+func TestSnapshotMetricsDropStaleAlarmLabelSeries(t *testing.T) {
+	registry := prometheus.NewRegistry()
+	m := New(registry)
+	activeZone := state.Zone{
+		Account:           "0001",
+		Partition:         "1",
+		Group:             "1",
+		Zone:              "21",
+		DeviceName:        "Roma",
+		Room:              "House",
+		Kind:              "SpaceControl",
+		DeviceEventsLabel: "night_mode,arming,panic",
+		AlarmActive:       true,
+		AlarmSignal:       "panic",
+		AlarmAction:       "panic_alarm",
+		AlarmStartedAt:    time.Unix(200, 0),
+	}
+	m.SetSnapshot(state.Snapshot{Zones: []state.Zone{activeZone}})
+
+	clearedZone := activeZone
+	clearedZone.AlarmActive = false
+	clearedZone.AlarmSignal = ""
+	clearedZone.AlarmAction = ""
+	clearedZone.AlarmStartedAt = time.Time{}
+	m.SetSnapshot(state.Snapshot{Zones: []state.Zone{clearedZone}})
+
+	expected := `
+# HELP ajax_zone_alarm_active Whether an alarm is currently active for a zone/device.
+# TYPE ajax_zone_alarm_active gauge
+ajax_zone_alarm_active{account="0001",alarm_action="none",alarm_signal="none",device="21",device_events="night_mode,arming,panic",device_kind="SpaceControl",device_name="Roma",group="1",partition="1",room="House",zone="21"} 0
+`
+	if err := testutil.GatherAndCompare(registry, strings.NewReader(expected), "ajax_zone_alarm_active", "ajax_zone_alarm_last_event_timestamp_seconds"); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestZoneTroubleAndLastEventMetricsIncludeDeviceLabels(t *testing.T) {
 	registry := prometheus.NewRegistry()
 	m := New(registry)

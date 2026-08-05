@@ -41,7 +41,7 @@ Account mode is derived as:
 | `armed=true` | `armed` |
 | otherwise | `disarmed` |
 
-Zone alarms and troubles are sticky until SIA sends a restore event. For example, a burglary alarm sets `alarm_active=true` and `signal_active.burglary=true`; a burglary restore clears that specific alarm signal. A battery trouble remains active until a battery restore arrives.
+Zone alarms and troubles are sticky until SIA sends a restore event. For example, a burglary alarm sets `alarm_active=true` and `signal_active.burglary=true`; a burglary restore clears that specific alarm signal. A battery trouble remains active until a battery restore arrives. A device bypass/deactivation (`QB`) or device turned-off event (`ZZ`) clears the active alarm for that zone because the device is no longer participating in alarm state; last-event metadata remains available as history.
 
 The account `online` field is recalculated from the latest ping/event and `AJAXBRIDGE_OFFLINE_GRACE`.
 

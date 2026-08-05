@@ -261,6 +261,7 @@ func (m *Metrics) ObserveForward(result forward.Result) {
 }
 
 func (m *Metrics) SetSnapshot(snapshot state.Snapshot) {
+	m.resetSnapshotGauges()
 	for _, account := range snapshot.Accounts {
 		labels := prometheus.Labels{"account": account.Account}
 		m.accountOnline.With(labels).Set(boolFloat(account.Online))
@@ -292,6 +293,24 @@ func (m *Metrics) SetSnapshot(snapshot state.Snapshot) {
 			m.zoneTamperLast.With(tamperLabels).Set(timestamp(zone.LastEventAt))
 		}
 	}
+}
+
+func (m *Metrics) resetSnapshotGauges() {
+	m.accountOnline.Reset()
+	m.accountArmed.Reset()
+	m.accountNightMode.Reset()
+	m.accountPartial.Reset()
+	m.accountAlarm.Reset()
+	m.accountTamper.Reset()
+	m.accountTrouble.Reset()
+	m.accountLastEvent.Reset()
+	m.accountLastPing.Reset()
+	m.zoneAlarm.Reset()
+	m.zoneAlarmLast.Reset()
+	m.zoneTamper.Reset()
+	m.zoneTamperLast.Reset()
+	m.zoneTrouble.Reset()
+	m.zoneLastEvent.Reset()
 }
 
 func deviceLabels(zone state.Zone) prometheus.Labels {

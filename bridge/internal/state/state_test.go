@@ -258,3 +258,70 @@ func TestTamperBypassRestoreClearsTrouble(t *testing.T) {
 		})
 	}
 }
+
+func TestDisabledDeviceClearsItsActiveAlarm(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		eventCode   string
+		eventClass  event.Class
+		eventAction string
+		signal      string
+	}{
+		{name: "bypassed", eventCode: "QB", eventClass: event.ClassTrouble, eventAction: "device_bypassed", signal: "bypass"},
+		{name: "turned off", eventCode: "ZZ", eventClass: event.ClassCommon, eventAction: "turned_off", signal: "power"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			engine := NewEngine(time.Minute, devicecatalog.Empty())
+			engine.Apply(event.Normalized{
+				Account:     "0001",
+				EventCode:   "KA",
+				EventClass:  event.ClassAlarm,
+				EventAction: "temperature_alarm",
+				EventName:   "Temperature alarm",
+				Signal:      "temperature",
+				Zone:        "7",
+				ReceivedAt:  time.Unix(100, 0),
+				ParseStatus: event.ParseStatusOK,
+			})
+			engine.Apply(event.Normalized{
+				Account:     "0001",
+				EventCode:   tc.eventCode,
+				EventClass:  tc.eventClass,
+				EventAction: tc.eventAction,
+				Signal:      tc.signal,
+				Zone:        "7",
+				ReceivedAt:  time.Unix(200, 0),
+				ParseStatus: event.ParseStatusOK,
+			})
+
+			snapshot := engine.Snapshot()
+			if snapshot.Accounts[0].AlarmActive || snapshot.Zones[0].AlarmActive || snapshot.Zones[0].SignalActive["temperature"] {
+				t.Fatalf("disabled device kept its alarm active: %#v", snapshot)
+			}
+		})
+	}
+}
+
+func TestDeviceBypassKeepsIndependentAccountAlarm(t *testing.T) {
+	engine := NewEngine(time.Minute, devicecatalog.Empty())
+	engine.Apply(event.Normalized{
+		Account: "0001", EventCode: "PA", EventClass: event.ClassAlarm,
+		EventAction: "panic_alarm", Signal: "panic", ReceivedAt: time.Unix(100, 0),
+	})
+	engine.Apply(event.Normalized{
+		Account: "0001", Zone: "7", EventCode: "KA", EventClass: event.ClassAlarm,
+		EventAction: "temperature_alarm", Signal: "temperature", ReceivedAt: time.Unix(200, 0),
+	})
+	engine.Apply(event.Normalized{
+		Account: "0001", Zone: "7", EventCode: "QB", EventClass: event.ClassTrouble,
+		EventAction: "device_bypassed", Signal: "bypass", ReceivedAt: time.Unix(300, 0),
+	})
+
+	snapshot := engine.Snapshot()
+	if !snapshot.Accounts[0].AlarmActive {
+		t.Fatal("device bypass cleared an independent account-level alarm")
+	}
+	if snapshot.Zones[0].AlarmActive {
+		t.Fatal("bypassed zone alarm should be cleared")
+	}
+}

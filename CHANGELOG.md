@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.0.1 - 2026-08-05
+
+- Split Home Assistant JSON attributes from dynamic Ajax/Jeedom state topics. Entities now keep compact stable device metadata while full MQTT state, HTTP APIs, entity identities, controls, and dedicated timestamp sensors remain compatible.
+- Clear a zone's latched SIA alarm when the device is bypassed/deactivated or turned off, while preserving last-event and measurement telemetry.
+
 ## 2.0.0 - 2026-05-06
 
 ### Added

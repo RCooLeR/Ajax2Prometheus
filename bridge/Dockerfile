@@ -1,5 +1,5 @@
 # --- Stage 1: Build the Go binary ---
-FROM --platform=$BUILDPLATFORM golang:1.26.4-alpine3.24 AS builder
+FROM golang:1.26.4-alpine3.24 AS builder
 
 ARG TARGETOS
 ARG TARGETARCH
@@ -15,7 +15,7 @@ RUN go mod download
 
 COPY . .
 
-RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -trimpath -ldflags="-s -w" -o /out/ajaxbridge ./cmd/ajaxbridge
+RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} go build -trimpath -ldflags="-s -w" -o /out/ajaxbridge ./cmd/ajaxbridge
 
 # --- Stage 2: Create a lightweight image with the binary only ---
 FROM alpine:3.24

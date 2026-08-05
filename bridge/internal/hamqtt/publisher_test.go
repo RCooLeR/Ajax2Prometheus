@@ -183,6 +183,45 @@ func TestPublishSnapshotRepublishesAfterCacheReset(t *testing.T) {
 	}
 }
 
+func TestRetainedDiscoveryRepublishesAfterCleanupPayload(t *testing.T) {
+	client := &stubClient{open: true}
+	publisher := New(Config{
+		Broker:   "tcp://mqtt.local:1883",
+		ClientID: "ajaxbridge",
+		Timeout:  time.Second,
+	}, zerologNop())
+	publisher.client = client
+
+	topic := "homeassistant/sensor/ajaxbridge/jeedom_cmd_345/config"
+	payload := []byte(`{"name":"Voltage","unique_id":"ajaxbridge_jeedom_cmd_345"}`)
+
+	if err := publisher.PublishDiscoveryMessage(t.Context(), "jeedom_discovery:sensor/jeedom_cmd_345", topic, payload, true); err != nil {
+		t.Fatal(err)
+	}
+	if err := publisher.PublishDiscoveryMessage(t.Context(), "jeedom_discovery:sensor/jeedom_cmd_345", topic, payload, true); err != nil {
+		t.Fatal(err)
+	}
+	if err := publisher.PublishDiscoveryMessage(t.Context(), "jeedom_discovery_cleanup:sensor/jeedom_cmd_345", topic, []byte{}, true); err != nil {
+		t.Fatal(err)
+	}
+	if err := publisher.PublishDiscoveryMessage(t.Context(), "jeedom_discovery:sensor/jeedom_cmd_345", topic, payload, true); err != nil {
+		t.Fatal(err)
+	}
+
+	var topicPayloads []string
+	for _, publish := range client.publishes {
+		if publish.topic == topic {
+			topicPayloads = append(topicPayloads, stringValue(publish.payload))
+		}
+	}
+	if got, want := len(topicPayloads), 3; got != want {
+		t.Fatalf("discovery publishes for %s = %d, want %d: %#v", topic, got, want, topicPayloads)
+	}
+	if topicPayloads[0] == "" || topicPayloads[1] != "" || topicPayloads[2] == "" {
+		t.Fatalf("discovery payload sequence = %#v, want config, cleanup, config", topicPayloads)
+	}
+}
+
 func TestPublishUpdatePublishesOnlyProvidedSubset(t *testing.T) {
 	client := &stubClient{open: true}
 	publisher := New(Config{
@@ -215,7 +254,7 @@ func TestPublishUpdatePublishesOnlyProvidedSubset(t *testing.T) {
 	}
 }
 
-func TestDiscoveryIncludesStateTopicAsJSONAttributesTopic(t *testing.T) {
+func TestDiscoveryUsesStableMetadataAsJSONAttributesTopic(t *testing.T) {
 	client := &stubClient{open: true}
 	publisher := New(Config{
 		Broker:          "tcp://mqtt.local:1883",
@@ -232,6 +271,7 @@ func TestDiscoveryIncludesStateTopicAsJSONAttributesTopic(t *testing.T) {
 		Zones: []state.Zone{{
 			Account:      "A0F80D",
 			Zone:         "3",
+			Kind:         "FireProtect",
 			DeviceEvents: []string{"fire"},
 			SignalActive: map[string]bool{"fire": true},
 		}},
@@ -248,8 +288,28 @@ func TestDiscoveryIncludesStateTopicAsJSONAttributesTopic(t *testing.T) {
 	if err := json.Unmarshal(raw, &cfg); err != nil {
 		t.Fatal(err)
 	}
-	if got, want := cfg["json_attributes_topic"], "ajaxbridge/accounts/A0F80D/zones/3/state"; got != want {
+	if got, want := cfg["json_attributes_topic"], "ajaxbridge/accounts/A0F80D/zones/3/attributes"; got != want {
 		t.Fatalf("json_attributes_topic = %#v, want %q", got, want)
+	}
+
+	attributesRaw, ok := client.payloadForTopic("ajaxbridge/accounts/A0F80D/zones/3/attributes").([]byte)
+	if !ok {
+		t.Fatalf("attributes payload = %#v, want []byte", client.payloadForTopic("ajaxbridge/accounts/A0F80D/zones/3/attributes"))
+	}
+	var attributes map[string]any
+	if err := json.Unmarshal(attributesRaw, &attributes); err != nil {
+		t.Fatal(err)
+	}
+	if got := attributes["zone"]; got != "3" {
+		t.Fatalf("zone attribute = %#v, want 3", got)
+	}
+	if got := attributes["kind"]; got != "FireProtect" {
+		t.Fatalf("kind attribute = %#v, want FireProtect", got)
+	}
+	for _, volatile := range []string{"alarm_active", "last_event_at", "last_event_unix", "signal_active"} {
+		if _, ok := attributes[volatile]; ok {
+			t.Fatalf("volatile field %q leaked into stable attributes: %#v", volatile, attributes)
+		}
 	}
 }
 
@@ -295,8 +355,8 @@ func TestZoneDiscoveryPayloadKeepsStableHAContract(t *testing.T) {
 	if cfg.StateTopic != "ajaxbridge/accounts/A0F80D/zones/8/state" {
 		t.Fatalf("StateTopic = %q", cfg.StateTopic)
 	}
-	if cfg.JSONAttributesTopic != cfg.StateTopic {
-		t.Fatalf("JSONAttributesTopic = %q, want state topic", cfg.JSONAttributesTopic)
+	if cfg.JSONAttributesTopic != "ajaxbridge/accounts/A0F80D/zones/8/attributes" {
+		t.Fatalf("JSONAttributesTopic = %q, want stable attributes topic", cfg.JSONAttributesTopic)
 	}
 	if cfg.ValueTemplate != "{{ 'ON' if value_json.alarm_active else 'OFF' }}" {
 		t.Fatalf("ValueTemplate = %q", cfg.ValueTemplate)
