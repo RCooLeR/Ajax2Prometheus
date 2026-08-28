@@ -49,6 +49,21 @@ Use the hostname that Prometheus can reach. If Prometheus runs outside Docker, t
 
 Forwarding metrics are emitted only when `AJAXBRIDGE_FORWARD_ADDR` is set.
 
+## Go Runtime Metrics
+
+AjaxBridge exports a focused set of Go scheduler metrics in addition to its application metrics:
+
+| Metric | Meaning |
+| --- | --- |
+| `go_sched_goroutines_created_goroutines_total` | Goroutines created since process start. |
+| `go_sched_goroutines_not_in_go_goroutines` | Goroutines executing outside Go code. |
+| `go_sched_goroutines_runnable_goroutines` | Goroutines waiting for a processor. |
+| `go_sched_goroutines_running_goroutines` | Goroutines currently running Go code. |
+| `go_sched_goroutines_waiting_goroutines` | Goroutines blocked on runtime resources. |
+| `go_sched_threads_total_threads` | Threads created by the Go runtime. |
+
+These series make scheduler pressure and goroutine growth visible without exporting the full Go runtime metric set. Metric families with physical units also expose OpenMetrics unit metadata.
+
 ## Account Metrics
 
 All account gauges have label `account`.

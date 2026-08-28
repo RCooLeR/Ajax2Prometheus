@@ -15,15 +15,20 @@ AjaxBridge is an unofficial DIY open-source project for compatibility and integr
 
 ## Development
 
+Use Node.js 24.20.0 LTS and npm 12.0.2. The checked-in `.node-version` and `packageManager` fields record those versions.
+
 ```bash
-npm install
+npm ci
 npm run dev
 ```
 
 Useful commands:
 
-- `npm run check`: TypeScript build check
+- `npm run dev:lan`: expose the development server on the local network
+- `npm run check`: TypeScript 7 project build check
+- `npm run lint`: type-aware Oxlint checks, including React hooks and promise handling
 - `npm run build`: production build into `dist/`
+- `npm run verify`: run lint, type checking, and the production build
 - `npm run preview`: serve the built `dist/` output locally
 
 ## Build output
@@ -33,6 +38,7 @@ Useful commands:
 - `dist/ajaxbridge-lovelace.js`: the Home Assistant module that registers both cards
 - `dist/assets/*`: JS chunks, CSS, icons, and room assets used by the module
 - `dist/index.html`: standalone browser preview
+- `dist/.vite/license.md`: generated third-party dependency license metadata
 
 Copy the full `dist/` contents into Home Assistant, not only `ajaxbridge-lovelace.js`.
 

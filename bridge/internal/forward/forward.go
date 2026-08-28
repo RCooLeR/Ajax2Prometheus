@@ -97,12 +97,10 @@ func (g *Group) Send(ctx context.Context, raw []byte) []Result {
 	}
 	results := make([]Result, len(g.forwarders))
 	var wg sync.WaitGroup
-	wg.Add(len(g.forwarders))
 	for i, target := range g.forwarders {
-		go func(i int, target *Forwarder) {
-			defer wg.Done()
+		wg.Go(func() {
 			results[i] = target.Send(ctx, raw)
-		}(i, target)
+		})
 	}
 	wg.Wait()
 	return results

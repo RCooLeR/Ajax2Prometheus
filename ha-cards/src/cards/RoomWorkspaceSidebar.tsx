@@ -96,6 +96,8 @@ function AjaxDeviceListItem({ device, selected, onSelect, hass }: AjaxDeviceList
     setPending(true);
     try {
       await callEntityService(hass, action.domain, action.service, action.entityId);
+    } catch (error) {
+      console.error('[ajaxbridge] Home Assistant action failed', { action, error });
     } finally {
       setPending(false);
     }
@@ -103,7 +105,12 @@ function AjaxDeviceListItem({ device, selected, onSelect, hass }: AjaxDeviceList
 
   return (
     <article className={['ajax-device-item', getToneClass(device.tone), selected ? 'ajax-device-item--selected' : ''].join(' ')}>
-      <button type="button" className="ajax-device-item__main" onClick={() => onSelect(selected ? null : device.id)}>
+      <button
+        type="button"
+        className="ajax-device-item__main"
+        aria-label={`${selected ? 'Clear selection for' : 'Select'} ${device.name}`}
+        onClick={() => onSelect(selected ? null : device.id)}
+      >
         <span className="ajax-device-item__media">
           <img src={getDeviceImageAsset(device)} alt="" loading="lazy" />
         </span>
@@ -140,7 +147,7 @@ function AjaxDeviceListItem({ device, selected, onSelect, hass }: AjaxDeviceList
               role="switch"
               aria-checked={isOn}
               disabled={pending || !hass?.callService}
-              onClick={() => callAction(toggleAction)}
+              onClick={() => void callAction(toggleAction)}
             >
               <span className="ajax-device-item__toggle-track">
                 <span className="ajax-device-item__toggle-thumb" />
@@ -155,7 +162,7 @@ function AjaxDeviceListItem({ device, selected, onSelect, hass }: AjaxDeviceList
               aria-label={`Send impulse to ${device.name}`}
               title="Impulse"
               disabled={pending || !hass?.callService}
-              onClick={() => callAction(impulseAction)}
+              onClick={() => void callAction(impulseAction)}
             >
               <Icon icon={{ category: 'devices', key: 'relay' }} size={20} />
             </button>
@@ -166,7 +173,7 @@ function AjaxDeviceListItem({ device, selected, onSelect, hass }: AjaxDeviceList
               type="button"
               className={['ajax-device-item__action', actionClass(action.label)].join(' ')}
               disabled={pending || !hass?.callService}
-              onClick={() => callAction(action)}
+              onClick={() => void callAction(action)}
             >
               <Icon icon={iconForAction(action.label)} size={18} />
               <span>{actionLabel(action.label)}</span>

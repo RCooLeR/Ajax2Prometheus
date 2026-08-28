@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useEffectEvent, useMemo, useState } from 'react';
 import type {
   DashboardChip,
   DashboardData,
@@ -162,6 +162,7 @@ const EMPTY_REGISTRIES: RegistrySnapshot = {
   devices: [],
   entities: [],
 };
+const EMPTY_ROOM_SMD_IVS_COUNTS: RoomSmdIvsCountsByRoom = {};
 const loggedDahuaDebug = new Set<string>();
 const ISSUE_SIGNALS = new Set([
   'alarm',
@@ -195,31 +196,44 @@ const ISSUE_SIGNALS = new Set([
 
 export function useDashboardData(hass?: HomeAssistant, account?: string, dahuaBase?: string): DashboardData {
   const [registries, setRegistries] = useState<RegistrySnapshot | null>(null);
-  const [roomSmdIvsCounts, setRoomSmdIvsCounts] = useState<RoomSmdIvsCountsByRoom>({});
+  const [smdIvsSnapshot, setSmdIvsSnapshot] = useState<{
+    signature: string;
+    counts: RoomSmdIvsCountsByRoom;
+  }>({ signature: '', counts: EMPTY_ROOM_SMD_IVS_COUNTS });
   const normalizedDahuaBase = normalizeDahuaBaseUrl(dahuaBase);
+  const canLoadRegistries = Boolean(hass && typeof Reflect.get(hass, 'callWS') === 'function');
+
+  const loadRegistries = useEffectEvent(async (): Promise<RegistrySnapshot> => {
+    if (!hass?.callWS) {
+      return EMPTY_REGISTRIES;
+    }
+
+    const [areas, devices, entities] = await Promise.all([
+      hass.callWS<HomeAssistantArea[]>({ type: 'config/area_registry/list' }),
+      hass.callWS<HomeAssistantDeviceEntry[]>({ type: 'config/device_registry/list' }),
+      hass.callWS<HomeAssistantEntityEntry[]>({ type: 'config/entity_registry/list' }),
+    ]);
+
+    return {
+      areas: Array.isArray(areas) ? areas : [],
+      devices: Array.isArray(devices) ? devices : [],
+      entities: Array.isArray(entities) ? entities : [],
+    };
+  });
 
   useEffect(() => {
-    if (!hass?.callWS || registries !== null) {
+    if (!canLoadRegistries || registries !== null) {
       return;
     }
 
     let active = true;
 
-    void Promise.all([
-      hass.callWS<HomeAssistantArea[]>({ type: 'config/area_registry/list' }),
-      hass.callWS<HomeAssistantDeviceEntry[]>({ type: 'config/device_registry/list' }),
-      hass.callWS<HomeAssistantEntityEntry[]>({ type: 'config/entity_registry/list' }),
-    ])
-      .then(([areas, devices, entities]) => {
+    void loadRegistries()
+      .then((snapshot) => {
         if (!active) {
           return;
         }
-
-        setRegistries({
-          areas: Array.isArray(areas) ? areas : [],
-          devices: Array.isArray(devices) ? devices : [],
-          entities: Array.isArray(entities) ? entities : [],
-        });
+        setRegistries(snapshot);
       })
       .catch(() => {
         if (active) {
@@ -230,7 +244,7 @@ export function useDashboardData(hass?: HomeAssistant, account?: string, dahuaBa
     return () => {
       active = false;
     };
-  }, [hass, registries]);
+  }, [canLoadRegistries, registries]);
 
   const registryIndex = useMemo(
     () => buildRegistryIndex(registries ?? EMPTY_REGISTRIES),
@@ -240,10 +254,19 @@ export function useDashboardData(hass?: HomeAssistant, account?: string, dahuaBa
     () => (hass ? dahuaBridgeChannelSignature(hass.states, registryIndex, normalizedDahuaBase) : ''),
     [hass, registryIndex, normalizedDahuaBase],
   );
+  const roomSmdIvsCounts = smdIvsSignature && smdIvsSnapshot.signature === smdIvsSignature
+    ? smdIvsSnapshot.counts
+    : EMPTY_ROOM_SMD_IVS_COUNTS;
+
+  const loadCurrentSmdIvsCounts = useEffectEvent((signal: AbortSignal) => {
+    if (!hass) {
+      return Promise.resolve(EMPTY_ROOM_SMD_IVS_COUNTS);
+    }
+    return loadSmdIvsCountsByRoom(hass.states, registryIndex, normalizedDahuaBase, signal);
+  });
 
   useEffect(() => {
-    if (!hass || !smdIvsSignature) {
-      setRoomSmdIvsCounts((current) => (Object.keys(current).length > 0 ? {} : current));
+    if (!smdIvsSignature) {
       return;
     }
 
@@ -255,13 +278,13 @@ export function useDashboardData(hass?: HomeAssistant, account?: string, dahuaBa
       controller = new AbortController();
 
       try {
-        const counts = await loadSmdIvsCountsByRoom(hass.states, registryIndex, normalizedDahuaBase, controller.signal);
+        const counts = await loadCurrentSmdIvsCounts(controller.signal);
         if (active) {
-          setRoomSmdIvsCounts(counts);
+          setSmdIvsSnapshot({ signature: smdIvsSignature, counts });
         }
       } catch (error) {
         if (active && !(error instanceof DOMException && error.name === 'AbortError')) {
-          setRoomSmdIvsCounts((current) => current);
+          console.error('[ajaxbridge] Unable to refresh Dahua SMD/IVS counts', error);
         }
       }
     };
@@ -276,7 +299,7 @@ export function useDashboardData(hass?: HomeAssistant, account?: string, dahuaBa
       controller.abort();
       window.clearInterval(timer);
     };
-  }, [registryIndex, smdIvsSignature, normalizedDahuaBase]);
+  }, [smdIvsSignature]);
 
   const dashboardData = useMemo(() => {
     if (!hass) {
@@ -358,7 +381,7 @@ function buildDashboardDataFromHomeAssistant(
     .sort(sortRooms);
 
   return {
-    systemState: buildSystemState(states, rooms, resolvedDevices, resolvedEvents),
+    systemState: buildSystemState(states, rooms, resolvedDevices),
     rooms,
     devices: resolvedDevices.map(toPublicDevice),
     events: resolvedEvents,
@@ -584,7 +607,6 @@ function buildGenericIntegrationDevice(
     return null;
   }
 
-  const primaryState = states[primary.entity_id];
   const alertEntry = entityEntries.find((entry) => {
     const state = states[entry.entity_id];
     return !isOfflineState(state) && entityIsAlert(entry, state);
@@ -914,7 +936,6 @@ function buildSystemState(
   states: Record<string, HomeAssistantState>,
   rooms: Room[],
   devices: ResolvedDevice[],
-  events: EventItem[],
 ): SystemState {
   const alertCount = devices.filter((device) => device.attention).length;
   const smdIvsTotals = rooms.reduce<RoomSmdIvsCounts>((totals, room) => {

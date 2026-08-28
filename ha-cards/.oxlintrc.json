@@ -1,0 +1,17 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["react", "typescript", "jsx-a11y", "promise", "oxc"],
+  "categories": {
+    "correctness": "error"
+  },
+  "options": {
+    "typeAware": true
+  },
+  "rules": {
+    "react/rules-of-hooks": "error",
+    "react/exhaustive-deps": "error",
+    "react/unsupported-syntax": "error",
+    "typescript/no-floating-promises": ["error", { "ignoreVoid": true }],
+    "typescript/no-misused-promises": "error"
+  }
+}

@@ -3,13 +3,15 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
 export default defineConfig({
+  base: './',
+  input: {
+    app: resolve(import.meta.dirname, 'index.html'),
+    'ajaxbridge-lovelace': resolve(import.meta.dirname, 'src/ha/register.tsx'),
+  },
   plugins: [react()],
   build: {
-    rollupOptions: {
-      input: {
-        app: resolve(__dirname, 'index.html'),
-        'ajaxbridge-lovelace': resolve(__dirname, 'src/ha/register.tsx'),
-      },
+    license: true,
+    rolldownOptions: {
       output: {
         entryFileNames: (chunkInfo) =>
           chunkInfo.name === 'ajaxbridge-lovelace' ? 'ajaxbridge-lovelace.js' : 'assets/[name].js',
@@ -18,5 +20,12 @@ export default defineConfig({
       },
     },
   },
-  server: { port: 5173 },
+  server: {
+    port: 5173,
+    strictPort: true,
+    forwardConsole: {
+      unhandledErrors: true,
+      logLevels: ['warn', 'error'],
+    },
+  },
 });

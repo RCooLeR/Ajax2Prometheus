@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { DashboardShell } from '../cards/DashboardShell';
 import { RoomDetailCard } from '../cards/RoomDetailCard';
 import { TopSystemBar } from '../cards/TopSystemBar';
@@ -32,25 +32,14 @@ export function DetailedDashboardView({ mode = 'standalone', initialRoomId, hass
     data.rooms.find((room) => room.id === resolvedInitialRoomId) ??
     data.rooms[0];
 
-  useEffect(() => {
-    if (!selectedRoom && data.rooms.length > 0) {
-      setSelectedRoomId(resolveInitialRoomId(data, initialRoomId));
-      return;
-    }
-    if (selectedRoom && selectedRoom.id !== selectedRoomId) {
-      setSelectedRoomId(selectedRoom.id);
-    }
-  }, [data, initialRoomId, selectedRoom, selectedRoomId]);
-
   const roomDevices = selectedRoom ? getDevicesForRoom(data, selectedRoom.id) : [];
   const roomEvents = selectedRoom ? getEventsForRoom(data, selectedRoom.id) : [];
-  const selectedDevice =
-    roomDevices.find((device) => device.id === selectedDeviceId) ?? null;
   const roomSummaries = getRoomSummaries(data);
 
-  useEffect(() => {
+  function handleSelectRoom(roomId: string) {
+    setSelectedRoomId(roomId);
     setSelectedDeviceId(null);
-  }, [selectedRoomId]);
+  }
 
   if (!selectedRoom) {
     return (
@@ -81,18 +70,15 @@ export function DetailedDashboardView({ mode = 'standalone', initialRoomId, hass
       topBar={<TopSystemBar systemState={data.systemState} />}
       detail={
         <RoomDetailCard
+          key={selectedRoom.id}
           rooms={data.rooms}
           selectedRoom={selectedRoom}
           roomDevices={roomDevices}
           roomEvents={roomEvents}
-          totalRoomEvents={roomEvents.length}
           roomSummaries={roomSummaries}
           selectedDeviceId={selectedDeviceId}
-          selectedDeviceName={selectedDevice?.name ?? null}
-          selectedDevice={selectedDevice}
           onSelectDevice={setSelectedDeviceId}
-          onClearDeviceFilter={() => setSelectedDeviceId(null)}
-          onSelectRoom={setSelectedRoomId}
+          onSelectRoom={handleSelectRoom}
           embedded={mode === 'embedded'}
           hass={hass}
         />

@@ -41,6 +41,7 @@ Thumbs.db
 tmp/
 tmp-jeedom/
 dist/
+/ha-cards-dist.tar.gz
 build/
 node_modules/
 *.tsbuildinfo

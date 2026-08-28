@@ -15,7 +15,7 @@ No database is required. Runtime SIA state is kept in memory, the optional devic
 
 Use [docker-compose.yml](./docker-compose.yml) as the tracked baseline and keep site-specific production overrides private, for example in an untracked `docker-compose.production.yml` or `docker-compose.override.yml`. Production data should stay under `./data` so the device catalog, notifications, and Jeedom cache survive container restarts.
 
-CI runs on every pushed branch and pull request. It verifies the Go bridge with `go vet` and `go test`, and verifies the Home Assistant cards with TypeScript check plus production build.
+CI runs on every pushed branch and pull request. It verifies the Go bridge with vet, normal and race-enabled tests, and `govulncheck`; verifies the Home Assistant cards with type-aware linting, TypeScript 7, and a Vite production build; and validates, smoke-tests, and scans the hardened amd64/arm64 container image.
 
 ## Disclaimer
 

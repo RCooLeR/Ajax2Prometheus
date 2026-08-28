@@ -3,6 +3,7 @@ package jeedom
 import (
 	"fmt"
 	"math"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -476,11 +477,11 @@ func (s *Store) identityFor(evt Event, mapping Mapping) DeviceIdentity {
 	baseSlug := Slug(evt.DeviceName)
 	identity := DeviceIdentity{
 		DeviceName:     evt.DeviceName,
+		DeviceSlug:     s.localDeviceSlug(evt, mapping, baseSlug),
 		BaseSlug:       baseSlug,
 		HAManufacturer: "Ajax via Jeedom",
 		HAModel:        "Jeedom MQTT Bridge",
 	}
-	identity.DeviceSlug = s.localDeviceSlug(evt, mapping, baseSlug)
 	identity.HAIdentifiers = []string{"ajaxbridge_jeedom_" + identity.DeviceSlug}
 	if s.resolver == nil {
 		return identity
@@ -727,10 +728,10 @@ func (s *Store) localDeviceSlug(evt Event, mapping Mapping, baseSlug string) str
 	if len(groups) == 0 {
 		return baseSlug
 	}
-	for i := len(groups) - 1; i >= 0; i-- {
-		device := s.devices[groups[i]]
+	for _, group := range slices.Backward(groups) {
+		device := s.devices[group]
 		if device == nil || !deviceHasMetric(device, mapping.Metric) {
-			return groups[i]
+			return group
 		}
 	}
 	suffix := Slug(evt.CommandID)
@@ -1224,8 +1225,7 @@ func (s *Store) HasRecentBridgeControl(commandID string, window time.Duration) b
 
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	for i := len(s.audits) - 1; i >= 0; i-- {
-		audit := s.audits[i]
+	for _, audit := range slices.Backward(s.audits) {
 		if audit.Time.Before(cutoff) {
 			return false
 		}

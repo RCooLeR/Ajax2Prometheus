@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import type { CameraStreamProfile, Device, EventItem, Room, RoomSummary } from '../models/dashboard';
 import type { HomeAssistant } from '../ha/types';
 import { CameraStrip } from './CameraStrip';
@@ -11,13 +11,9 @@ interface RoomDetailCardProps {
   selectedRoom: Room;
   roomDevices: Device[];
   roomEvents: EventItem[];
-  totalRoomEvents: number;
   roomSummaries: Record<string, RoomSummary>;
   selectedDeviceId: string | null;
-  selectedDeviceName: string | null;
-  selectedDevice: Device | null;
   onSelectDevice: (deviceId: string | null) => void;
-  onClearDeviceFilter: () => void;
   onSelectRoom: (roomId: string) => void;
   embedded?: boolean;
   hass?: HomeAssistant;
@@ -28,13 +24,9 @@ export function RoomDetailCard({
   selectedRoom,
   roomDevices,
   roomEvents,
-  totalRoomEvents,
   roomSummaries,
   selectedDeviceId,
-  selectedDeviceName,
-  selectedDevice,
   onSelectDevice,
-  onClearDeviceFilter,
   onSelectRoom,
   embedded = false,
   hass,
@@ -45,11 +37,6 @@ export function RoomDetailCard({
   const cameras = roomDevices.filter((device) => device.type === 'camera');
   const selectedCamera = cameras.find((device) => device.id === selectedCameraId) ?? null;
   const selectedCameraAudio = selectedCamera ? audioByCameraId[selectedCamera.id] ?? { muted: true, volume: 1 } : { muted: true, volume: 1 };
-
-  useEffect(() => {
-    setSelectedCameraId(null);
-    setStreamProfile('main');
-  }, [selectedRoom.id]);
 
   function handlePlayCamera(cameraId: string, profile: CameraStreamProfile) {
     setSelectedCameraId(cameraId);
@@ -66,6 +53,7 @@ export function RoomDetailCard({
       />
       <main className="room-detail-layout__main">
         <RoomHero
+          key={selectedCamera?.id ?? 'room-overview'}
           room={selectedRoom}
           roomSummary={roomSummaries[selectedRoom.id]}
           roomEvents={roomEvents}

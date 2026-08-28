@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -124,8 +125,8 @@ func (p *Publisher) beginDevicePublish(device Device) (func(), bool) {
 		gate.mu.Lock()
 	}
 	release := func() {
-		for i := len(gates) - 1; i >= 0; i-- {
-			gates[i].mu.Unlock()
+		for _, gate := range slices.Backward(gates) {
+			gate.mu.Unlock()
 		}
 	}
 	if canonicalGate == nil {

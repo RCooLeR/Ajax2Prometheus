@@ -1,4 +1,4 @@
-import { createElement, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { CameraStreamProfile, Device, DeviceActionDomain, EventItem, GlowTone, IconRef, Room, RoomSummary } from '../models/dashboard';
 import type { HomeAssistant, HomeAssistantState } from '../ha/types';
 import { Icon } from '../components/Icon';
@@ -20,8 +20,11 @@ interface RoomHeroProps {
 export function RoomHero({ room, roomSummary, roomEvents, selectedDevice, streamProfile, audioMuted, audioVolume, hass }: RoomHeroProps) {
   const [pendingActionId, setPendingActionId] = useState<string | null>(null);
   const [actionFeedback, setActionFeedback] = useState<string | null>(null);
-  const [mediaSrc, setMediaSrc] = useState<string | null>(null);
+  const [failedMediaSource, setFailedMediaSource] = useState<string | null>(null);
   const heroMedia = selectedDevice?.heroMedia ?? buildFallbackCameraMedia(selectedDevice);
+  const mediaSrc = failedMediaSource === heroMedia?.src
+    ? heroMedia.posterSrc ?? heroMedia.src
+    : heroMedia?.src;
   const actions = selectedDevice?.actions ?? [];
   const videoMode = heroMedia?.kind === 'stream';
   const showDahuaStats = roomSummary.dahuaCameraCount > 0;
@@ -31,15 +34,6 @@ export function RoomHero({ room, roomSummary, roomEvents, selectedDevice, stream
   const hasCoSensor = (safety.coCapable ?? 0) > 0;
   const smokeHigh = hasSmokeSensor ? safety.smokeHigh || countRoomEvents(roomEvents, ['smoke_detected', 'fire_detected']) : 0;
   const coHigh = hasCoSensor ? safety.coHigh || countRoomEvents(roomEvents, ['gas_detected']) : 0;
-
-  useEffect(() => {
-    setPendingActionId(null);
-    setActionFeedback(null);
-  }, [selectedDevice?.id]);
-
-  useEffect(() => {
-    setMediaSrc(heroMedia?.src ?? null);
-  }, [heroMedia?.entityId, heroMedia?.src]);
 
   async function handleAction(actionId: string, domain: DeviceActionDomain, service: string, entityId: string) {
     if (!hass?.callService) {
@@ -90,7 +84,7 @@ export function RoomHero({ room, roomSummary, roomEvents, selectedDevice, stream
               alt={heroMedia.title}
               onError={() => {
                 if (heroMedia.posterSrc && mediaSrc !== heroMedia.posterSrc) {
-                  setMediaSrc(heroMedia.posterSrc);
+                  setFailedMediaSource(heroMedia.src);
                 }
               }}
             />
@@ -174,7 +168,7 @@ export function RoomHero({ room, roomSummary, roomEvents, selectedDevice, stream
                 type="button"
                 className="room-hero__action-button"
                 disabled={pendingActionId !== null}
-                onClick={() => handleAction(action.id, action.domain, action.service, action.entityId)}
+                onClick={() => void handleAction(action.id, action.domain, action.service, action.entityId)}
               >
                 <span>{action.label}</span>
                 {action.stateLabel ? <small>{action.stateLabel}</small> : null}
@@ -240,12 +234,14 @@ function NativeCameraStream({ hass, stateObj, profile, muted, volume }: NativeCa
     return forceNestedVideoObjectFit(streamElement, muted, volume);
   }, [muted, stateObj.entity_id, volume]);
 
-  return createElement('ha-camera-stream', {
-    ref: streamRef,
-    className: 'room-hero__media room-hero__native-stream',
-    'data-audio-muted': String(muted),
-    'data-audio-volume': String(volume),
-  });
+  return (
+    <ha-camera-stream
+      ref={streamRef}
+      className="room-hero__media room-hero__native-stream"
+      data-audio-muted={String(muted)}
+      data-audio-volume={String(volume)}
+    />
+  );
 }
 
 function forceNestedVideoObjectFit(rootElement: HTMLElement, muted: boolean, volume: number): () => void {

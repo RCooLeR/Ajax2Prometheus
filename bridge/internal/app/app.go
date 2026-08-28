@@ -218,21 +218,18 @@ func Run(parent context.Context, cfg config.Config, log zerolog.Logger) error {
 
 	var wg sync.WaitGroup
 	errs := make(chan error, 2)
-	wg.Add(2)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		if err := httpServer.Run(ctx); err != nil {
 			errs <- err
 			stop()
 		}
-	}()
-	go func() {
-		defer wg.Done()
+	})
+	wg.Go(func() {
 		if err := siaServer.Run(ctx); err != nil {
 			errs <- err
 			stop()
 		}
-	}()
+	})
 	go application.refreshOnline(ctx)
 	if application.mqtt != nil {
 		go application.publishMQTTSnapshots(ctx)

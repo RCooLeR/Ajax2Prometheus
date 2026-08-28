@@ -5,8 +5,10 @@ project_name: ajaxbridge
 before:
   hooks:
     - go test ./bridge/...
-    - npm --prefix ./ha-cards run build
-    - npm --prefix ./ha-cards run check
+    - npm --prefix ./ha-cards run verify
+    - >-
+      tar --sort=name --mtime=@{{ .CommitTimestamp }} --owner=0 --group=0
+      --numeric-owner --format=gnu -czf ha-cards-dist.tar.gz -C ha-cards/dist .
 
 builds:
   - id: ajaxbridge
@@ -21,12 +23,26 @@ builds:
       - arm64
     flags:
       - -trimpath
+      - -buildvcs=false
     mod_timestamp: "{{ .CommitTimestamp }}"
     ldflags:
       - -s -w -X main.version={{ .Version }} -X main.commit={{ .Commit }} -X main.date={{ .CommitDate }}
 
+archives:
+  - formats:
+      - tar.gz
+
 checksum:
-  disable: true
+  name_template: checksums.txt
+  algorithm: sha256
+  extra_files:
+    - glob: ./ha-cards-dist.tar.gz
+
+sboms:
+  - id: archives
+    artifacts: archive
+  - id: source
+    artifacts: source
 
 docker_digest:
   name_template: digests.txt
@@ -63,12 +79,39 @@ dockers_v2:
       org.opencontainers.image.description: "Ajax security hub SIA DC-09 to Prometheus exporter"
       org.opencontainers.image.url: "{{ .GitURL }}"
       org.opencontainers.image.source: "{{ .GitURL }}"
+      org.opencontainers.image.licenses: MIT
       org.opencontainers.image.version: "{{ .Version }}"
       org.opencontainers.image.revision: "{{ .FullCommit }}"
       org.opencontainers.image.created: "{{ .Date }}"
+    annotations:
+      "index,manifest:org.opencontainers.image.title": "{{ .ProjectName }}"
+      "index,manifest:org.opencontainers.image.description": "Ajax security hub SIA DC-09 to Prometheus exporter"
+      "index,manifest:org.opencontainers.image.source": "{{ .GitURL }}"
+      "index,manifest:org.opencontainers.image.licenses": MIT
+      "index,manifest:org.opencontainers.image.version": "{{ .Version }}"
+      "index,manifest:org.opencontainers.image.revision": "{{ .FullCommit }}"
+      "index,manifest:org.opencontainers.image.created": "{{ .Date }}"
+    flags:
+      - --provenance=mode=max
+      - --pull
+    sbom: true
     platforms:
       - linux/amd64
       - linux/arm64
 
+docker_signs:
+  - id: keyless
+    artifacts: all
+    args:
+      - sign
+      - "${artifact}@${digest}"
+      - --yes
+    output: true
+
 release:
-  skip_upload: true
+  replace_existing_artifacts: true
+  include_meta: true
+  preflight:
+    fail_on_error: true
+  extra_files:
+    - glob: ./ha-cards-dist.tar.gz

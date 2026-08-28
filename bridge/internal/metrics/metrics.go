@@ -1,6 +1,7 @@
 package metrics
 
 import (
+	"regexp"
 	"strconv"
 	"time"
 
@@ -8,7 +9,10 @@ import (
 	"github.com/RCooLeR/AjaxBridge/internal/forward"
 	"github.com/RCooLeR/AjaxBridge/internal/state"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/collectors"
 )
+
+var schedulerRuntimeMetrics = regexp.MustCompile(`^/sched/(goroutines-created|goroutines/(not-in-go|runnable|running|waiting)|threads/total):`)
 
 type Metrics struct {
 	eventsTotal     *prometheus.CounterVec
@@ -45,6 +49,12 @@ type Metrics struct {
 }
 
 func New(reg prometheus.Registerer) *Metrics {
+	reg.MustRegister(collectors.NewGoCollector(
+		collectors.WithGoCollectorRuntimeMetrics(collectors.GoRuntimeMetricsRule{
+			Matcher: schedulerRuntimeMetrics,
+		}),
+	))
+
 	m := &Metrics{
 		eventsTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "ajax_sia_events_total",
@@ -61,6 +71,7 @@ func New(reg prometheus.Registerer) *Metrics {
 		forwardDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Name:    "ajax_sia_forward_duration_seconds",
 			Help:    "Duration of SIA frame forwarding attempts to an upstream receiver.",
+			Unit:    "seconds",
 			Buckets: []float64{0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10},
 		}, []string{"target", "status"}),
 		accountOnline: prometheus.NewGaugeVec(prometheus.GaugeOpts{
@@ -94,10 +105,12 @@ func New(reg prometheus.Registerer) *Metrics {
 		accountLastEvent: prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Name: "ajax_account_last_event_timestamp_seconds",
 			Help: "Unix timestamp for the last received event per account.",
+			Unit: "seconds",
 		}, []string{"account"}),
 		accountLastPing: prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Name: "ajax_account_last_ping_timestamp_seconds",
 			Help: "Unix timestamp for the last test/ping event per account.",
+			Unit: "seconds",
 		}, []string{"account"}),
 		zoneAlarm: prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Name: "ajax_zone_alarm_active",
@@ -106,6 +119,7 @@ func New(reg prometheus.Registerer) *Metrics {
 		zoneAlarmLast: prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Name: "ajax_zone_alarm_last_event_timestamp_seconds",
 			Help: "Unix timestamp for the last alarm event per zone/device.",
+			Unit: "seconds",
 		}, []string{"account", "partition", "group", "zone", "device", "device_name", "room", "device_kind", "device_events", "alarm_signal", "alarm_action"}),
 		zoneTamper: prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Name: "ajax_zone_tamper_active",
@@ -114,6 +128,7 @@ func New(reg prometheus.Registerer) *Metrics {
 		zoneTamperLast: prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Name: "ajax_zone_tamper_last_event_timestamp_seconds",
 			Help: "Unix timestamp for the last tamper or tamper restore event per zone/device.",
+			Unit: "seconds",
 		}, []string{"account", "partition", "group", "zone", "device", "device_name", "room", "device_kind", "device_events"}),
 		zoneTrouble: prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Name: "ajax_zone_trouble_active",
@@ -122,6 +137,7 @@ func New(reg prometheus.Registerer) *Metrics {
 		zoneLastEvent: prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Name: "ajax_zone_last_event_timestamp_seconds",
 			Help: "Unix timestamp for the last received event per zone/device.",
+			Unit: "seconds",
 		}, []string{"account", "partition", "group", "zone", "device", "device_name", "room", "device_kind", "device_events"}),
 		jeedomMessages: prometheus.NewCounter(prometheus.CounterOpts{
 			Name: "ajax_jeedom_mqtt_messages_total",
@@ -138,6 +154,7 @@ func New(reg prometheus.Registerer) *Metrics {
 		jeedomLastUpdate: prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Name: "ajax_jeedom_last_update_timestamp_seconds",
 			Help: "Unix timestamp for the last Jeedom command update.",
+			Unit: "seconds",
 		}, []string{"device", "command", "command_id", "metric"}),
 		jeedomCommandValue: prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Name: "ajax_jeedom_command_value",
@@ -146,22 +163,27 @@ func New(reg prometheus.Registerer) *Metrics {
 		jeedomDevicePower: prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Name: "ajax_jeedom_device_power_watts",
 			Help: "Last Jeedom power value per device.",
+			Unit: "watts",
 		}, []string{"device"}),
 		jeedomDeviceCurrent: prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Name: "ajax_jeedom_device_current_amperes",
 			Help: "Last Jeedom current value per device.",
+			Unit: "amperes",
 		}, []string{"device"}),
 		jeedomDeviceVoltage: prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Name: "ajax_jeedom_device_voltage_volts",
 			Help: "Last Jeedom voltage value per device.",
+			Unit: "volts",
 		}, []string{"device"}),
 		jeedomDeviceTemp: prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Name: "ajax_jeedom_device_temperature_celsius",
 			Help: "Last Jeedom temperature value per device.",
+			Unit: "celsius",
 		}, []string{"device"}),
 		jeedomDeviceBattery: prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Name: "ajax_jeedom_device_battery_percent",
 			Help: "Last Jeedom battery percent value per device.",
+			Unit: "percent",
 		}, []string{"device"}),
 	}
 

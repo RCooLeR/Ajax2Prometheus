@@ -4,6 +4,10 @@
 
 - Preserve action-only WallSwitch state across AjaxBridge restarts by publishing retained bridge state, persisting successful ON/OFF controls, and representing genuinely unknown state as unknown instead of OFF.
 - Seed an active WallSwitch from positive power/current telemetry when Jeedom discovery has no `Etat`/`realState` command, without treating zero load as proof that the relay is off.
+- Upgrade the bridge to Go 1.27, urfave/cli v3, Chi 5.3.2, Prometheus client 1.24.1, and current transitive modules; pin `govulncheck` through the Go tool directive and adopt context-aware CLI handlers, `WaitGroup.Go`, and modern slice iteration.
+- Publish selected Go scheduler runtime metrics and OpenMetrics unit metadata for duration, timestamp, power, current, voltage, temperature, and battery metric families.
+- Upgrade the Lovelace UI to React 19.2.8, TypeScript 7, Vite 8.2 with native Rolldown configuration, and type-aware Oxlint; adopt React Effect Events, stricter project references, safer state resets, and generated third-party license metadata.
+- Modernize the container and release pipeline with Go 1.27 and Alpine 3.24.1 images, BuildKit cache mounts, Compose hardening, current pinned GitHub Actions, automated dependency updates, release checksums, SBOMs, provenance, keyless Cosign signatures, and GitHub attestations.
 
 ## 2.0.1 - 2026-08-05
 
