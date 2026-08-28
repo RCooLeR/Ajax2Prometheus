@@ -23,6 +23,26 @@ const relayDiscoveryPayload = `{
   }
 }`
 
+const wallSwitchDiscoveryPayload = `{
+  "id": 26,
+  "name": "Grid load",
+  "logicalId": "WALLSWITCH26",
+  "eqType_name": "ajaxSystem",
+  "isVisible": 1,
+  "isEnable": 1,
+  "configuration": {"device":"WallSwitch","applyDevice":"WallSwitch"},
+  "cmds": {
+    "342": {"id":342,"logicalId":"sourceObjectName","name":"Source evenement","type":"info","subType":"other","eqLogic_id":26,"isVisible":1},
+    "343": {"id":343,"logicalId":"event","name":"Evenement","type":"info","subType":"other","eqLogic_id":26,"isVisible":1},
+    "344": {"id":344,"logicalId":"eventCode","name":"Code evenement","type":"info","subType":"other","eqLogic_id":26,"isVisible":1},
+    "345": {"id":345,"logicalId":"voltage","name":"Voltage","type":"info","subType":"numeric","eqLogic_id":26,"isVisible":1},
+    "346": {"id":346,"logicalId":"powerWTh","name":"Puissance","type":"info","subType":"numeric","eqLogic_id":26,"isVisible":1},
+    "347": {"id":347,"logicalId":"currentMA","name":"Courant","type":"info","subType":"numeric","eqLogic_id":26,"isVisible":1},
+    "348": {"id":348,"logicalId":"SWITCH_ON","name":"On","type":"action","subType":"other","eqLogic_id":26,"isVisible":1},
+    "349": {"id":349,"logicalId":"SWITCH_OFF","name":"Off","type":"action","subType":"other","eqLogic_id":26,"isVisible":1}
+  }
+}`
+
 func TestParseDiscoveryMessageExtractsActions(t *testing.T) {
 	discovery, err := ParseDiscoveryMessage("jeedom/discovery/eqLogic/10", []byte(relayDiscoveryPayload), time.Unix(100, 0))
 	if err != nil {
@@ -117,6 +137,72 @@ func TestStoreApplyDiscoverySeedsCurrentInfoValues(t *testing.T) {
 	}
 	if result.Device.RawCommands["56"].LastValueAt.IsZero() {
 		t.Fatalf("power command LastValueAt was not seeded")
+	}
+}
+
+func TestStoreApplyDiscoveryDoesNotSeedEmptyMeasurements(t *testing.T) {
+	payload := []byte(`{
+	  "id":9,
+	  "name":"Fence power",
+	  "configuration":{"device":"WallSwitch"},
+	  "isVisible":1,
+	  "isEnable":1,
+	  "cmds":{
+	    "180":{"id":180,"name":"Puissance","type":"info","subType":"numeric","unite":"W","isVisible":1,"currentValue":""},
+	    "181":{"id":181,"name":"Consommation","type":"info","subType":"numeric","unite":"kWh","isVisible":1,"currentValue":null}
+	  }
+	}`)
+	discovery, err := ParseDiscoveryMessage("jeedom/discovery/eqLogic/9", payload, time.Unix(100, 0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	result := NewStore("keep_last").ApplyDiscovery(discovery)
+
+	for _, tc := range []struct {
+		commandID string
+		metric    string
+	}{
+		{commandID: "180", metric: "power_w"},
+		{commandID: "181", metric: "energy_kwh"},
+	} {
+		command, ok := result.Device.RawCommands[tc.commandID]
+		if !ok {
+			t.Fatalf("command %s was not registered", tc.commandID)
+		}
+		if !command.LastValueAt.IsZero() {
+			t.Fatalf("command %s LastValueAt = %s, want zero", tc.commandID, command.LastValueAt)
+		}
+		if _, ok := result.Device.Values[tc.metric]; ok {
+			t.Fatalf("empty discovery synthesized %s: %#v", tc.metric, result.Device.Values)
+		}
+	}
+}
+
+func TestStoreApplyDiscoverySeedsWallSwitchOnFromPositiveLoad(t *testing.T) {
+	payload := []byte(`{
+	  "id":26,
+	  "name":"Grid load",
+	  "configuration":{"device":"WallSwitch"},
+	  "isVisible":1,
+	  "isEnable":1,
+	  "cmds":{
+	    "346":{"id":346,"logicalId":"powerWTh","name":"Puissance","type":"info","subType":"numeric","currentValue":15329},
+	    "347":{"id":347,"logicalId":"currentMA","name":"Courant","type":"info","subType":"numeric","currentValue":1940},
+	    "348":{"id":348,"logicalId":"SWITCH_ON","name":"On","type":"action","subType":"other"},
+	    "349":{"id":349,"logicalId":"SWITCH_OFF","name":"Off","type":"action","subType":"other"}
+	  }
+	}`)
+	discovery, err := ParseDiscoveryMessage("jeedom/discovery/eqLogic/26", payload, time.Unix(100, 0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	result := NewStore("keep_last").ApplyDiscovery(discovery)
+
+	if got := result.Device.Values["state"]; got != true {
+		t.Fatalf("state = %#v, want true from positive WallSwitch load", got)
+	}
+	if result.Device.Actions["on"].StateCommandID != "" {
+		t.Fatalf("WallSwitch unexpectedly acquired a state command: %#v", result.Device.Actions["on"])
 	}
 }
 

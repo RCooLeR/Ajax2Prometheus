@@ -3,6 +3,8 @@ package jeedom
 import (
 	"context"
 	"encoding/json"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -58,6 +60,215 @@ func TestDiscoveryPayloadUsesStableCommandIDAndDeviceIdentifier(t *testing.T) {
 	if payload.JSONAttributesTopic != "ajaxbridge/jeedom/devices/serverna/attributes" {
 		t.Fatalf("json_attributes_topic = %q", payload.JSONAttributesTopic)
 	}
+	if payload.ValueTemplate != "{{ value_json.get('power_w') }}" {
+		t.Fatalf("value_template = %q, want missing-key-safe lookup", payload.ValueTemplate)
+	}
+}
+
+func TestPublishDeviceCleansNeverValuedMeasurements(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		commandID  string
+		metric     string
+		unit       string
+		class      string
+		stateClass string
+	}{
+		{name: "power", commandID: "180", metric: "power_w", unit: "W", class: "power", stateClass: "measurement"},
+		{name: "energy", commandID: "221", metric: "energy_kwh", unit: "kWh", class: "energy", stateClass: "total_increasing"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			mqtt := &recordingMQTT{}
+			publisher := NewPublisher(PublisherConfig{
+				StateTopicPrefix: "ajaxbridge/jeedom",
+				Discovery:        true,
+				DiscoveryPrefix:  "homeassistant",
+				DiscoveryNode:    "ajaxbridge",
+				RetainState:      true,
+				RetainDiscovery:  true,
+			}, mqtt)
+			device := Device{
+				Device:     "Never valued",
+				DeviceSlug: "never_valued_" + tc.commandID,
+				Values:     map[string]any{},
+				RawCommands: map[string]Command{
+					tc.commandID: {
+						CommandID:   tc.commandID,
+						DeviceSlug:  "never_valued_" + tc.commandID,
+						Metric:      tc.metric,
+						Component:   ComponentSensor,
+						Unit:        tc.unit,
+						DeviceClass: tc.class,
+						StateClass:  tc.stateClass,
+					},
+				},
+			}
+
+			if err := publisher.PublishDevice(t.Context(), device); err != nil {
+				t.Fatal(err)
+			}
+			topic := "homeassistant/sensor/ajaxbridge/jeedom_cmd_" + tc.commandID + "/config"
+			payload, ok := mqtt.discovery[topic]
+			if !ok {
+				t.Fatalf("missing exact retained cleanup for %s", topic)
+			}
+			if payload != "" || !mqtt.discoveryRetain[topic] {
+				t.Fatalf("cleanup for %s = %q retain=%v, want empty retained", topic, payload, mqtt.discoveryRetain[topic])
+			}
+			var state map[string]any
+			stateTopic := "ajaxbridge/jeedom/devices/" + device.DeviceSlug + "/state"
+			if err := json.Unmarshal([]byte(mqtt.state[stateTopic]), &state); err != nil {
+				t.Fatal(err)
+			}
+			if _, ok := state[tc.metric]; ok {
+				t.Fatalf("unknown measurement %s was synthesized: %#v", tc.metric, state)
+			}
+		})
+	}
+}
+
+func TestFirstValidZeroMeasurementCausesRediscovery(t *testing.T) {
+	store := NewStore("keep_last")
+	discovered := store.ApplyDiscovery(Discovery{
+		EqLogicID:  "9",
+		Name:       "Fence power",
+		DeviceType: "WallSwitch",
+		InfoCommands: map[string]DiscoveryCommand{
+			"180": {CommandID: "180", Name: "Puissance", Type: "info", Subtype: "numeric", Unit: "W"},
+		},
+		ReceivedAt: time.Unix(100, 0),
+	})
+	mqtt := &recordingMQTT{}
+	publisher := NewPublisher(PublisherConfig{
+		StateTopicPrefix: "ajaxbridge/jeedom",
+		Discovery:        true,
+		DiscoveryPrefix:  "homeassistant",
+		DiscoveryNode:    "ajaxbridge",
+		RetainState:      true,
+		RetainDiscovery:  true,
+	}, mqtt)
+	topic := "homeassistant/sensor/ajaxbridge/jeedom_cmd_180/config"
+
+	if err := publisher.PublishDevice(t.Context(), discovered.Device); err != nil {
+		t.Fatal(err)
+	}
+	if payload, ok := mqtt.discovery[topic]; !ok || payload != "" {
+		t.Fatalf("initial discovery = %q present=%v, want retained cleanup", payload, ok)
+	}
+
+	updated := store.Apply(Event{
+		Topic:       "jeedom/cmd/event/180",
+		CommandID:   "180",
+		DeviceName:  "Fence power",
+		CommandName: "Puissance",
+		Type:        "info",
+		Subtype:     "numeric",
+		Unit:        "W",
+		Value:       json.RawMessage(`0`),
+		ReceivedAt:  time.Unix(101, 0),
+	})
+	if err := publisher.PublishDevice(t.Context(), updated.Device); err != nil {
+		t.Fatal(err)
+	}
+	payload := mqtt.discovery[topic]
+	if payload == "" {
+		t.Fatal("first valid zero did not republish discovery")
+	}
+	var config DiscoveryConfig
+	if err := json.Unmarshal([]byte(payload), &config); err != nil {
+		t.Fatal(err)
+	}
+	if config.UniqueID != "ajaxbridge_jeedom_cmd_180" || config.ValueTemplate != "{{ value_json.get('power_w') }}" {
+		t.Fatalf("rediscovery config = %#v", config)
+	}
+	stateTopic := "ajaxbridge/jeedom/devices/fence_power/state"
+	var state map[string]any
+	if err := json.Unmarshal([]byte(mqtt.state[stateTopic]), &state); err != nil {
+		t.Fatal(err)
+	}
+	if value, ok := state["power_w"]; !ok || value != float64(0) {
+		t.Fatalf("rediscovered zero state = %#v present=%v", value, ok)
+	}
+}
+
+func TestDiscoveryTemplatesAreSafeForPartialJSONAndFalse(t *testing.T) {
+	publisher := NewPublisher(PublisherConfig{}, fakeMQTT{})
+	device := Device{Device: "Device", DeviceSlug: "device"}
+	for _, tc := range []struct {
+		name    string
+		command Command
+		want    string
+	}{
+		{
+			name:    "sensor",
+			command: Command{CommandID: "1", Metric: "power_w", Component: ComponentSensor},
+			want:    "{{ value_json.get('power_w') }}",
+		},
+		{
+			name:    "binary false",
+			command: Command{CommandID: "2", Metric: "state", Component: ComponentBinarySensor},
+			want:    "{{ 'None' if value_json.get('state') is none else ('ON' if value_json.get('state') else 'OFF') }}",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, body, err := publisher.BuildDiscovery(tc.command, device)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var config DiscoveryConfig
+			if err := json.Unmarshal(body, &config); err != nil {
+				t.Fatal(err)
+			}
+			if config.ValueTemplate != tc.want || strings.Contains(config.ValueTemplate, "value_json."+tc.command.Metric) {
+				t.Fatalf("value_template = %q, want %q", config.ValueTemplate, tc.want)
+			}
+		})
+	}
+	if strings.Contains(switchStateValueTemplate, "value_json.state") || !strings.Contains(switchStateValueTemplate, "get('state')") {
+		t.Fatalf("switch value template is not partial-JSON-safe: %q", switchStateValueTemplate)
+	}
+}
+
+func TestNeverValuedDuplicateMetricCommandIsNotAuthorizedBySiblingValue(t *testing.T) {
+	mqtt := &recordingMQTT{}
+	publisher := NewPublisher(PublisherConfig{
+		StateTopicPrefix: "ajaxbridge/jeedom",
+		Discovery:        true,
+		DiscoveryPrefix:  "homeassistant",
+		DiscoveryNode:    "ajaxbridge",
+		RetainDiscovery:  true,
+	}, mqtt)
+	device := Device{
+		Device:     "Duplicate metrics",
+		DeviceSlug: "duplicate_metrics",
+		Values:     map[string]any{"power_w": 5.0},
+		RawCommands: map[string]Command{
+			"1": {
+				CommandID:   "1",
+				Metric:      "power_w",
+				Component:   ComponentSensor,
+				StateClass:  "measurement",
+				Value:       5.0,
+				LastValueAt: time.Unix(100, 0),
+			},
+			"2": {
+				CommandID:  "2",
+				Metric:     "power_w",
+				Component:  ComponentSensor,
+				StateClass: "measurement",
+			},
+		},
+	}
+
+	if err := publisher.PublishDevice(t.Context(), device); err != nil {
+		t.Fatal(err)
+	}
+	if got := mqtt.discovery["homeassistant/sensor/ajaxbridge/jeedom_cmd_1/config"]; got == "" {
+		t.Fatal("valued sibling discovery missing")
+	}
+	if got := mqtt.discovery["homeassistant/sensor/ajaxbridge/jeedom_cmd_2/config"]; got != "" {
+		t.Fatalf("never-valued duplicate metric discovery = %q, want cleanup", got)
+	}
 }
 
 func TestSwitchDiscoveryUsesBridgeCommandTopic(t *testing.T) {
@@ -101,6 +312,53 @@ func TestSwitchDiscoveryUsesBridgeCommandTopic(t *testing.T) {
 	}
 	if payload.Optimistic == nil || *payload.Optimistic {
 		t.Fatalf("optimistic = %#v, want false", payload.Optimistic)
+	}
+}
+
+func TestWallSwitchDiscoveryUsesRetainedBridgeStateWithoutJeedomStateCommand(t *testing.T) {
+	device := Device{
+		Source:           Source,
+		Device:           "Grid load",
+		DeviceSlug:       "grid_load",
+		JeedomDeviceType: "WallSwitch",
+		Actions: map[string]Action{
+			"on":  {Action: "on", CommandID: "348", DeviceSlug: "grid_load", Allowed: true},
+			"off": {Action: "off", CommandID: "349", DeviceSlug: "grid_load", Allowed: true},
+		},
+	}
+	publisher := NewPublisher(PublisherConfig{
+		StateTopicPrefix: "ajaxbridge/jeedom",
+		Discovery:        true,
+		DiscoveryPrefix:  "homeassistant",
+		DiscoveryNode:    "ajaxbridge",
+		Controls:         true,
+	}, fakeMQTT{})
+
+	topic, body, err := publisher.BuildSwitchDiscovery(device.Actions["on"], device)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if topic != "homeassistant/switch/ajaxbridge/jeedom_control_grid_load/config" {
+		t.Fatalf("discovery topic = %q", topic)
+	}
+	var payload DiscoveryConfig
+	if err := json.Unmarshal(body, &payload); err != nil {
+		t.Fatal(err)
+	}
+	if payload.UniqueID != "ajaxbridge_jeedom_control_grid_load" {
+		t.Fatalf("unique_id = %q", payload.UniqueID)
+	}
+	if payload.CommandTopic != "ajaxbridge/jeedom/devices/grid_load/set" {
+		t.Fatalf("command_topic = %q", payload.CommandTopic)
+	}
+	if payload.StateTopic != "ajaxbridge/jeedom/devices/grid_load/state" {
+		t.Fatalf("state_topic = %q", payload.StateTopic)
+	}
+	if payload.Optimistic == nil || *payload.Optimistic {
+		t.Fatalf("optimistic = %#v, want false", payload.Optimistic)
+	}
+	if payload.ValueTemplate != switchStateValueTemplate || !strings.Contains(payload.ValueTemplate, "None") {
+		t.Fatalf("value_template = %q, want unknown-safe bridge state template", payload.ValueTemplate)
 	}
 }
 
@@ -321,7 +579,7 @@ func TestPublishDeviceCleansSIAMergedDuplicateCommands(t *testing.T) {
 		LinkedAccount: "A0F80D",
 		LinkedZone:    "4",
 		HAIdentifiers: []string{"ajaxbridge_A0F80D_zone_4"},
-		Values:        map[string]any{},
+		Values:        map[string]any{"temperature_c": 21.0},
 		RawCommands: map[string]Command{
 			"134": {
 				CommandID: "134",
@@ -337,6 +595,8 @@ func TestPublishDeviceCleansSIAMergedDuplicateCommands(t *testing.T) {
 				Unit:        "\u00b0C",
 				DeviceClass: "temperature",
 				StateClass:  "measurement",
+				Value:       21.0,
+				LastValueAt: time.Unix(100, 0),
 			},
 		},
 	}
@@ -524,6 +784,278 @@ func TestPublishDeviceSeparatesStableAttributesFromFullState(t *testing.T) {
 	}
 }
 
+func TestPublisherRejectsOlderDeviceSnapshot(t *testing.T) {
+	mqtt := &recordingMQTT{}
+	publisher := NewPublisher(PublisherConfig{
+		StateTopicPrefix: "ajaxbridge/jeedom",
+		RetainState:      true,
+	}, mqtt)
+	newer := Device{
+		Device:          "Server",
+		DeviceSlug:      "server",
+		Values:          map[string]any{"power_w": 2.0},
+		publishRevision: 2,
+	}
+	older := newer
+	older.Values = map[string]any{"power_w": 1.0}
+	older.publishRevision = 1
+
+	if err := publisher.PublishDevice(t.Context(), newer); err != nil {
+		t.Fatal(err)
+	}
+	if err := publisher.PublishDevice(t.Context(), older); err != nil {
+		t.Fatal(err)
+	}
+	assertRecordedPower(t, mqtt.state["ajaxbridge/jeedom/devices/server/state"], 2)
+}
+
+func TestPublisherRejectsUnversionedSnapshotAfterVersionedSnapshot(t *testing.T) {
+	mqtt := &recordingMQTT{}
+	publisher := NewPublisher(PublisherConfig{
+		StateTopicPrefix: "ajaxbridge/jeedom",
+		RetainState:      true,
+	}, mqtt)
+	versioned := Device{
+		Device:          "Server",
+		DeviceSlug:      "server",
+		Values:          map[string]any{"power_w": 2.0},
+		publishRevision: 2,
+	}
+	unversioned := versioned
+	unversioned.Values = map[string]any{"power_w": 0.0}
+	unversioned.publishRevision = 0
+
+	if err := publisher.PublishDevice(t.Context(), versioned); err != nil {
+		t.Fatal(err)
+	}
+	if err := publisher.PublishDevice(t.Context(), unversioned); err != nil {
+		t.Fatal(err)
+	}
+	assertRecordedPower(t, mqtt.state["ajaxbridge/jeedom/devices/server/state"], 2)
+}
+
+func TestPublisherAllowsEqualRevisionReconnectReplay(t *testing.T) {
+	mqtt := &recordingMQTT{}
+	publisher := NewPublisher(PublisherConfig{
+		StateTopicPrefix: "ajaxbridge/jeedom",
+		RetainState:      true,
+	}, mqtt)
+	device := Device{
+		Device:          "Server",
+		DeviceSlug:      "server",
+		Values:          map[string]any{"power_w": 2.0},
+		publishRevision: 2,
+	}
+
+	if err := publisher.PublishDevice(t.Context(), device); err != nil {
+		t.Fatal(err)
+	}
+	if err := publisher.PublishDevice(t.Context(), device); err != nil {
+		t.Fatal(err)
+	}
+	if got := mqtt.stateCalls["ajaxbridge/jeedom/devices/server/state"]; got != 2 {
+		t.Fatalf("equal-revision state publishes = %d, want 2 for reconnect replay", got)
+	}
+}
+
+func TestPublisherPreventsStaleLegacySnapshotFromUndoingCleanup(t *testing.T) {
+	mqtt := &recordingMQTT{}
+	publisher := NewPublisher(PublisherConfig{
+		StateTopicPrefix: "ajaxbridge/jeedom",
+		Discovery:        true,
+		DiscoveryPrefix:  "homeassistant",
+		DiscoveryNode:    "ajaxbridge",
+		RetainState:      true,
+		RetainDiscovery:  true,
+	}, mqtt)
+	canonical := Device{
+		Device:            "Linked SIA device",
+		DeviceSlug:        "sia_a0f80d_zone_8",
+		LegacyDeviceSlugs: []string{"server"},
+		Values:            map[string]any{"power_w": 2.0},
+		publishRevision:   2,
+	}
+	staleLegacy := Device{
+		Device:          "Old Jeedom device",
+		DeviceSlug:      "server",
+		Values:          map[string]any{"power_w": 1.0},
+		publishRevision: 1,
+	}
+
+	if err := publisher.PublishDevice(t.Context(), canonical); err != nil {
+		t.Fatal(err)
+	}
+	if err := publisher.PublishDevice(t.Context(), staleLegacy); err != nil {
+		t.Fatal(err)
+	}
+	if got := mqtt.state["ajaxbridge/jeedom/devices/server/state"]; got != "" {
+		t.Fatalf("stale legacy snapshot repopulated cleaned retained state: %q", got)
+	}
+}
+
+func TestPublisherSharedLegacyAliasDoesNotSuppressCanonicalDevices(t *testing.T) {
+	mqtt := &recordingMQTT{}
+	publisher := NewPublisher(PublisherConfig{
+		StateTopicPrefix: "ajaxbridge/jeedom",
+		RetainState:      true,
+	}, mqtt)
+	zone2 := Device{
+		Device:            "Diana zone 2",
+		DeviceSlug:        "sia_a0f80d_zone_2",
+		LegacyDeviceSlugs: []string{"diana"},
+		Values:            map[string]any{"power_w": 2.0},
+		publishRevision:   2,
+	}
+	zone20 := Device{
+		Device:            "Diana zone 20",
+		DeviceSlug:        "sia_a0f80d_zone_20",
+		LegacyDeviceSlugs: []string{"diana"},
+		Values:            map[string]any{"power_w": 20.0},
+		publishRevision:   1,
+	}
+	staleLegacy := Device{
+		Device:          "Old Diana",
+		DeviceSlug:      "diana",
+		Values:          map[string]any{"power_w": 1.0},
+		publishRevision: 1,
+	}
+
+	if err := publisher.PublishDevice(t.Context(), zone2); err != nil {
+		t.Fatal(err)
+	}
+	if err := publisher.PublishDevice(t.Context(), zone20); err != nil {
+		t.Fatal(err)
+	}
+	assertRecordedPower(t, mqtt.state["ajaxbridge/jeedom/devices/sia_a0f80d_zone_20/state"], 20)
+	if err := publisher.PublishDevice(t.Context(), staleLegacy); err != nil {
+		t.Fatal(err)
+	}
+	if got := mqtt.state["ajaxbridge/jeedom/devices/diana/state"]; got != "" {
+		t.Fatalf("stale shared legacy snapshot repopulated cleanup: %q", got)
+	}
+}
+
+func TestPublisherCleansTransitiveLegacyAliasChain(t *testing.T) {
+	store := NewStore("keep_last")
+	store.replaceDevices([]Device{
+		{Device: "Canonical A", DeviceSlug: "a", LegacyDeviceSlugs: []string{"b"}, Values: map[string]any{"power_w": 3.0}},
+		{Device: "Legacy B", DeviceSlug: "b", LegacyDeviceSlugs: []string{"c"}, Values: map[string]any{"power_w": 2.0}},
+		{Device: "Legacy C", DeviceSlug: "c", Values: map[string]any{"power_w": 1.0}},
+	})
+	mqtt := &recordingMQTT{state: map[string]string{
+		"ajaxbridge/jeedom/devices/b/state": `{"power_w":2}`,
+		"ajaxbridge/jeedom/devices/c/state": `{"power_w":1}`,
+	}}
+	publisher := NewPublisher(PublisherConfig{
+		StateTopicPrefix: "ajaxbridge/jeedom",
+		Discovery:        true,
+		DiscoveryPrefix:  "homeassistant",
+		DiscoveryNode:    "ajaxbridge",
+		RetainState:      true,
+	}, mqtt)
+
+	for _, device := range store.Devices() {
+		if err := publisher.PublishDevice(t.Context(), device); err != nil {
+			t.Fatal(err)
+		}
+	}
+	assertRecordedPower(t, mqtt.state["ajaxbridge/jeedom/devices/a/state"], 3)
+	for _, slug := range []string{"b", "c"} {
+		if got := mqtt.state["ajaxbridge/jeedom/devices/"+slug+"/state"]; got != "" {
+			t.Fatalf("transitive legacy %s retained state = %q, want cleanup", slug, got)
+		}
+	}
+}
+
+func TestPublisherSerializesSameDeviceThroughMQTTPublish(t *testing.T) {
+	topic := "ajaxbridge/jeedom/devices/server/state"
+	mqtt := newOrderedStateMQTT(topic)
+	publisher := NewPublisher(PublisherConfig{
+		StateTopicPrefix: "ajaxbridge/jeedom",
+		RetainState:      true,
+	}, mqtt)
+	older := Device{Device: "Server", DeviceSlug: "server", Values: map[string]any{"power_w": 1.0}, publishRevision: 1}
+	newer := Device{Device: "Server", DeviceSlug: "server", Values: map[string]any{"power_w": 2.0}, publishRevision: 2}
+
+	errA := make(chan error, 1)
+	go func() {
+		errA <- publisher.PublishDevice(t.Context(), older)
+	}()
+	select {
+	case <-mqtt.firstEntered:
+	case <-time.After(time.Second):
+		t.Fatal("older snapshot never reached MQTT")
+	}
+
+	errB := make(chan error, 1)
+	go func() {
+		errB <- publisher.PublishDevice(t.Context(), newer)
+	}()
+	select {
+	case <-mqtt.secondEntered:
+		t.Fatal("newer same-device snapshot entered MQTT before older publish completed")
+	case <-time.After(50 * time.Millisecond):
+	}
+	close(mqtt.releaseFirst)
+	if err := <-errA; err != nil {
+		t.Fatal(err)
+	}
+	if err := <-errB; err != nil {
+		t.Fatal(err)
+	}
+	assertRecordedPower(t, mqtt.statePayload(topic), 2)
+}
+
+func TestPublisherDoesNotSerializeDifferentDevices(t *testing.T) {
+	mqtt := newBlockingStateMQTT("ajaxbridge/jeedom/devices/device_a/state")
+	publisher := NewPublisher(PublisherConfig{
+		StateTopicPrefix: "ajaxbridge/jeedom",
+		RetainState:      true,
+	}, mqtt)
+	deviceA := Device{Device: "Device A", DeviceSlug: "device_a", Values: map[string]any{"power_w": 1.0}, publishRevision: 1}
+	deviceB := Device{Device: "Device B", DeviceSlug: "device_b", Values: map[string]any{"power_w": 2.0}, publishRevision: 2}
+
+	errA := make(chan error, 1)
+	go func() {
+		errA <- publisher.PublishDevice(t.Context(), deviceA)
+	}()
+	select {
+	case <-mqtt.entered:
+	case <-time.After(time.Second):
+		t.Fatal("device A never reached the blocking MQTT publish")
+	}
+
+	errB := make(chan error, 1)
+	go func() {
+		errB <- publisher.PublishDevice(t.Context(), deviceB)
+	}()
+	select {
+	case err := <-errB:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(time.Second):
+		close(mqtt.release)
+		<-errA
+		t.Fatal("device B was unnecessarily serialized behind device A")
+	}
+	close(mqtt.release)
+	if err := <-errA; err != nil {
+		t.Fatal(err)
+	}
+}
+
+func assertRecordedPower(t *testing.T, payload string, want float64) {
+	t.Helper()
+	var state map[string]any
+	if err := json.Unmarshal([]byte(payload), &state); err != nil {
+		t.Fatal(err)
+	}
+	if got := state["power_w"]; got != want {
+		t.Fatalf("retained power_w = %#v, want %v (payload %s)", got, want, payload)
+	}
+}
+
 type fakeMQTT struct{}
 
 func (fakeMQTT) PublishStateMessage(context.Context, string, []byte, bool) error {
@@ -539,26 +1071,134 @@ func (fakeMQTT) AvailabilityTopic() string {
 }
 
 type recordingMQTT struct {
-	state     map[string]string
-	discovery map[string]string
+	state           map[string]string
+	stateRetain     map[string]bool
+	stateCalls      map[string]int
+	discovery       map[string]string
+	discoveryRetain map[string]bool
 }
 
-func (m *recordingMQTT) PublishStateMessage(_ context.Context, topic string, payload []byte, _ bool) error {
+func (m *recordingMQTT) PublishStateMessage(_ context.Context, topic string, payload []byte, retain bool) error {
 	if m.state == nil {
 		m.state = make(map[string]string)
 	}
+	if m.stateRetain == nil {
+		m.stateRetain = make(map[string]bool)
+	}
+	if m.stateCalls == nil {
+		m.stateCalls = make(map[string]int)
+	}
 	m.state[topic] = string(payload)
+	m.stateRetain[topic] = retain
+	m.stateCalls[topic]++
 	return nil
 }
 
-func (m *recordingMQTT) PublishDiscoveryMessage(_ context.Context, _ string, topic string, payload []byte, _ bool) error {
+func (m *recordingMQTT) PublishDiscoveryMessage(_ context.Context, _ string, topic string, payload []byte, retain bool) error {
 	if m.discovery == nil {
 		m.discovery = make(map[string]string)
 	}
+	if m.discoveryRetain == nil {
+		m.discoveryRetain = make(map[string]bool)
+	}
 	m.discovery[topic] = string(payload)
+	m.discoveryRetain[topic] = retain
 	return nil
 }
 
 func (m *recordingMQTT) AvailabilityTopic() string {
+	return "ajaxbridge/status"
+}
+
+type blockingStateMQTT struct {
+	blockTopic string
+	entered    chan struct{}
+	release    chan struct{}
+	once       sync.Once
+	mu         sync.Mutex
+	state      map[string]string
+}
+
+type orderedStateMQTT struct {
+	blockTopic    string
+	firstEntered  chan struct{}
+	secondEntered chan struct{}
+	releaseFirst  chan struct{}
+	mu            sync.Mutex
+	calls         int
+	state         map[string]string
+}
+
+func newOrderedStateMQTT(blockTopic string) *orderedStateMQTT {
+	return &orderedStateMQTT{
+		blockTopic:    blockTopic,
+		firstEntered:  make(chan struct{}),
+		secondEntered: make(chan struct{}),
+		releaseFirst:  make(chan struct{}),
+		state:         make(map[string]string),
+	}
+}
+
+func (m *orderedStateMQTT) PublishStateMessage(_ context.Context, topic string, payload []byte, _ bool) error {
+	if topic == m.blockTopic {
+		m.mu.Lock()
+		m.calls++
+		call := m.calls
+		m.mu.Unlock()
+		switch call {
+		case 1:
+			close(m.firstEntered)
+			<-m.releaseFirst
+		case 2:
+			close(m.secondEntered)
+		}
+	}
+	m.mu.Lock()
+	m.state[topic] = string(payload)
+	m.mu.Unlock()
+	return nil
+}
+
+func (*orderedStateMQTT) PublishDiscoveryMessage(context.Context, string, string, []byte, bool) error {
+	return nil
+}
+
+func (*orderedStateMQTT) AvailabilityTopic() string {
+	return "ajaxbridge/status"
+}
+
+func (m *orderedStateMQTT) statePayload(topic string) string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.state[topic]
+}
+
+func newBlockingStateMQTT(blockTopic string) *blockingStateMQTT {
+	return &blockingStateMQTT{
+		blockTopic: blockTopic,
+		entered:    make(chan struct{}),
+		release:    make(chan struct{}),
+		state:      make(map[string]string),
+	}
+}
+
+func (m *blockingStateMQTT) PublishStateMessage(_ context.Context, topic string, payload []byte, _ bool) error {
+	if topic == m.blockTopic {
+		m.once.Do(func() {
+			close(m.entered)
+			<-m.release
+		})
+	}
+	m.mu.Lock()
+	m.state[topic] = string(payload)
+	m.mu.Unlock()
+	return nil
+}
+
+func (*blockingStateMQTT) PublishDiscoveryMessage(context.Context, string, string, []byte, bool) error {
+	return nil
+}
+
+func (*blockingStateMQTT) AvailabilityTopic() string {
 	return "ajaxbridge/status"
 }

@@ -556,6 +556,8 @@ ON
 OFF
 ```
 
+The switch keeps the same unique id and command topic whether or not Jeedom exposes an `Etat`/`realState` info command. AjaxBridge always publishes a retained bridge state topic for the control. For action-only WallSwitch equipment it persists successful ON/OFF requests and recognized Ajax event-code changes, then republishes that state after restart. Positive power/current can seed `ON` during a fresh synchronization; zero load is not sufficient evidence for `OFF`. Until AjaxBridge has reliable evidence, Home Assistant shows the switch as `unknown` instead of incorrectly showing `OFF`.
+
 Relay impulse buttons publish `ON` for an `on`-backed pulse or `IMPULSE` for a dedicated impulse action.
 
 AjaxBridge then publishes to Jeedom:

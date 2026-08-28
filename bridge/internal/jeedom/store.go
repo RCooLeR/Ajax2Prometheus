@@ -2,6 +2,7 @@ package jeedom
 
 import (
 	"fmt"
+	"math"
 	"sort"
 	"strings"
 	"sync"
@@ -18,16 +19,17 @@ const (
 )
 
 type Store struct {
-	mu         sync.RWMutex
-	saveMu     sync.Mutex
-	policy     EmptyValuePolicy
-	resolver   IdentityResolver
-	path       string
-	devices    map[string]*Device
-	commands   map[string]string
-	eqLogics   map[string]string
-	baseGroups map[string][]string
-	audits     []ControlAudit
+	mu                  sync.RWMutex
+	saveMu              sync.Mutex
+	policy              EmptyValuePolicy
+	resolver            IdentityResolver
+	path                string
+	devices             map[string]*Device
+	commands            map[string]string
+	eqLogics            map[string]string
+	baseGroups          map[string][]string
+	audits              []ControlAudit
+	nextPublishRevision uint64
 }
 
 type Device struct {
@@ -54,6 +56,7 @@ type Device struct {
 	JeedomEnabled     bool               `json:"jeedom_enabled,omitempty"`
 	JeedomVisible     bool               `json:"jeedom_visible,omitempty"`
 	Actions           map[string]Action  `json:"actions,omitempty"`
+	publishRevision   uint64
 }
 
 type Command struct {
@@ -234,10 +237,14 @@ func (s *Store) Apply(evt Event) ApplyResult {
 		EntityCategory: mapping.EntityCategory,
 		LastUpdate:     now,
 	}
-	if existing, ok := device.RawCommands[evt.CommandID]; ok {
+	existing, hasExisting := device.RawCommands[evt.CommandID]
+	if hasExisting {
 		command.LogicalID = existing.LogicalID
 		command.GenericType = existing.GenericType
 		command.Visible = existing.Visible
+		command.Value = existing.Value
+		command.LastValueAt = existing.LastValueAt
+		command.EmptyValue = existing.EmptyValue
 	}
 
 	result := ApplyResult{
@@ -247,10 +254,6 @@ func (s *Store) Apply(evt Event) ApplyResult {
 
 	if result.EmptyValue {
 		command.EmptyValue = true
-		if existing, ok := device.RawCommands[evt.CommandID]; ok && s.policy == EmptyValueKeepLast {
-			command.Value = existing.Value
-			command.LastValueAt = existing.LastValueAt
-		}
 		if s.policy == EmptyValueUnknown {
 			device.Values[mapping.Metric] = nil
 			command.Value = nil
@@ -262,17 +265,20 @@ func (s *Store) Apply(evt Event) ApplyResult {
 			device.Values[mapping.Metric] = value
 			command.Value = value
 			command.LastValueAt = now
+			command.EmptyValue = false
 			result.UpdatedValue = true
 			applyDerivedValuesFromEventCode(mapping, device, value, now)
-		}
-		if number, ok := numericValue(value); ok {
-			result.NumericValue = number
-			result.HasNumeric = true
+			applyDerivedWallSwitchStateFromLoad(mapping, device, value)
+			if number, numeric := numericValue(value); numeric {
+				result.NumericValue = number
+				result.HasNumeric = true
+			}
 		}
 	}
 
 	device.RawCommands[evt.CommandID] = command
 	s.commands[evt.CommandID] = deviceSlug
+	s.bumpDevicePublishRevisionLocked(device)
 	result.Device = copyDevice(*device)
 	result.Command = command
 	return result
@@ -388,6 +394,7 @@ func (s *Store) ApplyDiscovery(discovery Discovery) ApplyDiscoveryResult {
 				command.LastValueAt = now
 				command.EmptyValue = false
 				applyDerivedValuesFromEventCode(mapping, device, value, now)
+				applyDerivedWallSwitchStateFromLoad(mapping, device, value)
 			}
 		}
 		device.RawCommands[info.CommandID] = command
@@ -424,8 +431,10 @@ func (s *Store) ApplyDiscovery(discovery Discovery) ApplyDiscoveryResult {
 		actions = append(actions, action)
 	}
 
+	s.bumpDevicePublishRevisionLocked(device)
 	if target := s.linkedTargetForLegacyLocked(deviceSlug); target != nil {
 		s.copyActionsLocked(target, device)
+		s.bumpDevicePublishRevisionLocked(target)
 		return ApplyDiscoveryResult{Device: copyDevice(*target), Actions: actionsForDevice(target)}
 	}
 
@@ -440,27 +449,26 @@ func (s *Store) ReconcileResolver(resolver IdentityResolver) []Device {
 	defer s.mu.Unlock()
 
 	s.resolver = resolver
-	if resolver == nil {
-		return s.devicesLocked()
-	}
-
-	slugs := make([]string, 0, len(s.devices))
-	for slug := range s.devices {
-		slugs = append(slugs, slug)
-	}
-	sort.Strings(slugs)
-	for _, slug := range slugs {
-		device := s.devices[slug]
-		if device == nil {
-			continue
+	if resolver != nil {
+		slugs := make([]string, 0, len(s.devices))
+		for slug := range s.devices {
+			slugs = append(slugs, slug)
 		}
-		identity := s.reconciledIdentityLocked(*device, resolver)
-		if identity.DeviceSlug == "" {
-			continue
+		sort.Strings(slugs)
+		for _, slug := range slugs {
+			device := s.devices[slug]
+			if device == nil {
+				continue
+			}
+			identity := s.reconciledIdentityLocked(*device, resolver)
+			if identity.DeviceSlug == "" {
+				continue
+			}
+			s.mergeDeviceIntoIdentityLocked(slug, identity)
 		}
-		s.mergeDeviceIntoIdentityLocked(slug, identity)
+		s.rebuildIndexesLocked()
 	}
-	s.rebuildIndexesLocked()
+	s.bumpAllDevicePublishRevisionsLocked()
 	return s.devicesLocked()
 }
 
@@ -677,6 +685,7 @@ func (s *Store) rebuildIndexesLocked() {
 		}
 		sort.Strings(s.baseGroups[device.BaseSlug])
 	}
+	s.ensureDevicePublishRevisionsLocked()
 }
 
 func (s *Store) identityForDiscovery(discovery Discovery) DeviceIdentity {
@@ -747,7 +756,7 @@ func mappedValue(evt Event, mapping Mapping, deviceType string) (any, bool) {
 	switch {
 	case mapping.Numeric:
 		value, ok := NumericRawValue(evt.Value)
-		if !ok {
+		if !ok || !finiteNumericValue(value) {
 			return 0, false
 		}
 		return normalizeNumericValue(mapping, deviceType, value), true
@@ -768,6 +777,26 @@ func applyDerivedValuesFromEventCode(mapping Mapping, device *Device, value any,
 	if gridPower, ok := derivedGridPowerFromEventCode(mapping, *device, value); ok {
 		device.Values["grid_power"] = gridPower
 		ensureSyntheticGridPowerCommand(device, gridPower, now)
+	}
+}
+
+// WallSwitch does not expose an Etat/realState command in the Jeedom Ajax
+// plugin. Positive load is nevertheless conclusive evidence that its relay is
+// on and lets a fresh discovery seed the state without physically toggling it.
+// Zero load is deliberately not treated as off because an enabled relay may
+// have no active consumer.
+func applyDerivedWallSwitchStateFromLoad(mapping Mapping, device *Device, value any) {
+	if device == nil || !isWallSwitchDevice(*device) {
+		return
+	}
+	switch mapping.Metric {
+	case "current_a", "power_w":
+	default:
+		return
+	}
+	load, ok := numericValue(value)
+	if ok && load > 0 {
+		device.Values["state"] = true
 	}
 }
 
@@ -864,9 +893,10 @@ func deviceTypeForNormalization(device Device) string {
 func numericValue(value any) (float64, bool) {
 	switch typed := value.(type) {
 	case float64:
-		return typed, true
+		return typed, finiteNumericValue(typed)
 	case float32:
-		return float64(typed), true
+		number := float64(typed)
+		return number, finiteNumericValue(number)
 	case int:
 		return float64(typed), true
 	case int64:
@@ -876,6 +906,118 @@ func numericValue(value any) (float64, bool) {
 	default:
 		return 0, false
 	}
+}
+
+func finiteNumericValue(value float64) bool {
+	return !math.IsNaN(value) && !math.IsInf(value, 0)
+}
+
+func (s *Store) bumpDevicePublishRevisionLocked(device *Device) {
+	if s == nil || device == nil {
+		return
+	}
+	s.flattenDeviceLegacySlugsLocked(device)
+	s.nextPublishRevision++
+	if s.nextPublishRevision == 0 {
+		s.nextPublishRevision = 1
+	}
+	device.publishRevision = s.nextPublishRevision
+}
+
+func (s *Store) flattenDeviceLegacySlugsLocked(device *Device) {
+	if s == nil || device == nil || len(device.LegacyDeviceSlugs) == 0 {
+		return
+	}
+	root := Slug(device.DeviceSlug)
+	seen := map[string]bool{root: true}
+	flattened := make([]string, 0, len(device.LegacyDeviceSlugs))
+	var visit func(string)
+	visit = func(slug string) {
+		slug = Slug(slug)
+		if slug == "" || slug == "unknown" || seen[slug] {
+			return
+		}
+		seen[slug] = true
+		flattened = append(flattened, slug)
+		if legacy := s.devices[slug]; legacy != nil {
+			for _, dependency := range legacy.LegacyDeviceSlugs {
+				visit(dependency)
+			}
+		}
+	}
+	for _, slug := range device.LegacyDeviceSlugs {
+		visit(slug)
+	}
+	device.LegacyDeviceSlugs = compactUniqueStrings(flattened)
+	sort.Strings(device.LegacyDeviceSlugs)
+}
+
+func (s *Store) ensureDevicePublishRevisionsLocked() {
+	if s == nil {
+		return
+	}
+	for _, device := range s.devices {
+		if device != nil && device.publishRevision > s.nextPublishRevision {
+			s.nextPublishRevision = device.publishRevision
+		}
+	}
+	for _, slug := range s.devicePublishRevisionOrderLocked() {
+		device := s.devices[slug]
+		if device != nil && device.publishRevision == 0 {
+			s.bumpDevicePublishRevisionLocked(device)
+		}
+	}
+}
+
+func (s *Store) bumpAllDevicePublishRevisionsLocked() {
+	if s == nil {
+		return
+	}
+	for _, slug := range s.devicePublishRevisionOrderLocked() {
+		s.bumpDevicePublishRevisionLocked(s.devices[slug])
+	}
+}
+
+func (s *Store) devicePublishRevisionOrderLocked() []string {
+	slugs := make([]string, 0, len(s.devices))
+	for slug, device := range s.devices {
+		if device != nil {
+			slugs = append(slugs, slug)
+		}
+	}
+	sort.Strings(slugs)
+
+	// A canonical device must receive a later revision than any persisted
+	// device slug it owns and cleans. DFS gives that dependency order even for
+	// legacy chains (C, then B->C, then A->B).
+	ordered := make([]string, 0, len(slugs))
+	visiting := make(map[string]bool, len(slugs))
+	visited := make(map[string]bool, len(slugs))
+	var visit func(string)
+	visit = func(slug string) {
+		if visited[slug] || visiting[slug] {
+			return
+		}
+		device := s.devices[slug]
+		if device == nil {
+			return
+		}
+		visiting[slug] = true
+		legacy := compactUniqueStrings(device.LegacyDeviceSlugs)
+		sort.Strings(legacy)
+		for _, dependency := range legacy {
+			if dependency != slug {
+				visit(dependency)
+			}
+		}
+		visiting[slug] = false
+		visited[slug] = true
+		ordered = append(ordered, slug)
+	}
+	for _, slug := range slugs {
+		visit(slug)
+	}
+	return ordered
 }
 
 func (s *Store) Devices() []Device {
@@ -1016,6 +1158,7 @@ func (s *Store) RecordControl(action Action, source, topic string, err error) {
 			current.LastRequestedAt = now
 			current.LastRequestSource = source
 			device.Actions[action.Action] = current
+			s.bumpDevicePublishRevisionLocked(device)
 		}
 	}
 	s.audits = append(s.audits, ControlAudit{
@@ -1032,6 +1175,41 @@ func (s *Store) RecordControl(action Action, source, topic string, err error) {
 	if len(s.audits) > 200 {
 		s.audits = append([]ControlAudit(nil), s.audits[len(s.audits)-200:]...)
 	}
+}
+
+// RecordOptimisticControlState records the requested state only for toggle
+// devices that have no Jeedom state command. Devices with real feedback remain
+// authoritative and are updated by their info command instead.
+func (s *Store) RecordOptimisticControlState(action Action, at time.Time) (Device, bool) {
+	if s == nil || strings.TrimSpace(action.StateCommandID) != "" {
+		return Device{}, false
+	}
+	var stateValue bool
+	switch NormalizeControlAction(action.Action) {
+	case "on":
+		stateValue = true
+	case "off":
+		stateValue = false
+	default:
+		return Device{}, false
+	}
+	if at.IsZero() {
+		at = time.Now().UTC()
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	device := s.devices[Slug(action.DeviceSlug)]
+	if device == nil || !toggleCapableDevice(*device) {
+		return Device{}, false
+	}
+	if device.Values == nil {
+		device.Values = make(map[string]any)
+	}
+	device.Values["state"] = stateValue
+	device.LastUpdate = at
+	s.bumpDevicePublishRevisionLocked(device)
+	return copyDevice(*device), true
 }
 
 func (s *Store) HasRecentBridgeControl(commandID string, window time.Duration) bool {

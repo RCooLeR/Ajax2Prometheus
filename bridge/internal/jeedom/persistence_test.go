@@ -1,6 +1,7 @@
 package jeedom
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -59,6 +60,74 @@ func TestServicePersistsJeedomDiscoveryForRestartRepublish(t *testing.T) {
 	}
 	if got := mqtt.state["ajaxbridge/jeedom/devices/server_power/state"]; !strings.Contains(got, `"temperature_c":18.6`) {
 		t.Fatalf("persisted Jeedom state = %q, want temperature_c", got)
+	}
+}
+
+func TestActionOnlyWallSwitchSurvivesBridgeThenHARestart(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "jeedom.json")
+	store, err := LoadStore(t.Context(), path, "keep_last", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	discovery, err := ParseDiscoveryMessage("jeedom/discovery/eqLogic/26", []byte(wallSwitchDiscoveryPayload), time.Unix(100, 0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	store.ApplyDiscovery(discovery)
+	controller := NewController(ControllerConfig{
+		Enabled:              true,
+		StateTopicPrefix:     "ajaxbridge/jeedom",
+		JeedomSetTopicPrefix: "jeedom/cmd/set",
+	}, store, &fakeCommandPublisher{}, zerolog.Nop())
+	if _, err := controller.Execute(t.Context(), "grid_load", "ON", "test"); err != nil {
+		t.Fatal(err)
+	}
+
+	// Bridge restart: the only source of truth is the persisted Jeedom cache.
+	restarted, err := LoadStore(t.Context(), path, "keep_last", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	device, ok := restarted.Device("grid_load")
+	if !ok {
+		t.Fatal("missing WallSwitch after bridge restart")
+	}
+	mqtt := &recordingMQTT{}
+	publisher := NewPublisher(PublisherConfig{
+		StateTopicPrefix: "ajaxbridge/jeedom",
+		Discovery:        true,
+		DiscoveryPrefix:  "homeassistant",
+		DiscoveryNode:    "ajaxbridge",
+		RetainState:      true,
+		RetainDiscovery:  true,
+		Controls:         true,
+	}, mqtt)
+	if err := publisher.PublishDevice(t.Context(), device); err != nil {
+		t.Fatal(err)
+	}
+
+	// HA restart: discovery and state must both be available as retained MQTT.
+	stateTopic := "ajaxbridge/jeedom/devices/grid_load/state"
+	if !mqtt.stateRetain[stateTopic] {
+		t.Fatalf("state topic %q was not retained", stateTopic)
+	}
+	var state map[string]any
+	if err := json.Unmarshal([]byte(mqtt.state[stateTopic]), &state); err != nil {
+		t.Fatal(err)
+	}
+	if state["state"] != true {
+		t.Fatalf("republished state = %#v, want true", state["state"])
+	}
+	discoveryTopic := "homeassistant/switch/ajaxbridge/jeedom_control_grid_load/config"
+	if !mqtt.discoveryRetain[discoveryTopic] {
+		t.Fatalf("discovery topic %q was not retained", discoveryTopic)
+	}
+	var config DiscoveryConfig
+	if err := json.Unmarshal([]byte(mqtt.discovery[discoveryTopic]), &config); err != nil {
+		t.Fatal(err)
+	}
+	if config.StateTopic != stateTopic || config.Optimistic == nil || *config.Optimistic {
+		t.Fatalf("restart-safe switch discovery = %#v", config)
 	}
 }
 

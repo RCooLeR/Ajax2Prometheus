@@ -146,8 +146,11 @@ On startup, AjaxBridge loads this cache before subscribing to Jeedom MQTT topics
 - retained Ajax/SIA account and zone discovery/state
 - retained Jeedom Home Assistant discovery configs
 - retained Jeedom state payloads, including measurements such as temperature, power, current, voltage, battery, humidity, and energy
+- the last known state of action-only WallSwitch controls, even though those devices do not expose an `Etat`/`realState` command
 
 That means a normal bridge restart should not require forcing Jeedom MQTT Manager to resend eqLogic discovery. Force Jeedom discovery only when `data/jeedom.json` is missing, empty, stale, or you have changed Jeedom equipment/commands and want the bridge to learn the new command list immediately.
+
+An action-only WallSwitch starts as `unknown` when the cache has never learned its physical state. AjaxBridge learns and persists state from successful bridge/MQTT ON/OFF controls and recognized Ajax event codes. A positive power/current measurement can safely seed `ON`; a zero measurement does not prove `OFF` because an enabled relay may have no active load.
 
 ## Expected Jeedom Event Payload
 
@@ -391,7 +394,9 @@ jeedom/cmd/set/<command_id>
 
 The Jeedom command payload is `1` by default. Override it with `AJAXBRIDGE_JEEDOM_CONTROL_PAYLOAD` if your MQTT Manager action commands expect a different payload.
 
-AjaxBridge also subscribes to this same `jeedom/cmd/set/#` prefix. That gives best-effort visibility into commands issued by other MQTT clients when the command id is known from eqLogic discovery. Commands issued directly inside Jeedom may not be visible as command topics, so state-change detection still depends on Jeedom publishing the related `state` info command.
+AjaxBridge also subscribes to this same `jeedom/cmd/set/#` prefix. That gives best-effort visibility into commands issued by other MQTT clients when the command id is known from eqLogic discovery. Commands issued directly inside Jeedom may not be visible as command topics, so physical state-change detection still depends on Jeedom publishing related state or event information.
+
+For WallSwitch equipment without a state info command, successful ON/OFF commands observed on this path update the persisted bridge state. Physical/direct Jeedom changes are learned from recognized Ajax event-code updates. If neither signal has ever been observed, the state remains `unknown` rather than being assumed `OFF`.
 
 HTTP control:
 
@@ -414,7 +419,8 @@ AjaxBridge can notify about Jeedom metrics and controls through [Notifications](
 For WallSwitch/Outlet on/off:
 
 - AjaxBridge can always notify when the command is issued through AjaxBridge or Home Assistant using `control`, `control_on`, or `control_off` rules.
-- AjaxBridge can notify about real physical/external on/off changes only when Jeedom publishes a binary `state` info command for that equipment.
+- AjaxBridge can learn physical/external WallSwitch changes from recognized Ajax event-code updates even when the equipment has no binary `state` info command.
+- Other equipment still depends on Jeedom publishing a binary `state` info command for authoritative physical state changes.
 - Use `state` plus `changed_to_on` or `changed_to_off` rules for those state changes.
 
 For relay trigger notifications:

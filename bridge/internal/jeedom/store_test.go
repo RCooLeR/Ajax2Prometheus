@@ -43,6 +43,135 @@ func TestStoreEmptyValueKeepsLastNumericValue(t *testing.T) {
 	}
 }
 
+func TestStoreUnknownValuePreservesLastValidHistory(t *testing.T) {
+	store := NewStore("unknown")
+	now := time.Unix(100, 0)
+	event := Event{
+		Topic:       "jeedom/cmd/event/56",
+		CommandID:   "56",
+		DeviceName:  "Server",
+		CommandName: "Puissance",
+		Type:        "info",
+		Subtype:     "numeric",
+		Value:       json.RawMessage(`12.5`),
+		ReceivedAt:  now,
+	}
+	store.Apply(event)
+
+	event.Value = json.RawMessage(`""`)
+	event.ReceivedAt = now.Add(time.Second)
+	result := store.Apply(event)
+	command := result.Device.RawCommands["56"]
+
+	if !result.EmptyValue || !result.UpdatedValue || !command.EmptyValue {
+		t.Fatalf("empty result = %#v, command = %#v", result, command)
+	}
+	if !command.LastValueAt.Equal(now) {
+		t.Fatalf("LastValueAt = %s, want %s", command.LastValueAt, now)
+	}
+	value, present := result.Device.Values["power_w"]
+	if !present || value != nil {
+		t.Fatalf("power_w = %#v, present=%v; want explicit nil", value, present)
+	}
+	if !commandDiscoverable(command, result.Device) {
+		t.Fatal("temporarily missing previously valid measurement became undiscoverable")
+	}
+}
+
+func TestStorePreservesZeroAndFalseAsUsableValues(t *testing.T) {
+	store := NewStore("keep_last")
+	now := time.Unix(100, 0)
+	power := store.Apply(Event{
+		Topic:       "jeedom/cmd/event/56",
+		CommandID:   "56",
+		DeviceName:  "Server",
+		CommandName: "Puissance",
+		Type:        "info",
+		Subtype:     "numeric",
+		Value:       json.RawMessage(`0`),
+		ReceivedAt:  now,
+	})
+	state := store.Apply(Event{
+		Topic:       "jeedom/cmd/event/57",
+		CommandID:   "57",
+		DeviceName:  "Server",
+		CommandName: "Etat",
+		Type:        "info",
+		Subtype:     "binary",
+		Value:       json.RawMessage(`false`),
+		ReceivedAt:  now.Add(time.Second),
+	})
+
+	if !power.UpdatedValue || !power.HasNumeric || power.NumericValue != 0 {
+		t.Fatalf("zero power result = %#v", power)
+	}
+	if power.Command.LastValueAt.IsZero() || power.Command.EmptyValue {
+		t.Fatalf("zero power command = %#v", power.Command)
+	}
+	if !state.UpdatedValue || state.Command.LastValueAt.IsZero() || state.Command.EmptyValue {
+		t.Fatalf("false state result = %#v", state)
+	}
+	if value, ok := state.Device.Values["state"]; !ok || value != false {
+		t.Fatalf("state = %#v, present=%v; want false", value, ok)
+	}
+	payload := StatePayload(state.Device)
+	if value, ok := payload["power_w"]; !ok || value != float64(0) {
+		t.Fatalf("state payload power_w = %#v, present=%v; want 0", value, ok)
+	}
+	if value, ok := payload["state"]; !ok || value != false {
+		t.Fatalf("state payload state = %#v, present=%v; want false", value, ok)
+	}
+	if _, ok := payload["energy_kwh"]; ok {
+		t.Fatalf("state payload synthesized energy_kwh: %#v", payload)
+	}
+}
+
+func TestStoreDoesNotSynthesizeZeroForMalformedMeasurement(t *testing.T) {
+	result := NewStore("keep_last").Apply(Event{
+		Topic:       "jeedom/cmd/event/56",
+		CommandID:   "56",
+		DeviceName:  "Server",
+		CommandName: "Puissance",
+		Type:        "info",
+		Subtype:     "numeric",
+		Value:       json.RawMessage(`"not-a-number"`),
+		ReceivedAt:  time.Unix(100, 0),
+	})
+
+	if result.UpdatedValue || result.HasNumeric {
+		t.Fatalf("malformed measurement result = %#v", result)
+	}
+	if !result.Command.LastValueAt.IsZero() || result.Command.Value != nil {
+		t.Fatalf("malformed measurement command = %#v", result.Command)
+	}
+	if _, ok := result.Device.Values["power_w"]; ok {
+		t.Fatalf("malformed measurement synthesized power_w: %#v", result.Device.Values)
+	}
+}
+
+func TestStoreRejectsNonFiniteMeasurement(t *testing.T) {
+	for _, raw := range []string{`"NaN"`, `"Inf"`, `"-Infinity"`} {
+		t.Run(raw, func(t *testing.T) {
+			result := NewStore("keep_last").Apply(Event{
+				Topic:       "jeedom/cmd/event/56",
+				CommandID:   "56",
+				DeviceName:  "Server",
+				CommandName: "Puissance",
+				Type:        "info",
+				Subtype:     "numeric",
+				Value:       json.RawMessage(raw),
+				ReceivedAt:  time.Unix(100, 0),
+			})
+			if result.UpdatedValue || result.HasNumeric || !result.Command.LastValueAt.IsZero() {
+				t.Fatalf("non-finite measurement was accepted: %#v", result)
+			}
+			if _, ok := result.Device.Values["power_w"]; ok {
+				t.Fatalf("non-finite measurement reached state: %#v", result.Device.Values)
+			}
+		})
+	}
+}
+
 func TestStoreKeepsEnglishCommandNameAndRawFrenchName(t *testing.T) {
 	store := NewStore("keep_last")
 	result := store.Apply(Event{
@@ -302,6 +431,42 @@ func TestStoreDerivesWallSwitchStateFromEventCode(t *testing.T) {
 	}
 }
 
+func TestStoreDoesNotTurnWallSwitchOffFromZeroLoad(t *testing.T) {
+	catalog := testCatalog(t, devicecatalog.Device{
+		Account:          "A0F80D",
+		Zone:             "8",
+		Name:             "Server power",
+		Kind:             "WallSwitch",
+		JeedomCommandIDs: []string{"203", "204"},
+	})
+	store := NewStoreWithResolver("keep_last", NewCatalogResolver(catalog, CatalogResolverConfig{}))
+
+	store.Apply(Event{
+		Topic:       "jeedom/cmd/event/204",
+		CommandID:   "204",
+		DeviceName:  "Server power",
+		CommandName: "Code evenement",
+		Type:        "info",
+		Subtype:     "string",
+		Value:       json.RawMessage(`"M_1F_37"`),
+		ReceivedAt:  time.Unix(100, 0),
+	})
+	result := store.Apply(Event{
+		Topic:       "jeedom/cmd/event/203",
+		CommandID:   "203",
+		DeviceName:  "Server power",
+		CommandName: "Courant",
+		Type:        "info",
+		Subtype:     "numeric",
+		Value:       json.RawMessage(`0`),
+		ReceivedAt:  time.Unix(101, 0),
+	})
+
+	if got := result.Device.Values["state"]; got != true {
+		t.Fatalf("state after zero load = %#v, want retained true", got)
+	}
+}
+
 func TestStoreDoesNotDeriveRelayStateFromWallSwitchEventCode(t *testing.T) {
 	catalog := testCatalog(t, devicecatalog.Device{
 		Account:          "A0F80D",
@@ -451,6 +616,45 @@ func TestStoreDoesNotDeriveMultiTransmitterGridPowerFromTransmitterEventCode(t *
 	})
 	if _, ok := result.Device.Values["grid_power"]; ok {
 		t.Fatalf("multitransmitter grid_power = %#v, want no derived value", result.Device.Values["grid_power"])
+	}
+}
+
+func TestStorePublishRevisionOrdersLegacyDependencies(t *testing.T) {
+	store := NewStore("keep_last")
+	store.replaceDevices([]Device{
+		{Device: "Canonical A", DeviceSlug: "a", LegacyDeviceSlugs: []string{"b"}},
+		{Device: "Legacy B", DeviceSlug: "b", LegacyDeviceSlugs: []string{"c"}},
+		{Device: "Legacy C", DeviceSlug: "c"},
+	})
+	a, _ := store.Device("a")
+	b, _ := store.Device("b")
+	c, _ := store.Device("c")
+	if !(c.publishRevision < b.publishRevision && b.publishRevision < a.publishRevision) {
+		t.Fatalf("legacy-chain revisions c=%d b=%d a=%d, want c < b < a", c.publishRevision, b.publishRevision, a.publishRevision)
+	}
+	if !containsString(a.LegacyDeviceSlugs, "b") || !containsString(a.LegacyDeviceSlugs, "c") {
+		t.Fatalf("canonical legacy closure = %#v, want b and c", a.LegacyDeviceSlugs)
+	}
+}
+
+func TestStoreRecordControlAdvancesPublishRevision(t *testing.T) {
+	store := NewStore("keep_last")
+	store.replaceDevices([]Device{{
+		Device:     "Relay",
+		DeviceSlug: "relay",
+		Actions: map[string]Action{
+			"on": {Action: "on", CommandID: "85", Device: "Relay", DeviceSlug: "relay"},
+		},
+	}})
+	before, _ := store.Device("relay")
+	action := before.Actions["on"]
+	store.RecordControl(action, "http:127.0.0.1", "jeedom/cmd/set/85", nil)
+	after, _ := store.Device("relay")
+	if after.publishRevision <= before.publishRevision {
+		t.Fatalf("publish revision = %d, want greater than %d", after.publishRevision, before.publishRevision)
+	}
+	if after.Actions["on"].LastRequestedAt.IsZero() {
+		t.Fatal("control request metadata was not recorded")
 	}
 }
 

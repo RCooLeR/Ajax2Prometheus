@@ -90,6 +90,54 @@ func TestServiceNumericValueUpdatesMetrics(t *testing.T) {
 	}
 }
 
+func TestServiceRetainedStateCannotRegressFromOutOfOrderHandlers(t *testing.T) {
+	store := NewStore("keep_last")
+	mqtt := &recordingMQTT{}
+	publisher := NewPublisher(PublisherConfig{
+		StateTopicPrefix: "ajaxbridge/jeedom",
+		RetainState:      true,
+	}, mqtt)
+	service := NewService(
+		ServiceConfig{EventTopic: "jeedom/cmd/event/#"},
+		store,
+		nil,
+		publisher,
+		nil,
+		nil,
+		zerolog.Nop(),
+	)
+	observer := &blockingUpdateObserver{
+		entered: make(chan struct{}),
+		release: make(chan struct{}),
+	}
+	service.SetObserver(observer)
+
+	doneA := make(chan struct{})
+	go func() {
+		service.HandleMessage(t.Context(), "jeedom/cmd/event/56", []byte(`{"value":"1","humanName":"[None][Server][Puissance]","name":"Puissance","type":"info","subtype":"numeric"}`))
+		close(doneA)
+	}()
+	select {
+	case <-observer.entered:
+	case <-time.After(time.Second):
+		t.Fatal("older handler did not reach the post-Apply observer")
+	}
+
+	service.HandleMessage(t.Context(), "jeedom/cmd/event/56", []byte(`{"value":"2","humanName":"[None][Server][Puissance]","name":"Puissance","type":"info","subtype":"numeric"}`))
+	close(observer.release)
+	select {
+	case <-doneA:
+	case <-time.After(time.Second):
+		t.Fatal("older handler did not finish")
+	}
+
+	device, ok := store.Device("server")
+	if !ok || device.Values["power_w"] != float64(2) {
+		t.Fatalf("store power_w = %#v, want 2", device.Values["power_w"])
+	}
+	assertRecordedPower(t, mqtt.state["ajaxbridge/jeedom/devices/server/state"], 2)
+}
+
 func TestServiceObservesExternalJeedomSetCommand(t *testing.T) {
 	store := NewStore("keep_last")
 	discovery, err := ParseDiscoveryMessage("jeedom/discovery/eqLogic/10", []byte(relayDiscoveryPayload), time.Unix(100, 0))
@@ -116,6 +164,36 @@ func TestServiceObservesExternalJeedomSetCommand(t *testing.T) {
 	}
 	if observer.last.Action != "on" || observer.last.DeviceSlug != "garage_gate" {
 		t.Fatalf("last control = %#v", observer.last)
+	}
+}
+
+func TestServiceRecordsExternalActionOnlyWallSwitchState(t *testing.T) {
+	store := NewStore("keep_last")
+	discovery, err := ParseDiscoveryMessage("jeedom/discovery/eqLogic/26", []byte(wallSwitchDiscoveryPayload), time.Unix(100, 0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	store.ApplyDiscovery(discovery)
+	observer := &fakeObserver{}
+	service := NewService(
+		ServiceConfig{EventTopic: "jeedom/cmd/event/#", SetTopicPrefix: "jeedom/cmd/set"},
+		store,
+		nil,
+		nil,
+		nil,
+		nil,
+		zerolog.Nop(),
+	)
+	service.SetObserver(observer)
+
+	service.HandleMessage(t.Context(), "jeedom/cmd/set/348", nil)
+
+	device, ok := store.Device("grid_load")
+	if !ok || device.Values["state"] != true {
+		t.Fatalf("WallSwitch after external ON = %#v, want state=true", device)
+	}
+	if observer.controls != 1 || !observer.last.StateUpdated {
+		t.Fatalf("control observation = %#v, want state update", observer.last)
 	}
 }
 
@@ -178,6 +256,20 @@ type fakeObserver struct {
 	controls int
 	last     ControlResult
 }
+
+type blockingUpdateObserver struct {
+	entered chan struct{}
+	release chan struct{}
+}
+
+func (o *blockingUpdateObserver) ObserveJeedomUpdate(_ context.Context, result ApplyResult) {
+	if result.HasNumeric && result.NumericValue == 1 {
+		close(o.entered)
+		<-o.release
+	}
+}
+
+func (*blockingUpdateObserver) ObserveJeedomControl(context.Context, ControlResult, error) {}
 
 func (o *fakeObserver) ObserveJeedomUpdate(context.Context, ApplyResult) {
 	o.updates++

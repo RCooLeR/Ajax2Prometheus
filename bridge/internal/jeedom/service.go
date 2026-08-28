@@ -221,6 +221,10 @@ func (s *Service) handleSetTopic(ctx context.Context, topic string) {
 		result.Account = device.LinkedAccount
 		result.Zone = device.LinkedZone
 	}
+	if _, updated := s.store.RecordOptimisticControlState(action, time.Now().UTC()); updated {
+		result.StateUpdated = true
+		s.persist(ctx, "persist external Jeedom control state")
+	}
 	s.store.RecordControl(action, "jeedom_mqtt_set:"+topic, topic, nil)
 	if s.observer != nil {
 		s.observer.ObserveJeedomControl(ctx, result, nil)

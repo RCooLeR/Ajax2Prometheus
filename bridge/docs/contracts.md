@@ -37,6 +37,8 @@ Default discovery topics use:
 
 SIA entity unique IDs are based on the discovery node plus the SIA object id. Jeedom measurement unique IDs are based on the Jeedom command id. These IDs must not be renamed casually because Home Assistant uses them for entity identity.
 
+Jeedom control switches keep `ajaxbridge_jeedom_control_{device_slug}` as their unique ID and `ajaxbridge/jeedom/devices/{device_slug}/set` as their command topic. Their state comes from the retained device state topic even when Jeedom exposes only ON/OFF actions. An absent state is published to Home Assistant as `unknown`, not `OFF`.
+
 When a Jeedom device is linked to SIA, Jeedom metrics may attach to the SIA Home Assistant device. Jeedom security/status entities that duplicate SIA-owned state are published as empty retained discovery payloads to remove stale duplicates.
 
 ## Frontend Card Inputs

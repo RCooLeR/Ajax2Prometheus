@@ -6,11 +6,13 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
 )
 
 const (
-	payloadOn  = "ON"
-	payloadOff = "OFF"
+	payloadOn                = "ON"
+	payloadOff               = "OFF"
+	switchStateValueTemplate = "{{ 'None' if value_json.get('state') is none else ('ON' if value_json.get('state') else 'OFF') }}"
 )
 
 type MQTTClient interface {
@@ -30,8 +32,15 @@ type PublisherConfig struct {
 }
 
 type Publisher struct {
-	cfg  PublisherConfig
-	mqtt MQTTClient
+	cfg     PublisherConfig
+	mqtt    MQTTClient
+	gatesMu sync.Mutex
+	gates   map[string]*devicePublishGate
+}
+
+type devicePublishGate struct {
+	mu             sync.Mutex
+	latestRevision uint64
 }
 
 type DiscoveryDevice struct {
@@ -66,14 +75,85 @@ func NewPublisher(cfg PublisherConfig, mqtt MQTTClient) *Publisher {
 	cfg.StateTopicPrefix = trimTopic(firstNonEmpty(cfg.StateTopicPrefix, "ajaxbridge/jeedom"))
 	cfg.DiscoveryPrefix = trimTopic(firstNonEmpty(cfg.DiscoveryPrefix, "homeassistant"))
 	cfg.DiscoveryNode = Slug(firstNonEmpty(cfg.DiscoveryNode, "ajaxbridge"))
-	return &Publisher{cfg: cfg, mqtt: mqtt}
+	return &Publisher{cfg: cfg, mqtt: mqtt, gates: make(map[string]*devicePublishGate)}
 }
 
 func (p *Publisher) PublishDevice(ctx context.Context, device Device) error {
 	if p == nil || p.mqtt == nil {
 		return nil
 	}
+	release, current := p.beginDevicePublish(device)
+	if !current {
+		return nil
+	}
+	defer release()
+	return p.publishDevice(ctx, device)
+}
 
+func (p *Publisher) beginDevicePublish(device Device) (func(), bool) {
+	canonicalKey := Slug(device.DeviceSlug)
+	keys := make([]string, 0, 1+len(device.LegacyDeviceSlugs))
+	keys = append(keys, device.DeviceSlug)
+	keys = append(keys, device.LegacyDeviceSlugs...)
+	keys = compactUniqueStrings(keys)
+	if len(keys) == 0 {
+		return func() {}, true
+	}
+	sort.Strings(keys)
+
+	p.gatesMu.Lock()
+	if p.gates == nil {
+		p.gates = make(map[string]*devicePublishGate)
+	}
+	gates := make([]*devicePublishGate, 0, len(keys))
+	var canonicalGate *devicePublishGate
+	for _, key := range keys {
+		gate := p.gates[key]
+		if gate == nil {
+			gate = &devicePublishGate{}
+			p.gates[key] = gate
+		}
+		gates = append(gates, gate)
+		if key == canonicalKey {
+			canonicalGate = gate
+		}
+	}
+	p.gatesMu.Unlock()
+
+	for _, gate := range gates {
+		gate.mu.Lock()
+	}
+	release := func() {
+		for i := len(gates) - 1; i >= 0; i-- {
+			gates[i].mu.Unlock()
+		}
+	}
+	if canonicalGate == nil {
+		canonicalGate = gates[0]
+	}
+
+	// Hand-built Device values used by callers and tests predate revisions, but
+	// they must not overwrite a slug after versioned Store traffic has begun.
+	if device.publishRevision == 0 {
+		if canonicalGate.latestRevision != 0 {
+			release()
+			return nil, false
+		}
+		return release, true
+	}
+	if device.publishRevision < canonicalGate.latestRevision {
+		release()
+		return nil, false
+	}
+	for _, gate := range gates {
+		if device.publishRevision > gate.latestRevision {
+			gate.latestRevision = device.publishRevision
+		}
+	}
+	return release, true
+}
+
+func (p *Publisher) publishDevice(ctx context.Context, device Device) error {
 	stateTopic := p.StateTopic(device.DeviceSlug)
 	if p.cfg.Discovery {
 		if err := p.publishLegacyCleanup(ctx, device); err != nil {
@@ -306,11 +386,13 @@ func (p *Publisher) BuildDiscovery(command Command, device Device) (string, []by
 func (p *Publisher) BuildSwitchDiscovery(action Action, device Device) (string, []byte, error) {
 	stateTopic := p.StateTopic(device.DeviceSlug)
 	attributesTopic := p.AttributesTopic(device.DeviceSlug)
-	optimistic := action.StateCommandID == ""
+	optimistic := false
 	cfg := DiscoveryConfig{
 		Name:                "Control",
 		UniqueID:            "ajaxbridge_jeedom_control_" + Slug(device.DeviceSlug),
+		StateTopic:          stateTopic,
 		CommandTopic:        p.CommandTopic(device.DeviceSlug),
+		ValueTemplate:       switchStateValueTemplate,
 		PayloadOn:           payloadOn,
 		PayloadOff:          payloadOff,
 		Optimistic:          &optimistic,
@@ -321,10 +403,6 @@ func (p *Publisher) BuildSwitchDiscovery(action Action, device Device) (string, 
 			Manufacturer: firstNonEmpty(device.HAManufacturer, "Ajax via Jeedom"),
 			Model:        firstNonEmpty(device.HAModel, "Jeedom MQTT Bridge"),
 		},
-	}
-	if action.StateCommandID != "" {
-		cfg.StateTopic = stateTopic
-		cfg.ValueTemplate = "{{ '" + payloadOn + "' if value_json.state else '" + payloadOff + "' }}"
 	}
 	if p.mqtt != nil && p.mqtt.AvailabilityTopic() != "" {
 		cfg.AvailabilityTopic = p.mqtt.AvailabilityTopic()
@@ -521,7 +599,43 @@ func commandDiscoverable(command Command, device Device) bool {
 	case "event_source", "event", "event_code":
 		return false
 	}
+	if command.Component == ComponentSensor && measurementStateClass(command.StateClass) && !measurementCommandHasUsableValue(command, device) {
+		return false
+	}
 	return !deviceLinkedToSIA(device) || !siaOwnedJeedomMetric(command.Metric)
+}
+
+func measurementCommandHasUsableValue(command Command, device Device) bool {
+	if !command.LastValueAt.IsZero() {
+		return true
+	}
+	if _, usable := numericValue(command.Value); usable {
+		return true
+	}
+	if !soleCommandForMetric(command, device) {
+		return false
+	}
+	_, usable := numericValue(device.Values[command.Metric])
+	return usable
+}
+
+func measurementStateClass(stateClass string) bool {
+	switch strings.ToLower(strings.TrimSpace(stateClass)) {
+	case "measurement", "total", "total_increasing":
+		return true
+	default:
+		return false
+	}
+}
+
+func soleCommandForMetric(command Command, device Device) bool {
+	count := 0
+	for _, candidate := range device.RawCommands {
+		if candidate.Metric == command.Metric {
+			count++
+		}
+	}
+	return count == 1
 }
 
 func deviceLinkedToSIA(device Device) bool {
@@ -638,9 +752,9 @@ func legacyMetricAliases(metric string) []string {
 
 func valueTemplate(command Command) string {
 	if command.Component == ComponentBinarySensor {
-		return "{{ '" + payloadOn + "' if value_json." + command.Metric + " else '" + payloadOff + "' }}"
+		return "{{ 'None' if value_json.get('" + command.Metric + "') is none else ('" + payloadOn + "' if value_json.get('" + command.Metric + "') else '" + payloadOff + "') }}"
 	}
-	return "{{ value_json." + command.Metric + " }}"
+	return "{{ value_json.get('" + command.Metric + "') }}"
 }
 
 func commandName(command Command) string {

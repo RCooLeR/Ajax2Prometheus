@@ -265,10 +265,19 @@ func (o notificationObserver) ObserveJeedomUpdate(ctx context.Context, result je
 }
 
 func (o notificationObserver) ObserveJeedomControl(ctx context.Context, result jeedom.ControlResult, err error) {
-	if o.app == nil || o.app.notifier == nil {
+	if o.app == nil {
 		return
 	}
-	o.app.notifier.ObserveJeedomControl(ctx, result, err, o.app.state.Snapshot())
+	if err == nil && result.StateUpdated && o.app.jeedom != nil && o.app.jeedomPub != nil {
+		if device, ok := o.app.jeedom.Device(result.DeviceSlug); ok {
+			if publishErr := o.app.jeedomPub.PublishDevice(ctx, device); publishErr != nil {
+				o.app.log.Debug().Err(publishErr).Str("device", result.DeviceSlug).Msg("publish optimistic Jeedom control state")
+			}
+		}
+	}
+	if o.app.notifier != nil {
+		o.app.notifier.ObserveJeedomControl(ctx, result, err, o.app.state.Snapshot())
+	}
 }
 
 func (a *App) handleCatalogChanged(snapshot state.Snapshot) {

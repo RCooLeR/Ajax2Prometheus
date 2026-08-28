@@ -2,6 +2,8 @@ package jeedom
 
 import (
 	"context"
+	"errors"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -117,13 +119,90 @@ func TestControllerPublishesWaterStopCommand(t *testing.T) {
 	}
 }
 
+func TestControllerPersistsActionOnlyWallSwitchStateAcrossRestart(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "jeedom.json")
+	store, err := LoadStore(t.Context(), path, "keep_last", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	discovery, err := ParseDiscoveryMessage("jeedom/discovery/eqLogic/26", []byte(wallSwitchDiscoveryPayload), time.Unix(100, 0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	device := store.ApplyDiscovery(discovery).Device
+	if _, exists := device.Values["state"]; exists {
+		t.Fatalf("fresh WallSwitch state = %#v, want unknown", device.Values["state"])
+	}
+	mqtt := &fakeCommandPublisher{}
+	controller := NewController(ControllerConfig{
+		Enabled:              true,
+		StateTopicPrefix:     "ajaxbridge/jeedom",
+		JeedomSetTopicPrefix: "jeedom/cmd/set",
+	}, store, mqtt, zerolog.Nop())
+
+	result, err := controller.Execute(t.Context(), "grid_load", "ON", "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !result.StateUpdated {
+		t.Fatalf("result = %#v, want persisted optimistic state", result)
+	}
+	restarted, err := LoadStore(t.Context(), path, "keep_last", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	restored, ok := restarted.Device("grid_load")
+	if !ok || restored.Values["state"] != true {
+		t.Fatalf("restored WallSwitch = %#v, want state=true", restored)
+	}
+
+	restartedController := NewController(ControllerConfig{Enabled: true}, restarted, mqtt, zerolog.Nop())
+	if _, err := restartedController.Execute(t.Context(), "grid_load", "OFF", "test"); err != nil {
+		t.Fatal(err)
+	}
+	restartedAgain, err := LoadStore(t.Context(), path, "keep_last", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	restored, ok = restartedAgain.Device("grid_load")
+	if !ok || restored.Values["state"] != false {
+		t.Fatalf("restored WallSwitch = %#v, want state=false", restored)
+	}
+}
+
+func TestControllerDoesNotUpdateWallSwitchStateWhenCommandPublishFails(t *testing.T) {
+	discovery, err := ParseDiscoveryMessage("jeedom/discovery/eqLogic/26", []byte(wallSwitchDiscoveryPayload), time.Unix(100, 0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	store := NewStore("keep_last")
+	store.ApplyDiscovery(discovery)
+	controller := NewController(ControllerConfig{Enabled: true}, store, &fakeCommandPublisher{err: errors.New("publish failed")}, zerolog.Nop())
+
+	result, err := controller.Execute(t.Context(), "grid_load", "ON", "test")
+	if err == nil {
+		t.Fatal("expected publish error")
+	}
+	if result.StateUpdated {
+		t.Fatalf("result = %#v, state must not update after failed command", result)
+	}
+	device, ok := store.Device("grid_load")
+	if !ok {
+		t.Fatal("missing WallSwitch")
+	}
+	if _, exists := device.Values["state"]; exists {
+		t.Fatalf("state = %#v, want unknown after failed command", device.Values["state"])
+	}
+}
+
 type fakeCommandPublisher struct {
 	topic   string
 	payload string
+	err     error
 }
 
 func (f *fakeCommandPublisher) PublishCommandMessage(_ context.Context, topic string, payload []byte) error {
 	f.topic = topic
 	f.payload = string(payload)
-	return nil
+	return f.err
 }

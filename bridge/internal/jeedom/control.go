@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/rs/zerolog"
 )
@@ -39,15 +40,16 @@ type Controller struct {
 }
 
 type ControlResult struct {
-	DeviceSlug string `json:"device_slug"`
-	Device     string `json:"device"`
-	DeviceType string `json:"device_type,omitempty"`
-	Account    string `json:"account,omitempty"`
-	Zone       string `json:"zone,omitempty"`
-	Action     string `json:"action"`
-	CommandID  string `json:"command_id"`
-	Topic      string `json:"topic"`
-	Published  bool   `json:"published"`
+	DeviceSlug   string `json:"device_slug"`
+	Device       string `json:"device"`
+	DeviceType   string `json:"device_type,omitempty"`
+	Account      string `json:"account,omitempty"`
+	Zone         string `json:"zone,omitempty"`
+	Action       string `json:"action"`
+	CommandID    string `json:"command_id"`
+	Topic        string `json:"topic"`
+	Published    bool   `json:"published"`
+	StateUpdated bool   `json:"state_updated,omitempty"`
 }
 
 func NewController(cfg ControllerConfig, store *Store, mqtt CommandPublisher, log zerolog.Logger) *Controller {
@@ -123,6 +125,12 @@ func (c *Controller) Execute(ctx context.Context, deviceSlug, actionName, source
 		return result, err
 	}
 	result.Published = true
+	if _, updated := c.store.RecordOptimisticControlState(action, time.Now().UTC()); updated {
+		result.StateUpdated = true
+		if saveErr := c.store.Save(ctx); saveErr != nil {
+			c.log.Warn().Err(saveErr).Str("device", result.DeviceSlug).Msg("persist optimistic Jeedom control state")
+		}
+	}
 	c.observe(ctx, result, nil)
 	c.log.Info().
 		Str("device", result.DeviceSlug).
