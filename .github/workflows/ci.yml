@@ -214,5 +214,5 @@ jobs:
           ignore-unfixed: true
           severity: HIGH,CRITICAL
           scanners: vuln,secret
-          vuln-type: os,library
+          pkg-types: os,library
           version: v0.74.0

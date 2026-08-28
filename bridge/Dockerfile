@@ -13,7 +13,8 @@ ARG VERSION
 ARG COMMIT
 ARG BUILD_DATE
 
-RUN apk add --no-cache ca-certificates git
+RUN apk upgrade --no-cache \
+    && apk add --no-cache ca-certificates git
 
 WORKDIR /src
 
@@ -38,7 +39,8 @@ ARG VERSION
 ARG COMMIT
 ARG BUILD_DATE
 
-RUN apk add --no-cache ca-certificates \
+RUN apk upgrade --no-cache \
+    && apk add --no-cache ca-certificates \
     && addgroup -S ajaxbridge \
     && adduser -S -G ajaxbridge ajaxbridge \
     && mkdir -p /data \
